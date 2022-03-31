@@ -463,4 +463,10 @@ mod tests {
         let res = run("tests/bcs/oob-unchecked.bc", "oob_unchecked::get");
         assert_eq!(res[0], Err(VMError::OutOfBounds));
     }
+
+    #[test]
+    fn vm_test_locals() {
+        let res = run("tests/bc2/locals.bc", "locals::app::foo");
+        assert_eq!(res[0], Err(VMError::OutOfBounds));
+    }
 }

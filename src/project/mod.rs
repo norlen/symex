@@ -178,4 +178,11 @@ impl Project {
     //         .map(|module| iter::repeat(module).zip(module.global_aliases.iter()))
     //         .flatten()
     // }
+
+    // -------------------------------------------------------------------------
+    // todo later
+    // -------------------------------------------------------------------------
+
+    // fn add_hook() {}
+    // fn add_hook_to_module() {} // may be interesting to only add hooks to certain modules
 }

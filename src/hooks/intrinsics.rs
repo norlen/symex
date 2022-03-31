@@ -4,6 +4,27 @@ use super::FnInfo;
 use crate::vm::ReturnValue;
 use crate::vm::VM;
 
+// TODO: Feels like most of these will be pretty much the same, except for the
+// operation. Should probably abstract these away a bit.
+
+pub fn llvm_sadd_with_overflow(vm: &mut VM<'_>, f: FnInfo) -> Result<ReturnValue> {
+    assert_eq!(f.arguments.len(), 2);
+
+    assert_eq!(f.arguments.len(), 2);
+    let (a0, _) = f.arguments.get(0).unwrap();
+    let (a1, _) = f.arguments.get(1).unwrap();
+
+    let a0 = vm.state.get_bv_from_operand(a0).unwrap();
+    let a1 = vm.state.get_bv_from_operand(a1).unwrap();
+
+    let result = a0.add(&a1);
+    let overflow = a0.saddo(&a1);
+    assert_eq!(overflow.get_width(), 1);
+
+    let ret = overflow.concat(&result).into();
+    Ok(ReturnValue::Return(ret))
+}
+
 pub fn llvm_smul_with_overflow(vm: &mut VM<'_>, f: FnInfo) -> Result<ReturnValue> {
     assert_eq!(f.arguments.len(), 2);
     let (a0, _) = f.arguments.get(0).unwrap();

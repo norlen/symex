@@ -16,22 +16,20 @@ pub struct Memory {
 
     mem: Array,
 
-    addr_size: u32,
+    ptr_size: u32,
     //null_detection: bool,
 }
 
 impl Memory {
-    pub fn new_uninitialized(solver: Solver) -> Self {
+    pub fn new_uninitialized(solver: Solver, ptr_size: u32) -> Self {
         const NAME: &str = "simple_memory";
-        let addr_size = 64;
 
-        let mem = solver.array(addr_size, BITS_IN_BYTE, Some(NAME));
+        let mem = solver.array(ptr_size, BITS_IN_BYTE, Some(NAME));
         Self {
             name: NAME.to_owned(),
             solver,
             mem,
-            addr_size: 64,
-            //null_detection: true,
+            ptr_size,
         }
     }
 
@@ -47,7 +45,7 @@ impl Memory {
         trace!("{} read addr={:?}, bits={}", self.name, addr, bits);
         assert_eq!(
             addr.get_width(),
-            self.addr_size,
+            self.ptr_size,
             "passed wrong sized address"
         );
 
@@ -66,7 +64,7 @@ impl Memory {
             // ..
             (0..num_bytes)
                 .map(|byte| {
-                    let offset = self.solver.bv_from_u64(byte as u64, self.addr_size);
+                    let offset = self.solver.bv_from_u64(byte as u64, self.ptr_size);
                     self.read_u8(&addr.add(&offset))
                 })
                 .reduce(|acc, byte| byte.concat(&acc).into())
@@ -81,7 +79,7 @@ impl Memory {
         trace!("{} write addr={:?}, value={:?}", self.name, addr, value);
         assert_eq!(
             addr.get_width(),
-            self.addr_size,
+            self.ptr_size,
             "passed wrong sized address"
         );
 
@@ -105,7 +103,7 @@ impl Memory {
             let high_bit = (n + 1) * BITS_IN_BYTE - 1;
             let byte = value.slice(high_bit, low_bit);
 
-            let offset = self.solver.bv_from_u64(n as u64, self.addr_size);
+            let offset = self.solver.bv_from_u64(n as u64, self.ptr_size);
             let addr = addr.add(&offset);
             self.write_u8(&addr, &byte.into());
         }

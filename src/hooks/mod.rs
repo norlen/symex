@@ -15,6 +15,12 @@ pub type Hook = fn(&mut VM<'_>, f: FnInfo) -> Result<ReturnValue>;
 
 pub type Argument = (Operand, Vec<ParameterAttribute>);
 
+// TODO: O(n) to check the instrinsics, which isn't very good since this happens
+// for basically every function call.
+//
+// so (1) do all instrinsics start with `llvm.`?, and (2) should probably use
+// a trie here anyway.
+
 pub struct FnInfo {
     pub arguments: Vec<Argument>,
     pub return_attrs: Vec<ParameterAttribute>,
@@ -39,8 +45,10 @@ impl Hooks {
         };
 
         use intrinsics::*;
+        add("llvm.sadd.with.overflow", llvm_sadd_with_overflow);
         add("llvm.smul.with.overflow", llvm_smul_with_overflow);
         add("llvm.expect", llvm_expect);
+        add("llvm.dbg", noop); // TODO
 
         hooks
             .hooks
@@ -81,4 +89,8 @@ impl Hooks {
 
 pub fn abort(_vm: &mut VM<'_>, _info: FnInfo) -> Result<ReturnValue, anyhow::Error> {
     Ok(ReturnValue::Abort)
+}
+
+pub fn noop(_vm: &mut VM<'_>, _info: FnInfo) -> Result<ReturnValue, anyhow::Error> {
+    Ok(ReturnValue::Void)
 }

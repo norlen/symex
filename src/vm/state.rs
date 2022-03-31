@@ -131,7 +131,7 @@ impl<'a> State<'a> {
             project,
             current_loc: Location::new(module, function),
             vars: VarMap::new(10),
-            mem: Memory::new_uninitialized(solver.clone()),
+            mem: Memory::new_uninitialized(solver.clone(), project.ptr_size as u32),
             solver,
             callstack: Vec::new(),
         }
