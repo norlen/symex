@@ -8,6 +8,18 @@ use llvm_ir::{types::NamedStructDef, Function, Module};
 use log::info;
 use rustc_demangle::demangle;
 
+mod config;
+
+pub use config::Config;
+
+pub enum FunctionType<'a> {
+    Function {
+        function: &'a Function,
+        module: &'a Module,
+    },
+    Hook(Hook),
+}
+
 /// A project is mostly a collection of `llvm_ir::Module`s.
 ///
 /// The `VM` takes `Project` and the entry function and exectues over that.
@@ -19,20 +31,15 @@ pub struct Project {
     pub ptr_size: usize,
 
     hooks: Hooks,
-}
 
-pub enum FunctionType<'a> {
-    Function {
-        function: &'a Function,
-        module: &'a Module,
-    },
-    Hook(Hook),
+    config: Config,
 }
 
 impl std::fmt::Debug for Project {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Project")
             .field("ptr_size", &self.ptr_size)
+            .field("config", &self.config)
             .finish()
     }
 }
@@ -51,6 +58,7 @@ impl Project {
             ptr_size: ptr_size as usize,
             modules: vec![module],
             hooks: Hooks::new(),
+            config: Config::default(),
         };
         Ok(project)
     }

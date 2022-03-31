@@ -7,8 +7,8 @@ use crate::llvm::size_in_bits;
 use crate::project::{FunctionType, Project};
 use crate::solver::{Solver, BV};
 use crate::vm::location::Location;
+use crate::vm::Result;
 use crate::vm::{Call, Path, State, VMError};
-use crate::vm::{ExecutionError, Result};
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum ReturnValue {
@@ -130,14 +130,15 @@ impl<'a> VM<'a> {
                 "---------- RUN_ALL: Paths: {}",
                 self.backtracking_paths.len()
             );
+
             let mut r = self.backtrack_and_continue();
-            if let Err(VMError::Execution(ExecutionError::Abort)) = r {
+
+            if let Err(VMError::Abort) = r {
                 r = Ok(ReturnValue::Abort);
             }
+
             println!("Result: {:?}", r);
             results.push(r);
-            // let r = r?;
-            // println!("R: {:?}", r);
         }
         println!("Explored {} paths", paths_explored);
         results

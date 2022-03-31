@@ -1,9 +1,8 @@
-use super::{ReturnValue, VMError, VM};
-
 use llvm_ir::instruction::{BinaryOp, HasResult, Instruction, UnaryOp};
 use llvm_ir::{instruction, terminator, IntPredicate, Operand, Terminator, Type};
 use log::{trace, warn};
 
+use super::{ReturnValue, VMError, VM};
 use crate::hooks::FnInfo;
 use crate::llvm::{
     const_to_bv, get_inner_type, get_offset_in_bits, size_in_bits, size_in_bytes, u64_from_operand,
@@ -12,7 +11,7 @@ use crate::project::FunctionType;
 use crate::solver::BinaryOperation;
 use crate::vm::location::Location;
 use crate::vm::Callsite;
-use crate::vm::{ExecutionError, Result};
+use crate::vm::Result;
 
 impl<'a> VM<'a> {
     pub fn process_instruction(&mut self, instr: &'a Instruction) -> Result<()> {
@@ -817,7 +816,7 @@ impl<'a> VM<'a> {
             ReturnValue::Return(v) => Some(v),
             ReturnValue::Void => None,
             ReturnValue::Throw(_) => todo!("support throw in calls"),
-            ReturnValue::Abort => return Err(ExecutionError::Abort.into()),
+            ReturnValue::Abort => return Err(VMError::Abort),
         };
 
         if let Some(name) = instr.dest.clone() {

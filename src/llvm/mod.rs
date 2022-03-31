@@ -6,6 +6,7 @@ use llvm_ir::types::{FPType, NamedStructDef};
 use llvm_ir::{Constant, Operand, Type, TypeRef};
 use log::trace;
 
+use crate::memory::BITS_IN_BYTE;
 use crate::project::Project;
 use crate::vm::State;
 use crate::BV;
@@ -299,11 +300,10 @@ pub fn size_in_bits(ty: &Type, project: &Project) -> Option<usize> {
 pub fn size_in_bytes(ty: &Type, project: &Project) -> Result<Option<usize>> {
     match size_in_bits(ty, project) {
         Some(size) => {
-            const BITS_IN_BYTES: usize = 8;
             if size % 8 != 0 {
                 Err(anyhow!("size not a multiple of 8"))
             } else {
-                Ok(Some(size / BITS_IN_BYTES))
+                Ok(Some(size / BITS_IN_BYTE as usize))
             }
         }
         None => Ok(None),

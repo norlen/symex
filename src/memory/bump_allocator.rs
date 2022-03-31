@@ -40,8 +40,8 @@ impl BumpAllocator {
 
         // Number of bytes requires for the amount of bits requested.
         let bytes = {
-            let floored_bytes = bits / BITS_IN_BYTE;
-            if bits % BITS_IN_BYTE == 0 {
+            let floored_bytes = bits / BITS_IN_BYTE as usize;
+            if bits % BITS_IN_BYTE as usize == 0 {
                 floored_bytes
             } else {
                 floored_bytes + 1
