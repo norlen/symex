@@ -89,10 +89,7 @@ impl<'a> Path<'a> {
         let mut state = state;
         state.current_loc = location;
 
-        Self {
-            state,
-            constraint: constraint,
-        }
+        Self { state, constraint }
     }
 }
 
@@ -164,9 +161,9 @@ impl<'a> State<'a> {
         Ok(bv)
     }
 
-    pub fn get_bv_from_constant(&mut self, constant: &Constant) -> Result<BV> {
-        todo!()
-    }
+    // pub fn get_bv_from_constant(&mut self, constant: &Constant) -> Result<BV> {
+    //     todo!()
+    // }
 
     // -------------------------------------------------------------------------
     // Helpers I may need, check if these should be in State.

@@ -12,6 +12,12 @@ pub struct Solver {
     btor: Rc<Btor>,
 }
 
+impl Default for Solver {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Solver {
     pub fn new() -> Self {
         let btor = Btor::new();

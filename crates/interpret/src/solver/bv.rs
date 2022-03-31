@@ -40,7 +40,7 @@ impl BV {
         }
     }
 
-    pub fn unary_op(&self, unary_op: UnaryOperation) -> Self {
+    pub fn unary_op(&self, _unary_op: UnaryOperation) -> Self {
         todo!()
     }
 

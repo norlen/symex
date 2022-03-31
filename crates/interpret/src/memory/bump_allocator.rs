@@ -2,7 +2,7 @@ use super::BITS_IN_BYTE;
 use log::debug;
 use std::collections::HashMap;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct BumpAllocator {
     /// Pointer to next avaiable address to allocate at.
     cursor: usize,

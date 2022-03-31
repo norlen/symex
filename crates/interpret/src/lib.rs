@@ -1,3 +1,8 @@
+#![allow(unused_imports)]
+#![warn(rust_2018_idioms, rust_2021_compatibility)]
+// For now.
+#![allow(clippy::module_inception)]
+
 //pub mod bv;
 mod hooks;
 pub mod llvm;

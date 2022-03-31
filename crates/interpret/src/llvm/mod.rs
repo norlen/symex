@@ -1,3 +1,5 @@
+#![allow(unused_variables)]
+
 use anyhow::{anyhow, Result};
 use llvm_ir::constant;
 use llvm_ir::types::{FPType, NamedStructDef};
@@ -109,7 +111,7 @@ pub fn u64_from_constant(constant: &Constant) -> Result<u64> {
 //     }
 // }
 
-pub fn operand_to_bv(op: &Operand, state: &mut State) -> Result<BV> {
+pub fn operand_to_bv(op: &Operand, state: &mut State<'_>) -> Result<BV> {
     match op {
         Operand::ConstantOperand(c) => const_to_bv(c, state),
         Operand::LocalOperand { name, .. } => {
@@ -121,7 +123,7 @@ pub fn operand_to_bv(op: &Operand, state: &mut State) -> Result<BV> {
     }
 }
 
-pub fn const_to_bv(constant: &Constant, state: &mut State) -> Result<BV> {
+pub fn const_to_bv(constant: &Constant, state: &mut State<'_>) -> Result<BV> {
     match constant {
         Constant::Int { bits, value } => Ok(state.solver.bv_from_u64(*value, *bits)),
         Constant::Float(_) => todo!(),

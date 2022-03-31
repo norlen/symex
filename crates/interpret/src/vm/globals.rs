@@ -88,8 +88,5 @@ fn is_weak(linkage: Linkage) -> bool {
 }
 
 fn is_private(linkage: Linkage) -> bool {
-    match linkage {
-        Linkage::Private => true,
-        _ => false,
-    }
+    matches!(linkage, Linkage::Private)
 }

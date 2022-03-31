@@ -55,7 +55,7 @@ impl Project {
         Ok(project)
     }
 
-    pub fn fn_by_name(&self, name: &str) -> Result<FunctionType> {
+    pub fn fn_by_name(&self, name: &str) -> Result<FunctionType<'_>> {
         // TODO: This is pretty inefficient in that when searching for a function each and every
         // function name is converted to a string, demangled, demangled without hash. This could be
         // done as a pre-pass for all functions and stored in a HashMap or something.
@@ -110,11 +110,11 @@ impl Project {
             .modules
             .iter()
             .filter_map(|module| {
-                if let Some(f) = module.functions.iter().find(|f| convert(&f.name) == name) {
-                    Some((f, module))
-                } else {
-                    None
-                }
+                module
+                    .functions
+                    .iter()
+                    .find(|f| convert(&f.name) == name)
+                    .map(|f| (f, module))
             })
             .collect();
 
@@ -134,16 +134,17 @@ impl Project {
         }
     }
 
-    pub fn get_named_struct(&self, name: &String) -> Option<&NamedStructDef> {
+    pub fn get_named_struct(&self, name: &str) -> Option<&NamedStructDef> {
         let mut ret = None;
         for module in self.modules.iter() {
             if let Some(def) = module.types.named_struct_def(name) {
                 // Prefer `NamedStructDef::Defined` over `NamedStructDef::Opaque`.
-                if let NamedStructDef::Defined(_) = def {
-                    ret = Some(def);
-                } else if ret.is_none() {
-                    ret = Some(def);
-                }
+                ret = Some(def)
+                // if let NamedStructDef::Defined(_) = def {
+                //     ret = Some(def);
+                // } else if ret.is_none() {
+                //     ret = Some(def);
+                // }
             }
         }
         ret

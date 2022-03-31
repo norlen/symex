@@ -410,12 +410,12 @@ impl<'a> VM<'a> {
         let mut base_ty = self.state.type_of(&instr.aggregate);
         let mut total_offset = 0;
         for index in instr.indices.iter() {
-            let (offset, ty) = get_offset_in_bits(&base_ty, *index as usize, &self.project);
+            let (offset, ty) = get_offset_in_bits(&base_ty, *index as usize, self.project);
             base_ty = ty;
             total_offset += offset;
         }
 
-        let offset_high = total_offset + size_in_bits(&base_ty, &self.project).unwrap();
+        let offset_high = total_offset + size_in_bits(&base_ty, self.project).unwrap();
         assert!(value.get_width() >= offset_high as u32);
 
         let value = value.slice(offset_high as u32 - 1, total_offset as u32);
@@ -468,7 +468,7 @@ impl<'a> VM<'a> {
 
         let addr = self.state.get_bv_from_operand(&instr.address).unwrap();
         let dst_ty = self.state.type_of(instr);
-        let dst_size = size_in_bits(&dst_ty, &self.project).unwrap() as u32;
+        let dst_size = size_in_bits(&dst_ty, self.project).unwrap() as u32;
         println!("dst size: {}", dst_size);
 
         let value = self.state.mem.read(&addr, dst_size).unwrap();
@@ -526,7 +526,7 @@ impl<'a> VM<'a> {
         let ptr_size = base_addr.get_width();
 
         let value_ty = self.state.type_of(&instr.address);
-        let value_size = size_in_bytes(&value_ty, &self.project).unwrap().unwrap() as u64;
+        let value_size = size_in_bytes(&value_ty, self.project).unwrap().unwrap() as u64;
         let value_size = self.solver.bv_from_u64(value_size, ptr_size);
         let upper_bound = base_addr.add(&value_size);
 
@@ -544,7 +544,7 @@ impl<'a> VM<'a> {
             let (offset, ty) = if is_struct {
                 // Concrete indexing into a struct.
                 let index = u64_from_operand(index).unwrap() as usize;
-                let (offset, ty) = get_offset_in_bits(&curr_ty, index, &self.project);
+                let (offset, ty) = get_offset_in_bits(&curr_ty, index, self.project);
 
                 let offset_bytes = (offset / 8) as u64;
                 let offset = self.solver.bv_from_u64(offset_bytes, ptr_size);
@@ -557,10 +557,10 @@ impl<'a> VM<'a> {
                 let index = self.state.get_bv_from_operand(index).unwrap();
                 let index = index.zero_ext(ptr_size);
 
-                let bytes = size_in_bytes(&curr_ty, &self.project).unwrap().unwrap() as u64;
+                let bytes = size_in_bytes(&curr_ty, self.project).unwrap().unwrap() as u64;
                 let bytes = self.solver.bv_from_u64(bytes, ptr_size);
 
-                let ty = get_inner_type(&curr_ty, &self.project).unwrap();
+                let ty = get_inner_type(&curr_ty, self.project).unwrap();
 
                 let offset = bytes.mul(&index).into();
                 (offset, ty)
@@ -784,8 +784,7 @@ impl<'a> VM<'a> {
                     return_attrs: instr.return_attributes.clone(),
                     fn_attrs: instr.function_attributes.clone(),
                 };
-                let res = hook(self, info).unwrap();
-                res
+                hook(self, info).unwrap()
             }
             FunctionType::Function { function, module } => {
                 let arguments = instr

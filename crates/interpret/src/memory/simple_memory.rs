@@ -16,8 +16,7 @@ pub struct Memory {
     mem: Array,
 
     addr_size: u32,
-
-    null_detection: bool,
+    //null_detection: bool,
 }
 
 impl Memory {
@@ -33,7 +32,7 @@ impl Memory {
             solver,
             mem,
             addr_size: 64,
-            null_detection: true,
+            //null_detection: true,
         }
     }
 
@@ -53,9 +52,9 @@ impl Memory {
             "passed wrong sized address"
         );
 
-        if self.null_detection && false {
-            panic!("");
-        }
+        // if self.null_detection {
+        //     panic!("");
+        // }
 
         let value = if bits < Self::BITS_IN_BYTE {
             self.read_u8(addr).slice(bits - 1, 0).into()
@@ -91,9 +90,9 @@ impl Memory {
             "passed wrong sized address"
         );
 
-        if self.null_detection && false {
-            panic!("");
-        }
+        // if self.null_detection {
+        //     panic!("");
+        // }
 
         // Check if we should zero extend the value (if it less than 8-bits).
         let value = if value.get_width() < Self::BITS_IN_BYTE {

@@ -110,7 +110,7 @@ impl<'a> VM<'a> {
         let mut results = Vec::new();
 
         let mut paths_explored = 0;
-        while self.backtracking_paths.len() > 0 {
+        while !self.backtracking_paths.is_empty() {
             paths_explored += 1;
             trace!(
                 "---------- RUN_ALL: Paths: {}",
