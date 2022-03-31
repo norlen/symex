@@ -1,5 +1,5 @@
-use breeze_bc_interp::project::Project;
-use breeze_bc_interp::vm::VM;
+use x0001e::project::Project;
+use x0001e::vm::VM;
 
 #[test]
 fn simple_test() {

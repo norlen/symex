@@ -73,31 +73,44 @@ impl<'a> VM<'a> {
         debug!("Creating VM, starting at function {}", fn_name);
 
         if let FunctionType::Function { function, module } = project.fn_by_name(fn_name)? {
-            //let (func, module) = project.fn_by_name(fn_name)?;
             let solver = Solver::new();
 
             let state = State::new(project, module, function, solver.clone());
 
             let mut vm = VM {
-                state: state.clone(), // Dummy state.
+                // Dummy state. The same state will come from the backtracking
+                // point created later.
+                state: state.clone(),
                 project,
                 backtracking_paths: Vec::new(),
                 solver,
             };
 
+            // Setup before exeuction of function can start.
             vm.state.vars.enter_scope();
             vm.setup_parameters()?;
 
-            let path = Path::new(vm.state.clone());
-
-            //vm.save_backtracking_path(bb_label, constraint)
-            vm.solver.push(1);
-            vm.backtracking_paths.push(path);
+            // Create a backtracking point to the start of the function.
+            let bb_label = &state.current_loc.block.name;
+            vm.save_backtracking_path(bb_label, None)?;
 
             Ok(vm)
         } else {
             Err(VMError::FunctionNotFound(fn_name.to_string()))
         }
+    }
+
+    // Helper to create unconstrained symbols for all parameters.
+    fn setup_parameters(&mut self) -> Result<()> {
+        for param in self.state.current_loc.func.parameters.iter() {
+            let size = size_in_bits(&param.ty, self.project).unwrap();
+            assert_ne!(size, 0);
+
+            let bv = self.solver.bv(size as u32);
+            self.state.vars.insert(param.name.clone(), bv).unwrap();
+        }
+
+        Ok(())
     }
 
     /// Starts executing the VM.
@@ -106,6 +119,7 @@ impl<'a> VM<'a> {
         self.backtrack_and_continue()
     }
 
+    // Helper to run all the paths the VM finds.
     pub fn run_all(&mut self) -> Vec<Result<ReturnValue>> {
         let mut results = Vec::new();
 
@@ -127,18 +141,6 @@ impl<'a> VM<'a> {
         }
         println!("Explored {} paths", paths_explored);
         results
-    }
-
-    fn setup_parameters(&mut self) -> Result<()> {
-        for param in self.state.current_loc.func.parameters.iter() {
-            let size = size_in_bits(&param.ty, self.project).unwrap();
-            assert_ne!(size, 0);
-
-            let bv = self.solver.bv(size as u32);
-            self.state.vars.insert(param.name.clone(), bv).unwrap();
-        }
-
-        Ok(())
     }
 
     /// Start executing from the current location.
