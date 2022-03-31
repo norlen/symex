@@ -2,7 +2,7 @@ use thiserror::Error;
 
 pub type Result<T> = std::result::Result<T, VMError>;
 
-#[derive(Debug, Error)]
+#[derive(Debug, Error, PartialEq, Eq)]
 #[allow(dead_code)]
 pub enum ExecutionError {
     #[error("Abort")]
@@ -13,7 +13,7 @@ pub enum ExecutionError {
 }
 
 /// VMError
-#[derive(Debug, Error)]
+#[derive(Debug, Error, PartialEq, Eq)]
 #[allow(dead_code)]
 pub enum VMError {
     #[error("Execution err: {0}")]
@@ -22,6 +22,9 @@ pub enum VMError {
     /// Unsat
     #[error("Unsat")]
     Unsat,
+
+    #[error("Out of bounds")]
+    OutOfBounds,
 
     /// UnsupportedInstruction
     #[error("UnsupportedInstruction")]

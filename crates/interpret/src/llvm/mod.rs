@@ -1,4 +1,5 @@
 use anyhow::{anyhow, Result};
+use llvm_ir::constant;
 use llvm_ir::types::{FPType, NamedStructDef};
 use llvm_ir::{Constant, Operand, Type, TypeRef};
 use log::trace;
@@ -12,21 +13,101 @@ use crate::BV;
 //     Invoke(&'a Invoke),
 // }
 
-pub fn get_constant_int_value(op: &Operand) -> Result<usize> {
+pub fn u64_from_operand(op: &Operand) -> Result<u64> {
     match op {
-        Operand::ConstantOperand(constant_ref) => match constant_ref.as_ref() {
-            Constant::Int { value, .. } => Ok(*value as usize),
-            constant => Err(anyhow!(
-                "alloca expected NumElements to be constant int, got {:?}",
-                constant
-            )),
-        },
-        operand => Err(anyhow!(
-            "alloca expected NumElements to be constant int, got {:?}",
-            operand
-        )),
+        Operand::LocalOperand { .. } => todo!(),
+        Operand::ConstantOperand(constant) => u64_from_constant(constant),
+        Operand::MetadataOperand => todo!(),
     }
 }
+
+pub fn u64_from_constant(constant: &Constant) -> Result<u64> {
+    match constant {
+        Constant::Int { value, .. } => Ok(*value),
+        Constant::Float(_) => todo!(),
+        Constant::Null(_) => todo!(),
+        Constant::AggregateZero(_) => todo!(),
+        Constant::Struct {
+            name,
+            values,
+            is_packed,
+        } => todo!(),
+        Constant::Array {
+            element_type,
+            elements,
+        } => todo!(),
+        Constant::Vector(_) => todo!(),
+        Constant::Undef(_) => todo!(),
+        Constant::Poison(_) => todo!(),
+        Constant::BlockAddress => todo!(),
+        Constant::GlobalReference { name, ty } => todo!(),
+        Constant::TokenNone => todo!(),
+        Constant::Add(constant::Add { operand0, operand1 }) => {
+            let lhs = u64_from_constant(operand0)?;
+            let rhs = u64_from_constant(operand1)?;
+            Ok(lhs + rhs)
+        }
+        Constant::Sub(constant::Sub { operand0, operand1 }) => {
+            let lhs = u64_from_constant(operand0)?;
+            let rhs = u64_from_constant(operand1)?;
+            Ok(lhs - rhs)
+        }
+        Constant::Mul(_) => todo!(),
+        Constant::UDiv(_) => todo!(),
+        Constant::SDiv(_) => todo!(),
+        Constant::URem(_) => todo!(),
+        Constant::SRem(_) => todo!(),
+        Constant::And(_) => todo!(),
+        Constant::Or(_) => todo!(),
+        Constant::Xor(_) => todo!(),
+        Constant::Shl(_) => todo!(),
+        Constant::LShr(_) => todo!(),
+        Constant::AShr(_) => todo!(),
+        Constant::FAdd(_) => todo!(),
+        Constant::FSub(_) => todo!(),
+        Constant::FMul(_) => todo!(),
+        Constant::FDiv(_) => todo!(),
+        Constant::FRem(_) => todo!(),
+        Constant::ExtractElement(_) => todo!(),
+        Constant::InsertElement(_) => todo!(),
+        Constant::ShuffleVector(_) => todo!(),
+        Constant::ExtractValue(_) => todo!(),
+        Constant::InsertValue(_) => todo!(),
+        Constant::GetElementPtr(_) => todo!(),
+        Constant::Trunc(_) => todo!(),
+        Constant::ZExt(_) => todo!(),
+        Constant::SExt(_) => todo!(),
+        Constant::FPTrunc(_) => todo!(),
+        Constant::FPExt(_) => todo!(),
+        Constant::FPToUI(_) => todo!(),
+        Constant::FPToSI(_) => todo!(),
+        Constant::UIToFP(_) => todo!(),
+        Constant::SIToFP(_) => todo!(),
+        Constant::PtrToInt(_) => todo!(),
+        Constant::IntToPtr(_) => todo!(),
+        Constant::BitCast(_) => todo!(),
+        Constant::AddrSpaceCast(_) => todo!(),
+        Constant::ICmp(_) => todo!(),
+        Constant::FCmp(_) => todo!(),
+        Constant::Select(_) => todo!(),
+    }
+}
+
+// pub fn get_constant_int_value(op: &Operand) -> Result<usize> {
+//     match op {
+//         Operand::ConstantOperand(constant_ref) => match constant_ref.as_ref() {
+//             Constant::Int { value, .. } => Ok(*value as usize),
+//             constant => Err(anyhow!(
+//                 "alloca expected NumElements to be constant int, got {:?}",
+//                 constant
+//             )),
+//         },
+//         operand => Err(anyhow!(
+//             "alloca expected NumElements to be constant int, got {:?}",
+//             operand
+//         )),
+//     }
+// }
 
 pub fn operand_to_bv(op: &Operand, state: &mut State) -> Result<BV> {
     match op {

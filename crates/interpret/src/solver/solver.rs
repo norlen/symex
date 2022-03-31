@@ -77,7 +77,6 @@ impl Solver {
         self.btor.set_opt(BtorOption::ModelGen(ModelGen::Disabled));
         self.btor.pop(1);
 
-        // Return our result from the helper, either an Ok or Err.
         result
     }
 

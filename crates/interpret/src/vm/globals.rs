@@ -13,6 +13,7 @@
 //!
 //! Further, `private` keeps the global private to the module it is declared in
 //! while the rest allows access from the outside.
+#![allow(dead_code, unused_variables)]
 
 use anyhow::Result;
 use std::collections::HashMap;
@@ -88,7 +89,7 @@ fn is_weak(linkage: Linkage) -> bool {
 
 fn is_private(linkage: Linkage) -> bool {
     match linkage {
-        Private => true,
+        Linkage::Private => true,
         _ => false,
     }
 }

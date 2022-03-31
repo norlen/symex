@@ -16,6 +16,8 @@ pub enum BinaryOperation {
     SRem,
 }
 
+pub enum UnaryOperation {}
+
 pub enum Solutions {
     /// Could not find any solutions with the current constraints.
     None,

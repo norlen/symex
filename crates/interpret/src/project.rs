@@ -1,23 +1,12 @@
-use std::iter;
 use std::path::Path;
 
 use crate::{
     hooks::{Hook, Hooks},
     vm::{Result, VMError},
 };
-use llvm_ir::{
-    module::{GlobalAlias, GlobalVariable},
-    types::NamedStructDef,
-    Function, Module,
-};
+use llvm_ir::{types::NamedStructDef, Function, Module};
 use log::info;
 use rustc_demangle::demangle;
-
-// TODO: Move hooks here.
-// So we can have a unified API for looking up functions.
-//
-//
-//
 
 /// A project is mostly a collection of `llvm_ir::Module`s.
 ///
@@ -66,60 +55,68 @@ impl Project {
         Ok(project)
     }
 
-    pub fn fn_by_name(&self, name: &str) -> Result<(&Function, &Module)> {
+    pub fn fn_by_name(&self, name: &str) -> Result<FunctionType> {
+        // TODO: This is pretty inefficient in that when searching for a function each and every
+        // function name is converted to a string, demangled, demangled without hash. This could be
+        // done as a pre-pass for all functions and stored in a HashMap or something.
+        //
+        // Also: How does function visibility work more in detail? Can there be multiple private
+        // functions with the same name?
+
         // Check if this is a hook.
+        if let Some(hook) = self.find_hook(name) {
+            return Ok(FunctionType::Hook(hook));
+        }
 
         // Check if we can find the literal function name.
-        println!("Check literal name");
         if let Some(res) = self.find_fn_by_name(name, |name| name.to_owned())? {
-            println!("found fn: {:?}", res.0);
-            return Ok(res);
+            return Ok(FunctionType::Function {
+                function: res.0,
+                module: res.1,
+            });
         }
 
-        println!("Check demanged name");
         // Check if name is a demangled name.
         if let Some(res) = self.find_fn_by_name(name, |name| demangle(name).to_string())? {
-            return Ok(res);
+            return Ok(FunctionType::Function {
+                function: res.0,
+                module: res.1,
+            });
         }
 
-        println!("Check demanged wihtout trailing hash name");
         // Check if name is demangled name without trailing hash.
         if let Some(res) = self.find_fn_by_name(name, |name| format!("{:#}", demangle(name)))? {
-            return Ok(res);
+            return Ok(FunctionType::Function {
+                function: res.0,
+                module: res.1,
+            });
         }
 
         Err(VMError::FunctionNotFound(name.to_string()))
         // Err(anyhow!("Could not find function {}", name))
     }
 
+    fn find_hook(&self, name: &str) -> Option<Hook> {
+        // TODO: move demangling here instead of in hooks.get
+        self.hooks.get(name)
+    }
+
     fn find_fn_by_name<F>(&self, name: &str, convert: F) -> Result<Option<(&Function, &Module)>>
     where
         F: Fn(&str) -> String,
     {
-        // for module in &self.modules {
-        //     for f in &module.functions {
-        //         println!("  mod: {}, f: {}", module.name, f.name);
-        //     }
-        // }
-        println!("Check for function: {}", name);
         // Find functions that match the name in any modules.
         let results: Vec<_> = self
             .modules
             .iter()
             .filter_map(|module| {
                 if let Some(f) = module.functions.iter().find(|f| convert(&f.name) == name) {
-                    println!("------------ module: {}, fn: {}", module.name, f.name);
                     Some((f, module))
                 } else {
                     None
                 }
             })
             .collect();
-
-        println!("results");
-        for res in &results {
-            println!("res: {}", res.0.name);
-        }
 
         if results.len() > 1 {
             // Found more than one matching function.
@@ -152,24 +149,24 @@ impl Project {
         ret
     }
 
-    pub fn get_all_functions(&self) -> impl Iterator<Item = (&Module, &Function)> {
-        self.modules
-            .iter()
-            .map(|module| iter::repeat(module).zip(module.functions.iter()))
-            .flatten()
-    }
+    // pub fn get_all_functions(&self) -> impl Iterator<Item = (&Module, &Function)> {
+    //     self.modules
+    //         .iter()
+    //         .map(|module| iter::repeat(module).zip(module.functions.iter()))
+    //         .flatten()
+    // }
 
-    pub fn get_all_global_vars(&self) -> impl Iterator<Item = (&Module, &GlobalVariable)> {
-        self.modules
-            .iter()
-            .map(|module| iter::repeat(module).zip(module.global_vars.iter()))
-            .flatten()
-    }
+    // pub fn get_all_global_vars(&self) -> impl Iterator<Item = (&Module, &GlobalVariable)> {
+    //     self.modules
+    //         .iter()
+    //         .map(|module| iter::repeat(module).zip(module.global_vars.iter()))
+    //         .flatten()
+    // }
 
-    pub fn get_all_global_aliases(&self) -> impl Iterator<Item = (&Module, &GlobalAlias)> {
-        self.modules
-            .iter()
-            .map(|module| iter::repeat(module).zip(module.global_aliases.iter()))
-            .flatten()
-    }
+    // pub fn get_all_global_aliases(&self) -> impl Iterator<Item = (&Module, &GlobalAlias)> {
+    //     self.modules
+    //         .iter()
+    //         .map(|module| iter::repeat(module).zip(module.global_aliases.iter()))
+    //         .flatten()
+    // }
 }

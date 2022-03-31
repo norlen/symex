@@ -2,7 +2,9 @@ use boolector::{BVSolution, Btor};
 use std::convert::From;
 use std::{ops::Deref, rc::Rc};
 
-#[derive(Debug, Clone)]
+use super::{BinaryOperation, UnaryOperation};
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BV(pub(super) boolector::BV<Rc<Btor>>);
 
 impl BV {
@@ -24,6 +26,22 @@ impl BV {
             std::cmp::Ordering::Equal => self.clone(),
             std::cmp::Ordering::Greater => todo!(),
         }
+    }
+
+    pub fn binary_op(&self, other: BV, binop: BinaryOperation) -> Self {
+        match binop {
+            BinaryOperation::Add => self.add(&other),
+            BinaryOperation::Sub => self.sub(&other),
+            BinaryOperation::Mul => self.mul(&other).into(),
+            BinaryOperation::UDiv => self.udiv(&other).into(),
+            BinaryOperation::SDiv => self.sdiv(&other).into(),
+            BinaryOperation::URem => self.urem(&other).into(),
+            BinaryOperation::SRem => self.srem(&other).into(),
+        }
+    }
+
+    pub fn unary_op(&self, unary_op: UnaryOperation) -> Self {
+        todo!()
     }
 
     pub fn get_width(&self) -> u32 {

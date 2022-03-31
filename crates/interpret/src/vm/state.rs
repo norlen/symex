@@ -1,5 +1,5 @@
 use crate::{
-    llvm::size_in_bits,
+    llvm::{operand_to_bv, size_in_bits},
     memory::bump_allocator::BumpAllocator,
     memory::simple_memory::Memory,
     project::Project,
@@ -9,7 +9,7 @@ use llvm_ir::{
     instruction::{self, HasResult},
     terminator,
     types::Typed,
-    Function, Module, Name, TypeRef,
+    Constant, Function, Module, Name, Operand, TypeRef,
 };
 
 use super::varmap::VarMap;
@@ -140,11 +140,6 @@ impl<'a> State<'a> {
         }
     }
 
-    pub fn assign_bv(&mut self, name: Name, bv: BV) -> Result<()> {
-        self.vars.insert(name, bv).unwrap();
-        Ok(())
-    }
-
     /// Allocate an unitialized value `name` on the stack with size `allocation_size`.
     pub fn stack_alloc(&mut self, allocation_size: usize, align: usize) -> Result<BV> {
         let ptr = self.stack.get_address(allocation_size, align);
@@ -153,6 +148,24 @@ impl<'a> State<'a> {
             .solver
             .bv_from_u64(ptr as u64, self.project.ptr_size as u32);
         Ok(bv)
+    }
+
+    // -------------------------------------------------------------------------
+    // BV Helpers
+    // -------------------------------------------------------------------------
+
+    pub fn assign_bv(&mut self, name: Name, bv: BV) -> Result<()> {
+        self.vars.insert(name, bv).unwrap();
+        Ok(())
+    }
+
+    pub fn get_bv_from_operand(&mut self, op: &Operand) -> Result<BV> {
+        let bv = operand_to_bv(op, self).unwrap();
+        Ok(bv)
+    }
+
+    pub fn get_bv_from_constant(&mut self, constant: &Constant) -> Result<BV> {
+        todo!()
     }
 
     // -------------------------------------------------------------------------
@@ -166,7 +179,7 @@ impl<'a> State<'a> {
         (name, size)
     }
 
-    pub fn type_of<T: Typed + ?Sized>(&self, t: &T) -> TypeRef {
+    pub fn type_of<T: Typed>(&self, t: &T) -> TypeRef {
         self.current_loc.module.type_of(t)
     }
 }

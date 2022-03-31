@@ -2,15 +2,15 @@ use anyhow::Result;
 
 use super::FnInfo;
 use crate::vm::ReturnValue;
-use crate::{llvm::operand_to_bv, vm::VM};
+use crate::vm::VM;
 
 pub fn llvm_smul_with_overflow(vm: &mut VM, f: FnInfo) -> Result<ReturnValue> {
     assert_eq!(f.arguments.len(), 2);
     let (a0, _) = f.arguments.get(0).unwrap();
     let (a1, _) = f.arguments.get(1).unwrap();
 
-    let a0 = operand_to_bv(a0, &mut vm.state)?;
-    let a1 = operand_to_bv(a1, &mut vm.state)?;
+    let a0 = vm.state.get_bv_from_operand(a0).unwrap();
+    let a1 = vm.state.get_bv_from_operand(a1).unwrap();
 
     let result = a0.mul(&a1);
     let overflow = a0.smulo(&a1);
@@ -23,7 +23,7 @@ pub fn llvm_smul_with_overflow(vm: &mut VM, f: FnInfo) -> Result<ReturnValue> {
 pub fn llvm_expect(vm: &mut VM, f: FnInfo) -> Result<ReturnValue> {
     assert_eq!(f.arguments.len(), 2);
     let (a0, _) = f.arguments.get(0).unwrap();
-    let val = operand_to_bv(a0, &mut vm.state)?;
+    let val = vm.state.get_bv_from_operand(a0).unwrap();
 
     Ok(ReturnValue::Return(val))
 }

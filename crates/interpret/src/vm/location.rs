@@ -96,6 +96,7 @@ impl<'a> Location<'a> {
             self.instr = InstructionIndex::Terminated;
         } else {
             self.instr = InstructionIndex::Instruction(current_pc + 1);
+            self.source_loc = self.block.instrs[current_pc + 1].get_debug_loc().as_ref();
         }
     }
 
@@ -114,9 +115,9 @@ impl<'a> Location<'a> {
         }
     }
 
-    pub fn set_location(&mut self, instr: &'a impl HasDebugLoc, pc: usize) {
+    pub fn set_location(&mut self, pc: usize) {
         self.instr = InstructionIndex::Instruction(pc);
-        self.source_loc = instr.get_debug_loc().as_ref();
+        self.source_loc = self.block.instrs[pc].get_debug_loc().as_ref();
     }
 
     pub fn set_terminator(&mut self, term: &'a impl HasDebugLoc) {

@@ -7,8 +7,8 @@ target triple = "x86_64-unknown-linux-gnu"
 %"unwind::libunwind::_Unwind_Exception" = type { i64, void (i32, %"unwind::libunwind::_Unwind_Exception"*)*, [6 x i64] }
 %"unwind::libunwind::_Unwind_Context" = type { [0 x i8] }
 
-@alloc24 = private unnamed_addr constant <{ [6 x i8] }> <{ [6 x i8] c"oob.rs" }>, align 1
-@alloc25 = private unnamed_addr constant <{ i8*, [16 x i8] }> <{ i8* getelementptr inbounds (<{ [6 x i8] }>, <{ [6 x i8] }>* @alloc24, i32 0, i32 0, i32 0), [16 x i8] c"\06\00\00\00\00\00\00\00\02\00\00\00\05\00\00\00" }>, align 8
+@alloc25 = private unnamed_addr constant <{ [6 x i8] }> <{ [6 x i8] c"oob.rs" }>, align 1
+@alloc26 = private unnamed_addr constant <{ i8*, [16 x i8] }> <{ i8* getelementptr inbounds (<{ [6 x i8] }>, <{ [6 x i8] }>* @alloc25, i32 0, i32 0, i32 0), [16 x i8] c"\06\00\00\00\00\00\00\00\02\00\00\00\05\00\00\00" }>, align 8
 @vtable.0 = private unnamed_addr constant <{ i8*, [16 x i8], i8*, i8*, i8*, [0 x i8] }> <{ i8* bitcast (void (i64**)* @"_ZN4core3ptr85drop_in_place$LT$std..rt..lang_start$LT$$LP$$RP$$GT$..$u7b$$u7b$closure$u7d$$u7d$$GT$17he471cffbc8635194E" to i8*), [16 x i8] c"\08\00\00\00\00\00\00\00\08\00\00\00\00\00\00\00", i8* bitcast (i32 (i64**)* @"_ZN4core3ops8function6FnOnce40call_once$u7b$$u7b$vtable.shim$u7d$$u7d$17h3cf8b0f91fdbddceE" to i8*), i8* bitcast (i32 (i64**)* @"_ZN3std2rt10lang_start28_$u7b$$u7b$closure$u7d$$u7d$17hd42ae60c45fa441cE" to i8*), i8* bitcast (i32 (i64**)* @"_ZN3std2rt10lang_start28_$u7b$$u7b$closure$u7d$$u7d$17hd42ae60c45fa441cE" to i8*), [0 x i8] zeroinitializer }>, align 8
 
 ; core::ops::function::FnOnce::call_once{{vtable.shim}}
@@ -101,8 +101,28 @@ bb1:                                              ; preds = %start
 
 panic:                                            ; preds = %start
 ; call core::panicking::panic_bounds_check
-  call void @_ZN4core9panicking18panic_bounds_check17h449d4ff4d992b84fE(i64 %idx, i64 %arr.1, %"core::panic::location::Location"* align 8 dereferenceable(24) bitcast (<{ i8*, [16 x i8] }>* @alloc25 to %"core::panic::location::Location"*)) #6
+  call void @_ZN4core9panicking18panic_bounds_check17h449d4ff4d992b84fE(i64 %idx, i64 %arr.1, %"core::panic::location::Location"* align 8 dereferenceable(24) bitcast (<{ i8*, [16 x i8] }>* @alloc26 to %"core::panic::location::Location"*)) #6
   unreachable
+}
+
+; oob::get2
+; Function Attrs: nonlazybind uwtable
+define internal i32 @_ZN3oob4get217he7234e2fb7f66c94E(i64 %idx) unnamed_addr #1 {
+start:
+  %arr = alloca [3 x i32], align 4
+  %0 = bitcast [3 x i32]* %arr to i32*
+  store i32 0, i32* %0, align 4
+  %1 = getelementptr inbounds [3 x i32], [3 x i32]* %arr, i32 0, i32 1
+  store i32 1, i32* %1, align 4
+  %2 = getelementptr inbounds [3 x i32], [3 x i32]* %arr, i32 0, i32 2
+  store i32 2, i32* %2, align 4
+  %_3.0 = bitcast [3 x i32]* %arr to [0 x i32]*
+; call oob::get
+  %3 = call i32 @_ZN3oob3get17h0621e0df12816864E([0 x i32]* nonnull align 4 %_3.0, i64 3, i64 %idx)
+  br label %bb1
+
+bb1:                                              ; preds = %start
+  ret i32 %3
 }
 
 ; oob::main
@@ -122,6 +142,11 @@ start:
   br label %bb1
 
 bb1:                                              ; preds = %start
+; call oob::get2
+  %y = call i32 @_ZN3oob4get217he7234e2fb7f66c94E(i64 0)
+  br label %bb2
+
+bb2:                                              ; preds = %bb1
   ret void
 }
 
@@ -288,4 +313,4 @@ attributes #6 = { noreturn }
 !1 = !{i32 7, !"PIE Level", i32 2}
 !2 = !{i32 2, !"RtLibUseGOT", i32 1}
 !3 = !{}
-!4 = !{i32 3212971}
+!4 = !{i32 3213068}

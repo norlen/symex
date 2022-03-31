@@ -53,24 +53,24 @@ impl Hooks {
     //     self.hooks.insert(name, hook);
     // }
 
-    pub fn get(&mut self, name: &str) -> Option<&Hook> {
+    pub fn get(&self, name: &str) -> Option<Hook> {
         trace!("hooks: get {}", name);
         if let Some(hook) = self.hooks.get(name) {
-            return Some(hook);
+            return Some(hook.clone());
         }
         trace!("hooks: no hooks found, checking intrinsics");
 
         let demangled = format!("{:#}", demangle(name));
         trace!("hooks: demangled: {}", demangled.as_str());
         if let Some(hook) = self.hooks.get(demangled.as_str()) {
-            return Some(hook);
+            return Some(hook.clone());
         }
 
         // If we can't find then check if it's some kind of intrinsic.
         for (n, hook) in self.intrinsics.iter() {
             trace!("hooks: cmp {} startsWith {}", name, n);
             if name.starts_with(n) {
-                return Some(hook);
+                return Some(hook.clone());
             }
         }
         trace!("hooks: no intrinsics found");
@@ -79,6 +79,6 @@ impl Hooks {
     }
 }
 
-pub fn abort(vm: &mut VM, info: FnInfo) -> Result<ReturnValue, anyhow::Error> {
+pub fn abort(_vm: &mut VM, _info: FnInfo) -> Result<ReturnValue, anyhow::Error> {
     Ok(ReturnValue::Abort)
 }
