@@ -1,3 +1,4 @@
+//! TODO
 use anyhow::{anyhow, Result};
 use llvm_ir::{BasicBlock, DebugLoc, Function, HasDebugLoc, Module, Name};
 
@@ -22,16 +23,16 @@ pub enum InstructionIndex {
 /// the execution is currently at.
 #[derive(Clone)]
 pub struct Location<'a> {
-    /// The `Module` we are executing in.
+    /// The `Module` that is currently being executing in.
     pub module: &'a Module,
 
-    /// The `Function` that is begin executed.
+    /// The `Function` that is being executed.
     pub func: &'a Function,
 
-    /// The current `BasicBlock` that is begin executed.
+    /// The current `BasicBlock` that is being executed.
     pub block: &'a BasicBlock,
 
-    /// Determines the location we are in in the `BasicBlock`.
+    /// Determines the current instruction being executed in in the `BasicBlock`.
     pub instr: InstructionIndex,
 
     /// todo

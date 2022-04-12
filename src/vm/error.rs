@@ -3,7 +3,7 @@ use thiserror::Error;
 pub type Result<T> = std::result::Result<T, VMError>;
 
 /// VMError
-#[derive(Debug, Error, PartialEq, Eq)]
+#[derive(Debug, Error)]
 #[allow(dead_code)]
 pub enum VMError {
     // -------------------------------------------------------------------------
@@ -42,4 +42,20 @@ pub enum VMError {
     /// UnreachableInstruction
     #[error("UnreachableInstruction")]
     UnreachableInstruction,
+
+    #[error("Expected type to be non-zero sized")]
+    UnexpectedZeroSize,
+
+    #[error(transparent)]
+    Other(#[from] anyhow::Error),
+}
+
+impl PartialEq for VMError {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::FunctionNotFound(l0), Self::FunctionNotFound(r0)) => l0 == r0,
+            (Self::Other(l0), Self::Other(r0)) => l0.to_string() == r0.to_string(),
+            _ => core::mem::discriminant(self) == core::mem::discriminant(other),
+        }
+    }
 }

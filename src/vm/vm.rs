@@ -1,14 +1,15 @@
 use either::Either;
 use llvm_ir::instruction::{HasResult, InlineAssembly};
-use llvm_ir::{Constant, Function, Name, Operand};
+use llvm_ir::{Constant, Function, Name, Operand, Type};
 use log::{debug, trace};
 
-use crate::llvm::size_in_bits;
+// use crate::llvm::size_in_bits;
+use crate::llvm::*;
 use crate::project::{FunctionType, Project};
 use crate::solver::{Solver, BV};
 use crate::vm::location::Location;
-use crate::vm::Result;
 use crate::vm::{Call, Path, State, VMError};
+use crate::vm::{Globals, Result};
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum ReturnValue {
@@ -72,38 +73,38 @@ impl<'a> VM<'a> {
     pub fn new(fn_name: &str, project: &'a Project) -> Result<Self> {
         debug!("Creating VM, starting at function {}", fn_name);
 
-        if let FunctionType::Function { function, module } = project.fn_by_name(fn_name)? {
-            let solver = Solver::new();
+        let (function, module) = project.find_entry_function(fn_name)?;
+        let solver = Solver::new();
+        let state = State::new(project, module, function, solver.clone());
 
-            let state = State::new(project, module, function, solver.clone());
+        let mut vm = VM {
+            // Dummy state. The same state will come from the backtracking
+            // point created later.
+            state: state.clone(),
+            project,
+            backtracking_paths: Vec::new(),
+            solver,
+        };
 
-            let mut vm = VM {
-                // Dummy state. The same state will come from the backtracking
-                // point created later.
-                state: state.clone(),
-                project,
-                backtracking_paths: Vec::new(),
-                solver,
-            };
+        vm.allocate_globals();
 
-            // Setup before exeuction of function can start.
-            vm.state.vars.enter_scope();
-            vm.setup_parameters()?;
+        // Setup before exeuction of function can start.
+        vm.state.vars.enter_scope();
+        vm.setup_parameters()?;
 
-            // Create a backtracking point to the start of the function.
-            let bb_label = &state.current_loc.block.name;
-            vm.save_backtracking_path(bb_label, None)?;
+        // Create a backtracking point to the start of the function.
+        let bb_label = &state.current_loc.block.name;
+        vm.save_backtracking_path(bb_label, None)?;
 
-            Ok(vm)
-        } else {
-            Err(VMError::FunctionNotFound(fn_name.to_string()))
-        }
+        Ok(vm)
     }
 
     // Helper to create unconstrained symbols for all parameters.
     fn setup_parameters(&mut self) -> Result<()> {
         for param in self.state.current_loc.func.parameters.iter() {
-            let size = size_in_bits(&param.ty, self.project).unwrap();
+            // let size = size_in_bits(&param.ty, self.project).unwrap();
+            // let size = self.project.get_size(&param.ty).unwrap();
+            let size = param.ty.size(self.project).unwrap();
             assert_ne!(size, 0);
 
             let bv = self.solver.bv(size as u32);
@@ -282,7 +283,7 @@ impl<'a> VM<'a> {
 
             // Add the contraint.
             if let Some(constraint) = path.constraint {
-                constraint.assert();
+                self.solver.assert(&constraint);
             }
 
             // Resume execution.
@@ -318,15 +319,17 @@ impl<'a> VM<'a> {
 
     pub fn assign(&mut self, dst: &impl HasResult, src_bv: BV) -> Result<()> {
         let dst_ty = self.state.type_of(dst);
-        let dst_sz = size_in_bits(&dst_ty, self.project).unwrap();
+        // let dst_sz = size_in_bits(&dst_ty, self.project).unwrap();
+        // let dst_sz = self.project.get_size(&dst_ty).unwrap();
+        let dst_sz = dst_ty.size(self.project).unwrap();
 
-        println!(
-            "assign ty: {:?}, size: {:?}, bv_size: {}",
-            dst_ty,
-            dst_sz,
-            src_bv.get_width()
-        );
-        assert_eq!(dst_sz, src_bv.get_width() as usize);
+        // println!(
+        //     "assign ty: {:?}, size: {:?}, bv_size: {}",
+        //     dst_ty,
+        //     dst_sz,
+        //     src_bv.get_width()
+        // );
+        assert_eq!(dst_sz, src_bv.len() as u64);
 
         let dst_name = dst.get_result().clone();
         self.state.assign_bv(dst_name, src_bv).unwrap();
@@ -339,7 +342,7 @@ impl<'a> VM<'a> {
         &mut self,
         function: &Either<InlineAssembly, Operand>,
     ) -> Result<String> {
-        trace!("resolve fn: {:?}", function);
+        trace!("\n\nresolve fn: {:?}", function);
         match function {
             Either::Left(_) => todo!(),
             Either::Right(operand) => match operand {
@@ -353,7 +356,30 @@ impl<'a> VM<'a> {
                     }
                     _ => todo!(),
                 },
-                _ => todo!(),
+                Operand::LocalOperand { .. } => {
+                    let addr = self.state.get_bv(operand)?;
+                    let solutions = self.solver.get_solutions_for_bv(&addr, 1).unwrap();
+                    dbg!(&solutions);
+                    match solutions {
+                        crate::Solutions::None => todo!(),
+                        crate::Solutions::Exactly(v) => {
+                            let addr = v[0].as_u64().unwrap();
+                            let f = self
+                                .state
+                                .globals
+                                .get_func(addr, self.state.current_loc.module)
+                                .unwrap();
+                            match &f.kind {
+                                crate::vm::AllocationType::Variable(_) => todo!(),
+                                crate::vm::AllocationType::Function(f) => {
+                                    Ok(f.function.name.to_string())
+                                }
+                            }
+                        }
+                        crate::Solutions::AtLeast(_) => todo!(),
+                    }
+                }
+                Operand::MetadataOperand => todo!(),
             },
         }
     }
@@ -391,6 +417,49 @@ impl<'a> VM<'a> {
 
     //     todo!()
     // }
+
+    fn allocate_globals(&mut self) {
+        for (module, v) in self.project.get_all_global_vars() {
+            // TODO
+            if v.initializer.is_none() {
+                continue;
+            }
+
+            if let Type::PointerType { pointee_type, .. } = v.ty.as_ref() {
+                let size = {
+                    let size = pointee_type.size(self.project).unwrap();
+
+                    // Allocate a default of 8 bits for zero sized allocations.
+                    if size == 0 {
+                        8
+                    } else {
+                        size
+                    }
+                };
+
+                let addr = self.state.stack_alloc(size, v.alignment as u64).unwrap();
+                println!("--GLOBAL: addr={:?}, v={}", addr, v.name);
+
+                self.state.globals.add_global_variable(v, module, addr);
+            }
+        }
+
+        for (module, f) in self.project.get_all_functions() {
+            let ptr = self
+                .state
+                .stack
+                .get_address(self.project.ptr_size as usize, 4);
+
+            let bv = self
+                .solver
+                .bv_from_u64(ptr as u64, self.project.ptr_size as u32);
+
+            self.state.globals.add_function(f, module, bv, ptr as u64);
+        }
+
+        // After all globals have been added we can initialize them.
+        // self.state.initialize_globals();
+    }
 }
 
 #[cfg(test)]
@@ -464,9 +533,47 @@ mod tests {
         assert_eq!(res[0], Err(VMError::OutOfBounds));
     }
 
+    // #[test]
+    // fn vm_test_locals() {
+    //     let res = run("tests/bc2/locals.bc", "locals::app::foo");
+    //     assert_eq!(res[0], Err(VMError::OutOfBounds));
+    // }
+
     #[test]
-    fn vm_test_locals() {
-        let res = run("tests/bc2/locals.bc", "locals::app::foo");
+    fn vm_test_traits() {
+        let res = run("tests/bcs/traits.bc", "traits::foo");
         assert_eq!(res[0], Err(VMError::OutOfBounds));
+    }
+
+    #[test]
+    fn vm_test_out_of_bounds_checked() {
+        let res = run(
+            "tests/samples/out_of_bounds.bc",
+            "out_of_bounds::out_of_bounds",
+        );
+        assert!(matches!(res[0], Ok(ReturnValue::Return(_))));
+        assert_eq!(res[1], Ok(ReturnValue::Abort));
+    }
+
+    // #[test]
+    // fn vm_test_out_of_bounds_unchecked() {
+    //     let res = run(
+    //         "tests/samples/out_of_bounds.bc",
+    //         "out_of_bounds::out_of_bounds_unchecked",
+    //     );
+    //     assert_eq!(res[0], Err(VMError::OutOfBounds));
+    // }
+
+    // #[test]
+    // fn vm_test_vec() {
+    //     let res = run("tests/bcs/vec.bc", "vec::foo");
+    //     assert_eq!(res[0], Err(VMError::OutOfBounds));
+    // }
+
+    #[test]
+    fn vm_test_globals() {
+        let res = run("tests/samples/globals.bc", "globals::foo");
+        assert!(matches!(res[0], Ok(ReturnValue::Return(_))));
+        assert!(matches!(res[1], Ok(ReturnValue::Return(_))));
     }
 }

@@ -1,17 +1,18 @@
 use llvm_ir::instruction::{BinaryOp, HasResult, Instruction, UnaryOp};
 use llvm_ir::{instruction, terminator, IntPredicate, Operand, Terminator, Type};
-use log::{trace, warn};
+use log::{debug, warn};
 
-use super::{ReturnValue, VMError, VM};
+use super::{ReturnValue, State, VMError, VM};
 use crate::hooks::FnInfo;
-use crate::llvm::{
-    const_to_bv, get_inner_type, get_offset_in_bits, size_in_bits, size_in_bytes, u64_from_operand,
-};
+use crate::llvm::{AsConcrete, Size};
 use crate::project::FunctionType;
 use crate::solver::BinaryOperation;
+use crate::traits::*;
+use crate::util::gep_op;
 use crate::vm::location::Location;
 use crate::vm::Callsite;
 use crate::vm::Result;
+use crate::BV;
 
 impl<'a> VM<'a> {
     pub fn process_instruction(&mut self, instr: &'a Instruction) -> Result<()> {
@@ -95,9 +96,9 @@ impl<'a> VM<'a> {
     // -------------------------------------------------------------------------
 
     fn ret(&mut self, instr: &terminator::Ret) -> Result<ReturnValue> {
-        trace!("{}", instr);
+        debug!("{}", instr);
         let ret_val = if let Some(op) = &instr.return_operand {
-            let value = self.state.get_bv_from_operand(op).unwrap();
+            let value = self.state.get_bv(op).unwrap();
             ReturnValue::Return(value)
         } else {
             ReturnValue::Void
@@ -112,14 +113,14 @@ impl<'a> VM<'a> {
     }
 
     fn br(&mut self, instr: &terminator::Br) -> Result<ReturnValue> {
-        trace!("{}", instr);
+        debug!("{}", instr);
         self.branch(&instr.dest)
     }
 
     fn condbr(&mut self, instr: &terminator::CondBr) -> Result<ReturnValue> {
-        trace!("{}", instr);
+        debug!("{}", instr);
 
-        let cond = self.state.get_bv_from_operand(&instr.condition).unwrap();
+        let cond = self.state.get_bv(&instr.condition).unwrap();
         let true_possible = self.solver.is_sat_with_constraint(&cond).unwrap();
         let false_possible = self
             .solver
@@ -128,65 +129,56 @@ impl<'a> VM<'a> {
 
         let target = match (true_possible, false_possible) {
             (true, true) => {
-                trace!("condbr: true and false possible");
                 // Explore true first, then backtrack to false.
                 self.save_backtracking_path(&instr.false_dest, Some(cond.not().into()))?;
                 cond.assert();
-                &instr.true_dest
+                Ok(&instr.true_dest)
             }
-            (true, false) => {
-                trace!("condbr: true possible");
-                //cond.assert();
-                &instr.true_dest
-            }
-            (false, true) => {
-                trace!("condbr: false possible");
-                //cond.not().assert();
-                &instr.false_dest
-            }
-            (false, false) => {
-                trace!("condbr: neither possible");
-                return Err(VMError::Unsat);
-            }
-        };
+            (true, false) => Ok(&instr.true_dest),
+            (false, true) => Ok(&instr.false_dest),
+            (false, false) => Err(VMError::Unsat),
+        }?;
 
         self.branch(target)
     }
 
     fn switch(&mut self, instr: &terminator::Switch) -> Result<ReturnValue> {
-        trace!("{}", instr);
-        let value = self.state.get_bv_from_operand(&instr.operand).unwrap();
+        debug!("{}", instr);
+        let value = self.state.get_bv(&instr.operand).unwrap();
 
-        // A switch can pick any paths, the default path can be chosen if value
-        // can be something other than any of the switches.
+        // The condition for the default term in the switch. The default case is built such that
+        //   C = true ^ (val != path_cond_1) ^ (val != path_cond_2) ^ ...
+        // So if the default one is the only path, we'll still explore.
         let mut default_cond = self.solver.bv_from_bool(true);
 
         let mut paths = Vec::new();
 
         // Check if any of the non-default cases can be reached.
         for (constant, target) in instr.dests.iter() {
-            let path_cond = const_to_bv(constant, &mut self.state).unwrap();
+            let path_cond = self.state.get_bv_from_constant(constant).unwrap();
 
             // Build default condition.
-            default_cond = default_cond.and(&value._ne(&path_cond)).into();
+            default_cond = default_cond.and(&value.ne(&path_cond)).into();
 
-            let cond = value._eq(&path_cond);
+            let cond = value.eq(&path_cond);
             if self.solver.is_sat_with_constraint(&cond).unwrap() {
-                trace!("switch: path {} possible", target);
+                debug!("switch: path {} possible", target);
                 paths.push((target, cond));
             }
         }
 
         // Check if the default case can be reached.
         if self.solver.is_sat_with_constraint(&default_cond).unwrap() {
-            trace!("switch: default path possible");
+            debug!("switch: default path possible");
             paths.push((&instr.default_dest, default_cond));
         }
 
+        // Save backtracking points for all paths except one.
         for (target, cond) in paths.iter().skip(1).cloned() {
             self.save_backtracking_path(target, Some(cond))?;
         }
 
+        // Jump the the one path that didn't get saved as a backtracking point.
         if let Some((target, cond)) = paths.first() {
             cond.assert();
             self.branch(target)
@@ -198,37 +190,37 @@ impl<'a> VM<'a> {
     }
 
     fn indirectbr(&mut self, instr: &terminator::IndirectBr) -> Result<ReturnValue> {
-        trace!("{}", instr);
+        debug!("{}", instr);
         todo!()
     }
 
     fn invoke(&mut self, instr: &terminator::Invoke) -> Result<ReturnValue> {
-        trace!("{}", instr);
+        debug!("{}", instr);
         todo!()
     }
 
     fn callbr(&mut self, instr: &terminator::CallBr) -> Result<ReturnValue> {
-        trace!("{}", instr);
+        debug!("{}", instr);
         todo!()
     }
 
     fn resume(&mut self, instr: &terminator::Resume) -> Result<ReturnValue> {
-        trace!("{}", instr);
+        debug!("{}", instr);
         todo!()
     }
 
     fn catchswitch(&mut self, instr: &terminator::CatchSwitch) -> Result<ReturnValue> {
-        trace!("{}", instr);
+        debug!("{}", instr);
         todo!()
     }
 
     fn catchret(&mut self, instr: &terminator::CatchRet) -> Result<ReturnValue> {
-        trace!("{}", instr);
+        debug!("{}", instr);
         todo!()
     }
 
     fn cleanupret(&mut self, instr: &terminator::CleanupRet) -> Result<ReturnValue> {
-        trace!("{}", instr);
+        debug!("{}", instr);
         todo!()
     }
 
@@ -237,7 +229,7 @@ impl<'a> VM<'a> {
     /// The `unreachable` instruction as it name says, should be unreachable.
     /// If this is called, it is most likely an error in the interpreter.
     fn unreachable(&mut self, instr: &terminator::Unreachable) -> Result<ReturnValue> {
-        trace!("{}", instr);
+        debug!("{}", instr);
         Err(VMError::UnreachableInstruction)
     }
 
@@ -246,7 +238,7 @@ impl<'a> VM<'a> {
     // -------------------------------------------------------------------------
 
     fn fneg(&mut self, instr: &instruction::FNeg) -> Result<()> {
-        trace!("{}", instr);
+        debug!("{}", instr);
         todo!()
     }
 
@@ -254,93 +246,123 @@ impl<'a> VM<'a> {
     // Binary Operations
     // -------------------------------------------------------------------------
 
-    fn binop(
-        &mut self,
-        dst: &impl HasResult,
-        lhs: &Operand,
-        rhs: &Operand,
-        op: BinaryOperation,
-    ) -> Result<()> {
-        //let lhs_ty = self.state.type_of(lhs);
-        //let rhs_ty = self.state.type_of(rhs);
+    // fn binop(
+    //     &mut self,
+    //     dst: &impl HasResult,
+    //     lhs: &Operand,
+    //     rhs: &Operand,
+    //     op: BinaryOperation,
+    // ) -> Result<()> {
+    //     // TODO: Could check that types match?
+    //     // let lhs_ty = self.state.type_of(lhs);
+    //     // let rhs_ty = self.state.type_of(rhs);
 
-        let lhs_bv = self.state.get_bv_from_operand(lhs).unwrap();
-        let rhs_bv = self.state.get_bv_from_operand(rhs).unwrap();
-        let result_bv = lhs_bv.binary_op(rhs_bv, op);
+    //     let lhs_bv = self.state.get_bv(lhs).unwrap();
+    //     let rhs_bv = self.state.get_bv(rhs).unwrap();
+    //     let result_bv = lhs_bv.binary_op(rhs_bv, op);
 
-        let name = dst.get_result().clone();
-        self.state.assign_bv(name, result_bv).unwrap();
-
-        Ok(())
-    }
+    //     self.assign(dst, result_bv)
+    // }
 
     fn add(&mut self, instr: &instruction::Add) -> Result<()> {
-        trace!("{}", instr);
-        self.binop(
-            instr,
+        debug!("{}", instr);
+        let result = binop(
+            &mut self.state,
             instr.get_operand0(),
             instr.get_operand1(),
             BinaryOperation::Add,
-        )
+        )?;
+        self.assign(instr, result)
     }
 
     fn fadd(&mut self, instr: &instruction::FAdd) -> Result<()> {
-        trace!("{}", instr);
+        debug!("{}", instr);
         todo!()
     }
 
     fn sub(&mut self, instr: &instruction::Sub) -> Result<()> {
-        trace!("{}", instr);
-        self.binop(
-            instr,
+        debug!("{}", instr);
+        let result = binop(
+            &mut self.state,
             instr.get_operand0(),
             instr.get_operand1(),
             BinaryOperation::Sub,
-        )
+        )?;
+        self.assign(instr, result)
     }
 
     fn fsub(&mut self, instr: &instruction::FSub) -> Result<()> {
-        trace!("{}", instr);
+        debug!("{}", instr);
         todo!()
     }
 
     fn mul(&mut self, instr: &instruction::Mul) -> Result<()> {
-        trace!("{}", instr);
-        todo!()
+        debug!("{}", instr);
+        let result = binop(
+            &mut self.state,
+            instr.get_operand0(),
+            instr.get_operand1(),
+            BinaryOperation::Mul,
+        )?;
+        self.assign(instr, result)
     }
 
     fn fmul(&mut self, instr: &instruction::FMul) -> Result<()> {
-        trace!("{}", instr);
+        debug!("{}", instr);
         todo!()
     }
 
     fn udiv(&mut self, instr: &instruction::UDiv) -> Result<()> {
-        trace!("{}", instr);
-        todo!()
+        debug!("{}", instr);
+        let result = binop(
+            &mut self.state,
+            instr.get_operand0(),
+            instr.get_operand1(),
+            BinaryOperation::UDiv,
+        )?;
+        self.assign(instr, result)
     }
 
     fn sdiv(&mut self, instr: &instruction::SDiv) -> Result<()> {
-        trace!("{}", instr);
-        todo!()
+        debug!("{}", instr);
+        let result = binop(
+            &mut self.state,
+            instr.get_operand0(),
+            instr.get_operand1(),
+            BinaryOperation::SDiv,
+        )?;
+        self.assign(instr, result)
     }
 
     fn fdiv(&mut self, instr: &instruction::FDiv) -> Result<()> {
-        trace!("{}", instr);
+        debug!("{}", instr);
         todo!()
     }
 
     fn urem(&mut self, instr: &instruction::URem) -> Result<()> {
-        trace!("{}", instr);
-        todo!()
+        debug!("{}", instr);
+        let result = binop(
+            &mut self.state,
+            instr.get_operand0(),
+            instr.get_operand1(),
+            BinaryOperation::URem,
+        )?;
+        self.assign(instr, result)
     }
 
     fn srem(&mut self, instr: &instruction::SRem) -> Result<()> {
-        trace!("{}", instr);
-        todo!()
+        debug!("{}", instr);
+        let result = binop(
+            &mut self.state,
+            instr.get_operand0(),
+            instr.get_operand1(),
+            BinaryOperation::SRem,
+        )?;
+        self.assign(instr, result)
     }
 
     fn frem(&mut self, instr: &instruction::FRem) -> Result<()> {
-        trace!("{}", instr);
+        debug!("{}", instr);
         todo!()
     }
 
@@ -349,32 +371,32 @@ impl<'a> VM<'a> {
     // -------------------------------------------------------------------------
 
     fn shl(&mut self, instr: &instruction::Shl) -> Result<()> {
-        trace!("{}", instr);
+        debug!("{}", instr);
         todo!()
     }
 
     fn lshr(&mut self, instr: &instruction::LShr) -> Result<()> {
-        trace!("{}", instr);
+        debug!("{}", instr);
         todo!()
     }
 
     fn ashr(&mut self, instr: &instruction::AShr) -> Result<()> {
-        trace!("{}", instr);
+        debug!("{}", instr);
         todo!()
     }
 
     fn and(&mut self, instr: &instruction::And) -> Result<()> {
-        trace!("{}", instr);
+        debug!("{}", instr);
         todo!()
     }
 
     fn or(&mut self, instr: &instruction::Or) -> Result<()> {
-        trace!("{}", instr);
+        debug!("{}", instr);
         todo!()
     }
 
     fn xor(&mut self, instr: &instruction::Xor) -> Result<()> {
-        trace!("{}", instr);
+        debug!("{}", instr);
         todo!()
     }
 
@@ -383,17 +405,17 @@ impl<'a> VM<'a> {
     // -------------------------------------------------------------------------
 
     fn extractelement(&mut self, instr: &instruction::ExtractElement) -> Result<()> {
-        trace!("{}", instr);
+        debug!("{}", instr);
         todo!()
     }
 
     fn insertelement(&mut self, instr: &instruction::InsertElement) -> Result<()> {
-        trace!("{}", instr);
+        debug!("{}", instr);
         todo!()
     }
 
     fn shufflevector(&mut self, instr: &instruction::ShuffleVector) -> Result<()> {
-        trace!("{}", instr);
+        debug!("{}", instr);
         todo!()
     }
 
@@ -402,31 +424,34 @@ impl<'a> VM<'a> {
     // -------------------------------------------------------------------------
 
     fn extractvalue(&mut self, instr: &instruction::ExtractValue) -> Result<()> {
-        trace!("{}", instr);
+        debug!("{}", instr);
 
-        let value = self.state.get_bv_from_operand(&instr.aggregate).unwrap();
+        let value = self.state.get_bv(&instr.aggregate).unwrap();
 
         let mut base_ty = self.state.type_of(&instr.aggregate);
         let mut total_offset = 0;
         for index in instr.indices.iter() {
-            let (offset, ty) = get_offset_in_bits(&base_ty, *index as usize, self.project);
+            let (offset, ty) = base_ty.offset(*index as u64, self.project).unwrap();
+
             base_ty = ty;
             total_offset += offset;
         }
 
-        let offset_high = total_offset + size_in_bits(&base_ty, self.project).unwrap();
-        assert!(value.get_width() >= offset_high as u32);
+        let offset_high = total_offset + base_ty.size(self.project).unwrap();
+        // let offset_high = total_offset + size_in_bits(&base_ty, self.project).unwrap();
+        assert!(value.len() >= offset_high as u32);
 
-        let value = value.slice(offset_high as u32 - 1, total_offset as u32);
+        let value = value.slice(total_offset as u32, offset_high as u32 - 1);
 
         self.state
             .assign_bv(instr.get_result().clone(), value.into())
             .unwrap();
+
         Ok(())
     }
 
     fn insertvalue(&mut self, instr: &instruction::InsertValue) -> Result<()> {
-        trace!("{}", instr);
+        debug!("{}", instr);
         todo!()
     }
 
@@ -439,10 +464,13 @@ impl<'a> VM<'a> {
     ///
     /// Reference: https://llvm.org/docs/LangRef.html#alloca-instruction
     fn alloca(&mut self, instr: &instruction::Alloca) -> Result<()> {
-        trace!("{}", instr);
+        debug!("{}", instr);
 
-        let num_elements = u64_from_operand(&instr.num_elements).unwrap() as usize;
-        let element_size = size_in_bits(&instr.allocated_type, self.project).unwrap();
+        let num_elements = instr.num_elements.as_concrete().unwrap();
+        let element_size = instr.allocated_type.size(self.project).unwrap();
+
+        // let num_elements = u64_from_operand(&instr.num_elements).unwrap() as usize;
+        // let element_size = size_in_bits(&instr.allocated_type, self.project).unwrap();
         let mut allocation_size = element_size * num_elements;
 
         if allocation_size == 0 {
@@ -453,7 +481,7 @@ impl<'a> VM<'a> {
 
         let addr = self
             .state
-            .stack_alloc(allocation_size, instr.alignment as usize)
+            .stack_alloc(allocation_size, instr.alignment as u64)
             .unwrap();
 
         self.assign(instr, addr)
@@ -463,11 +491,12 @@ impl<'a> VM<'a> {
     ///
     /// Reference: https://llvm.org/docs/LangRef.html#load-instruction
     fn load(&mut self, instr: &instruction::Load) -> Result<()> {
-        trace!("{}", instr);
+        debug!("{}", instr);
 
-        let addr = self.state.get_bv_from_operand(&instr.address).unwrap();
+        let addr = self.state.get_bv(&instr.address).unwrap();
         let dst_ty = self.state.type_of(instr);
-        let dst_size = size_in_bits(&dst_ty, self.project).unwrap() as u32;
+        let dst_size = dst_ty.size(self.project).unwrap() as u32;
+        // let dst_size = size_in_bits(&dst_ty, self.project).unwrap() as u32;
         println!("dst size: {}", dst_size);
 
         let value = self.state.mem.read(&addr, dst_size).unwrap();
@@ -485,27 +514,27 @@ impl<'a> VM<'a> {
     ///
     /// Reference: https://llvm.org/docs/LangRef.html#store-instruction
     fn store(&mut self, instr: &instruction::Store) -> Result<()> {
-        trace!("{}", instr);
+        debug!("{}", instr);
 
-        let value = self.state.get_bv_from_operand(&instr.value).unwrap();
-        let addr = self.state.get_bv_from_operand(&instr.address).unwrap();
+        let value = self.state.get_bv(&instr.value).unwrap();
+        let addr = self.state.get_bv(&instr.address).unwrap();
         self.state.mem.write(&addr, value).unwrap();
 
         Ok(())
     }
 
     fn fence(&mut self, instr: &instruction::Fence) -> Result<()> {
-        trace!("{}", instr);
+        debug!("{}", instr);
         todo!()
     }
 
     fn cmpxchg(&mut self, instr: &instruction::CmpXchg) -> Result<()> {
-        trace!("{}", instr);
+        debug!("{}", instr);
         todo!()
     }
 
     fn atomicrmw(&mut self, instr: &instruction::AtomicRMW) -> Result<()> {
-        trace!("{}", instr);
+        debug!("{}", instr);
         todo!()
     }
 
@@ -514,78 +543,15 @@ impl<'a> VM<'a> {
     ///
     /// Reference: https://llvm.org/docs/LangRef.html#getelementptr-instruction
     fn getelementptr(&mut self, instr: &instruction::GetElementPtr) -> Result<()> {
-        trace!("{}", instr);
-        // Currently, symbolic values are supported except in the case of struct
-        // field addressing. This require concretization which could be support
-        // for at least a few values.
-        //
-        // Hence, we check if the current type is a struct. And if it is, the
-        // operand is required to be a constant, for now.
-        let base_addr = self.state.get_bv_from_operand(&instr.address).unwrap();
-        let ptr_size = base_addr.get_width();
+        debug!("{}", instr);
+        let target_address = gep_op(
+            &instr.address,
+            &instr.indices,
+            instr.in_bounds,
+            &mut self.state,
+        )?;
 
-        let value_ty = self.state.type_of(&instr.address);
-        let value_size = size_in_bytes(&value_ty, self.project).unwrap().unwrap() as u64;
-        let value_size = self.solver.bv_from_u64(value_size, ptr_size);
-        let upper_bound = base_addr.add(&value_size);
-
-        let target_addr = base_addr.clone();
-
-        // The offsets modifies the address ptr, and this is the type of what
-        // is currently pointed to.
-        let mut curr_ty = self.state.type_of(&instr.address);
-        for index in instr.indices.iter() {
-            let is_struct = matches!(
-                curr_ty.as_ref(),
-                Type::NamedStructType { .. } | Type::StructType { .. }
-            );
-
-            let (offset, ty) = if is_struct {
-                // Concrete indexing into a struct.
-                let index = u64_from_operand(index).unwrap() as usize;
-                let (offset, ty) = get_offset_in_bits(&curr_ty, index, self.project);
-
-                let offset_bytes = (offset / 8) as u64;
-                let offset = self.solver.bv_from_u64(offset_bytes, ptr_size);
-
-                (offset, ty)
-            } else {
-                // Symbolic index. We cannot support struct indexing here, since
-                // we calculate the offset as size of type * index, which won't
-                // offset correctly for structs.
-                let index = self.state.get_bv_from_operand(index).unwrap();
-                let index = index.zero_ext(ptr_size);
-
-                let bytes = size_in_bytes(&curr_ty, self.project).unwrap().unwrap() as u64;
-                let bytes = self.solver.bv_from_u64(bytes, ptr_size);
-
-                let ty = get_inner_type(&curr_ty, self.project).unwrap();
-
-                let offset = bytes.mul(&index).into();
-                (offset, ty)
-            };
-
-            target_addr.add(&offset);
-            curr_ty = ty;
-        }
-
-        // Check that the target address is in bounds.
-        let is_below = target_addr.ult(&base_addr);
-        let is_above = target_addr.ugte(&upper_bound);
-        let out_of_bounds = is_below.or(&is_above).into();
-        if self.solver.is_sat_with_constraint(&out_of_bounds).unwrap() {
-            out_of_bounds.assert();
-            let sol = self.solver.get_solutions_for_bv(&base_addr, 1).unwrap();
-            match sol {
-                crate::Solutions::None => println!("==== no solution"),
-                crate::Solutions::Exactly(n) => println!("==== exact {:?}", n),
-                crate::Solutions::AtLeast(n) => println!("==== atleast {:?}", n),
-            }
-            // panic!("not in bounds");
-            return Err(VMError::OutOfBounds);
-        }
-
-        self.assign(instr, target_addr)
+        self.assign(instr, target_address)
     }
 
     // -------------------------------------------------------------------------
@@ -593,7 +559,7 @@ impl<'a> VM<'a> {
     // -------------------------------------------------------------------------
 
     fn trunc(&mut self, instr: &instruction::Trunc) -> Result<()> {
-        trace!("{}", instr);
+        debug!("{}", instr);
         todo!()
     }
 
@@ -604,7 +570,7 @@ impl<'a> VM<'a> {
     ///
     /// Reference: https://llvm.org/docs/LangRef.html#zext-to-instruction
     fn zext(&mut self, instr: &instruction::ZExt) -> Result<()> {
-        trace!("{}", instr);
+        debug!("{}", instr);
 
         // Required that both type be integers, or vector with the same number
         // of integers.
@@ -612,8 +578,8 @@ impl<'a> VM<'a> {
         match (ty0.as_ref(), instr.to_type.as_ref()) {
             (Type::IntegerType { bits: n }, Type::IntegerType { bits: m }) => {
                 assert!(n < m);
-                let value = self.state.get_bv_from_operand(&instr.operand).unwrap();
-                assert_eq!(*n, value.get_width());
+                let value = self.state.get_bv(&instr.operand).unwrap();
+                assert_eq!(*n, value.len());
 
                 let value = value.zero_ext(*m);
                 self.state
@@ -637,14 +603,14 @@ impl<'a> VM<'a> {
     }
 
     fn sext(&mut self, instr: &instruction::SExt) -> Result<()> {
-        trace!("{}", instr);
+        debug!("{}", instr);
 
         let ty0 = self.state.type_of(&instr.operand);
         match (ty0.as_ref(), instr.to_type.as_ref()) {
             (Type::IntegerType { bits: n }, Type::IntegerType { bits: m }) => {
                 assert!(n < m);
-                let value = self.state.get_bv_from_operand(&instr.operand).unwrap();
-                assert_eq!(*n, value.get_width());
+                let value = self.state.get_bv(&instr.operand).unwrap();
+                assert_eq!(*n, value.len());
 
                 let value = value.sign_ext(*m);
                 self.state
@@ -668,46 +634,48 @@ impl<'a> VM<'a> {
     }
 
     fn fptrunc(&mut self, instr: &instruction::FPTrunc) -> Result<()> {
-        trace!("{}", instr);
+        debug!("{}", instr);
         todo!()
     }
 
     fn fpext(&mut self, instr: &instruction::FPExt) -> Result<()> {
-        trace!("{}", instr);
+        debug!("{}", instr);
         todo!()
     }
 
     fn fptoui(&mut self, instr: &instruction::FPToUI) -> Result<()> {
-        trace!("{}", instr);
+        debug!("{}", instr);
         todo!()
     }
 
     fn fptosi(&mut self, instr: &instruction::FPToSI) -> Result<()> {
-        trace!("{}", instr);
+        debug!("{}", instr);
         todo!()
     }
 
     fn uitofp(&mut self, instr: &instruction::UIToFP) -> Result<()> {
-        trace!("{}", instr);
+        debug!("{}", instr);
         todo!()
     }
 
     fn sitofp(&mut self, instr: &instruction::SIToFP) -> Result<()> {
-        trace!("{}", instr);
+        debug!("{}", instr);
         todo!()
     }
 
     fn ptrtoint(&mut self, instr: &instruction::PtrToInt) -> Result<()> {
-        trace!("{}", instr);
-        todo!()
+        debug!("{}", instr);
+        let bv = cast_to(&mut self.state, &instr.to_type, &instr.operand)?;
+        self.assign(instr, bv)
     }
 
     fn inttoptr(&mut self, instr: &instruction::IntToPtr) -> Result<()> {
-        trace!("{}", instr);
-        todo!()
+        debug!("{}", instr);
+        let bv = cast_to(&mut self.state, &instr.to_type, &instr.operand)?;
+        self.assign(instr, bv)
     }
 
-    /// Bitcast casts a value to to resulting type without chaning any of the
+    /// Bitcast casts a value to to resulting type without changing any of the
     /// bits.
     ///
     /// Essentially a no-op, the implementation only stores the source value
@@ -715,14 +683,15 @@ impl<'a> VM<'a> {
     ///
     /// Reference: https://llvm.org/docs/LangRef.html#bitcast-to-instruction
     fn bitcast(&mut self, instr: &instruction::BitCast) -> Result<()> {
-        trace!("{}", instr);
-        let src_bv = self.state.get_bv_from_operand(instr.get_operand()).unwrap();
-        self.assign(instr, src_bv)
+        debug!("{}", instr);
+        let bv = cast_to(&mut self.state, &instr.to_type, &instr.operand)?;
+        self.assign(instr, bv)
     }
 
     fn addrspacecast(&mut self, instr: &instruction::AddrSpaceCast) -> Result<()> {
-        trace!("{}", instr);
-        todo!()
+        debug!("{}", instr);
+        let bv = cast_to(&mut self.state, &instr.to_type, &instr.operand)?;
+        self.assign(instr, bv)
     }
 
     // -------------------------------------------------------------------------
@@ -730,53 +699,46 @@ impl<'a> VM<'a> {
     // -------------------------------------------------------------------------
 
     fn icmp(&mut self, instr: &instruction::ICmp) -> Result<()> {
-        trace!("{}", instr);
-
-        let lhs = self.state.get_bv_from_operand(&instr.operand0).unwrap();
-        let rhs = self.state.get_bv_from_operand(&instr.operand1).unwrap();
-        let result = match instr.predicate {
-            IntPredicate::EQ => lhs._eq(&rhs),
-            IntPredicate::NE => lhs._ne(&rhs),
-            IntPredicate::UGT => lhs.ugt(&rhs).into(),
-            IntPredicate::UGE => lhs.ugte(&rhs).into(),
-            IntPredicate::ULT => lhs.ult(&rhs).into(),
-            IntPredicate::ULE => lhs.ulte(&rhs).into(),
-            IntPredicate::SGT => lhs.sgt(&rhs).into(),
-            IntPredicate::SGE => lhs.sgte(&rhs).into(),
-            IntPredicate::SLT => lhs.slt(&rhs).into(),
-            IntPredicate::SLE => lhs.slte(&rhs).into(),
-        };
-
+        debug!("{}", instr);
+        let result = icmp(
+            &mut self.state,
+            &instr.operand0,
+            &instr.operand1,
+            instr.predicate,
+        )?;
         self.assign(instr, result)
     }
 
     fn fcmp(&mut self, instr: &instruction::FCmp) -> Result<()> {
-        trace!("{}", instr);
+        debug!("{}", instr);
         todo!()
     }
 
     fn phi(&mut self, instr: &instruction::Phi) -> Result<()> {
-        trace!("{}", instr);
+        debug!("{}", instr);
         todo!()
     }
 
     fn select(&mut self, instr: &instruction::Select) -> Result<()> {
-        trace!("{}", instr);
+        debug!("{}", instr);
         todo!()
     }
 
     fn freeze(&mut self, instr: &instruction::Freeze) -> Result<()> {
-        trace!("{}", instr);
+        debug!("{}", instr);
         todo!()
     }
 
     fn call(&mut self, instr: &'a instruction::Call) -> Result<()> {
-        trace!("{:?}", instr);
+        debug!("{:?}", instr);
 
         let fn_name = self.resolve_function(&instr.function)?;
         println!("fn_name: {:?}", fn_name);
 
-        let ret_val = match self.project.fn_by_name(&fn_name)? {
+        let ret_val = match self
+            .project
+            .get_function(&fn_name, self.state.current_loc.module)?
+        {
             FunctionType::Hook(hook) => {
                 let info = FnInfo {
                     arguments: instr.arguments.clone(),
@@ -789,12 +751,11 @@ impl<'a> VM<'a> {
                 let arguments = instr
                     .arguments
                     .iter()
-                    .map(|(op, _)| self.state.get_bv_from_operand(op))
-                    .collect::<anyhow::Result<Vec<_>>>()
-                    .unwrap();
+                    .map(|(op, _)| self.state.get_bv(op))
+                    .collect::<Result<Vec<_>>>()?;
 
-                // Create new location at the start of function to call, and store
-                // our current position in the callstack so we can return here later.
+                // Create new location at the start of function to call, and store our current
+                // position in the callstack so we can return here later.
                 let mut new_location = Location::new(module, function);
                 std::mem::swap(&mut new_location, &mut self.state.current_loc);
 
@@ -831,22 +792,22 @@ impl<'a> VM<'a> {
     }
 
     fn va_arg(&mut self, instr: &instruction::VAArg) -> Result<()> {
-        trace!("{}", instr);
+        debug!("{}", instr);
         todo!()
     }
 
     fn landingpad(&mut self, instr: &instruction::LandingPad) -> Result<()> {
-        trace!("{}", instr);
+        debug!("{}", instr);
         todo!()
     }
 
     fn catchpad(&mut self, instr: &instruction::CatchPad) -> Result<()> {
-        trace!("{}", instr);
+        debug!("{}", instr);
         todo!()
     }
 
     fn cleanuppad(&mut self, instr: &instruction::CleanupPad) -> Result<()> {
-        trace!("{}", instr);
+        debug!("{}", instr);
         todo!()
     }
 }

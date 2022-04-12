@@ -24,17 +24,11 @@ impl Scope {
 
 /// Environment that holds all stack variables declared.
 ///
-/// Scoped by the current function. Keeps track of the current version, for
-/// detecting loop iterations.
+/// Scoped by the current function.
 #[derive(Debug, Clone)]
 pub struct VarMap {
     /// Variables for each scope (function).
     scopes: Vec<Scope>,
-    // /// Reference to the solver.
-    //solver: BV::SolverRef,
-
-    // /// Highest version number allow.
-    //max_version: usize,
 }
 
 impl VarMap {

@@ -1,8 +1,9 @@
 use crate::{
-    llvm::{operand_to_bv, size_in_bits},
+    llvm::*,
     memory::bump_allocator::BumpAllocator,
     memory::simple_memory::Memory,
     project::Project,
+    traits::Op,
     {Solver, BV},
 };
 use llvm_ir::{
@@ -11,10 +12,11 @@ use llvm_ir::{
     types::Typed,
     Constant, Function, Module, Name, Operand, TypeRef,
 };
+use log::warn;
 
-use super::varmap::VarMap;
-use super::Location;
-use anyhow::Result;
+use super::{varmap::VarMap, Globals};
+use super::{Allocation, Location};
+use super::{AllocationType, Result};
 
 #[derive(Debug, Clone)]
 pub enum Call<'a> {
@@ -98,13 +100,13 @@ impl<'a> Path<'a> {
 #[derive(Debug, Clone)]
 pub struct State<'a> {
     /// The project where this state executes over.
-    project: &'a Project,
+    pub project: &'a Project,
 
     /// Reference to the solver, used in the `VM` as well.
     pub solver: Solver,
 
     /// Stack allocations.
-    stack: BumpAllocator,
+    pub stack: BumpAllocator,
 
     pub callstack: Vec<Callsite<'a>>,
 
@@ -117,6 +119,8 @@ pub struct State<'a> {
 
     /// The global memory. That both stack and heap allocations use.
     pub mem: Memory,
+
+    pub globals: Globals<'a>,
 }
 
 impl<'a> State<'a> {
@@ -134,12 +138,29 @@ impl<'a> State<'a> {
             mem: Memory::new_uninitialized(solver.clone(), project.ptr_size as u32),
             solver,
             callstack: Vec::new(),
+            globals: Globals::new(),
+        }
+    }
+
+    pub fn get(&mut self, op: Op<'_>) -> Result<BV> {
+        match op {
+            Op::Operand(o) => self.get_bv(o),
+            Op::Constant(c) => self.get_bv_from_constant(c),
         }
     }
 
     /// Allocate an unitialized value `name` on the stack with size `allocation_size`.
-    pub fn stack_alloc(&mut self, allocation_size: usize, align: usize) -> Result<BV> {
-        let ptr = self.stack.get_address(allocation_size, align);
+    pub fn stack_alloc(&mut self, allocation_size: u64, align: u64) -> Result<BV> {
+        let align = if align == 0 {
+            warn!("Alignment of 0");
+            self.project.default_alignment
+        } else {
+            align
+        };
+
+        let ptr = self
+            .stack
+            .get_address(allocation_size as usize, align as usize);
 
         let bv = self
             .solver
@@ -156,23 +177,56 @@ impl<'a> State<'a> {
         Ok(())
     }
 
-    pub fn get_bv_from_operand(&mut self, op: &Operand) -> Result<BV> {
+    pub fn get_bv(&mut self, op: &Operand) -> Result<BV> {
+        // let bv = op.to_bv(self).unwrap();
         let bv = operand_to_bv(op, self).unwrap();
         Ok(bv)
     }
 
-    // pub fn get_bv_from_constant(&mut self, constant: &Constant) -> Result<BV> {
-    //     todo!()
+    pub fn get_bv_from_constant(&mut self, c: &Constant) -> Result<BV> {
+        let bv = const_to_bv(c, self).unwrap();
+        Ok(bv)
+    }
+
+    // -------------------------------------------------------------------------
+    // Globals
+    // -------------------------------------------------------------------------
+
+    pub fn get_global(&self, name: &Name) -> Option<&Allocation<'a>> {
+        self.globals.get(name, self.current_loc.module)
+    }
+
+    // pub fn initialize_globals(&mut self) {
+    //     for (_, allocation) in &self.globals.globals {
+    //         match &allocation.kind {
+    //             AllocationType::Variable(v) => {
+    //                 let value = self.get_bv_from_constant(&v.initializer).unwrap();
+    //                 self.mem.write(&allocation.addr_bv, value).unwrap();
+    //             }
+    //             AllocationType::Function(_) => {}
+    //         }
+    //     }
+    //     for (_, map) in &self.globals.private_globals {
+    //         for (_, allocation) in map {
+    //             match &allocation.kind {
+    //                 AllocationType::Variable(v) => {
+    //                     let value = self.get_bv_from_constant(&v.initializer).unwrap();
+    //                     self.mem.write(&allocation.addr_bv, value).unwrap();
+    //                 }
+    //                 AllocationType::Function(_) => {}
+    //             }
+    //         }
+    //     }
     // }
 
     // -------------------------------------------------------------------------
     // Helpers I may need, check if these should be in State.
     // -------------------------------------------------------------------------
 
-    pub fn get_result<T: Typed + HasResult>(&self, t: &T) -> (Name, usize) {
+    pub fn get_result<T: Typed + HasResult>(&self, t: &T) -> (Name, u64) {
         let name = t.get_result().clone();
         let ty = self.type_of(t);
-        let size = size_in_bits(&ty, self.project).unwrap(); // TODO
+        let size = ty.size(self.project).unwrap();
         (name, size)
     }
 

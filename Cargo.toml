@@ -14,3 +14,5 @@ log = "0.4.0"
 env_logger = "0.9.0"
 rustc-demangle = "0.1.21"
 boolector = "0.4.2"
+z3 = {version="0.11.2", features = ["static-link-z3"]}
+radix_trie = "0.2.1"

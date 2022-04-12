@@ -45,10 +45,14 @@ impl Solver {
         // it should only be valid until the next call to is_sat
 
         self.btor.push(1);
-        constraint.assert();
+        self.assert(constraint);
         let is_sat = self.is_sat()?;
         self.btor.pop(1);
         Ok(is_sat)
+    }
+
+    pub fn assert(&self, bv: &BV) {
+        bv.0.assert();
     }
 
     // -------------------------------------------------------------------------
@@ -92,15 +96,19 @@ impl Solver {
             return Ok(Solutions::None);
         }
 
+        let mut solutions_found = 0;
         let mut solutions = Vec::new();
-        while solutions.len() <= max_solutions && self.is_sat()? {
+        while solutions_found <= max_solutions && self.is_sat()? {
             let solution = bv.get_solution().disambiguate();
 
             // Constrain the next value to not be an already found solution.
             let solution_bv = self.from_binary_string(solution.as_01x_str());
-            bv._ne(&solution_bv);
+            self.assert(&bv.ne(&solution_bv));
 
+            solutions_found += 1;
+            // if solutions.len() != max_solutions {
             solutions.push(solution);
+            // }
         }
 
         Ok(match solutions.len() {

@@ -1,16 +1,27 @@
+use llvm_ir::{
+    module::GlobalVariable,
+    types::{NamedStructDef, Typed},
+    Function, Module, Type, TypeRef,
+};
+use log::info;
+use rustc_demangle::demangle;
+use std::iter;
 use std::path::Path;
+use thiserror::Error;
 
 use crate::{
     hooks::{Hook, Hooks},
     vm::{Result, VMError},
 };
-use llvm_ir::{types::NamedStructDef, Function, Module};
-use log::info;
-use rustc_demangle::demangle;
+use map::ModulePrivateMap;
 
 mod config;
+mod map;
 
 pub use config::Config;
+
+#[derive(Debug, Error)]
+pub enum ProjectError {}
 
 pub enum FunctionType<'a> {
     Function {
@@ -25,14 +36,18 @@ pub enum FunctionType<'a> {
 /// The `VM` takes `Project` and the entry function and exectues over that.
 pub struct Project {
     /// The modules the project consists of.
-    modules: Vec<Module>,
+    modules: &'static [Module],
 
     /// Pointer size in bits used in the project.
-    pub ptr_size: usize,
+    pub ptr_size: u64,
+
+    pub default_alignment: u64,
 
     hooks: Hooks,
 
     config: Config,
+
+    functions: ModulePrivateMap<'static>,
 }
 
 impl std::fmt::Debug for Project {
@@ -51,95 +66,72 @@ impl Project {
     pub fn from_bc_path(path: impl AsRef<Path>) -> anyhow::Result<Self> {
         info!("Parsing bitcode in file {}", path.as_ref().display());
         let module = Module::from_bc_path(path).map_err(|e| anyhow::anyhow!(e))?;
-
         let ptr_size = module.data_layout.alignments.ptr_alignment(0).size;
 
+        let modules: &'static [Module] = {
+            let v = vec![module];
+            v.leak()
+        };
+
+        let mut functions = ModulePrivateMap::new();
+        for module in modules.iter() {
+            for function in module.functions.iter() {
+                functions.insert(function.name.clone(), function, module);
+            }
+        }
+
         let project = Self {
-            ptr_size: ptr_size as usize,
-            modules: vec![module],
+            ptr_size: ptr_size as u64,
+            default_alignment: 4,
+            modules,
             hooks: Hooks::new(),
             config: Config::default(),
+            functions,
         };
         Ok(project)
     }
 
-    pub fn fn_by_name(&self, name: &str) -> Result<FunctionType<'_>> {
-        // TODO: This is pretty inefficient in that when searching for a function each and every
-        // function name is converted to a string, demangled, demangled without hash. This could be
-        // done as a pre-pass for all functions and stored in a HashMap or something.
-        //
-        // Also: How does function visibility work more in detail? Can there be multiple private
-        // functions with the same name?
+    pub fn get_function<'s>(&self, name: &str, module: &'s Module) -> Result<FunctionType<'s>> {
+        let module_name = module.name.to_string();
+        let demangled_names = [demangle(name).to_string(), format!("{:#}", demangle(name))];
 
-        // Check if this is a hook.
-        if let Some(hook) = self.find_hook(name) {
+        // Check for hook.
+        if let Some(hook) = self.hooks.get(name) {
             return Ok(FunctionType::Hook(hook));
         }
-
-        // Check if we can find the literal function name.
-        if let Some(res) = self.find_fn_by_name(name, |name| name.to_owned())? {
-            return Ok(FunctionType::Function {
-                function: res.0,
-                module: res.1,
-            });
+        for name in demangled_names.iter() {
+            if let Some(hook) = self.hooks.get(&name.as_str()) {
+                return Ok(FunctionType::Hook(hook));
+            }
         }
 
-        // Check if name is a demangled name.
-        if let Some(res) = self.find_fn_by_name(name, |name| demangle(name).to_string())? {
-            return Ok(FunctionType::Function {
-                function: res.0,
-                module: res.1,
-            });
-        }
-
-        // Check if name is demangled name without trailing hash.
-        if let Some(res) = self.find_fn_by_name(name, |name| format!("{:#}", demangle(name)))? {
-            return Ok(FunctionType::Function {
-                function: res.0,
-                module: res.1,
-            });
+        // Check for regular function.
+        if let Some((function, module)) = self.functions.get(name, &module_name) {
+            return Ok(FunctionType::Function { function, module });
         }
 
         Err(VMError::FunctionNotFound(name.to_string()))
-        // Err(anyhow!("Could not find function {}", name))
     }
 
-    fn find_hook(&self, name: &str) -> Option<Hook> {
-        // TODO: move demangling here instead of in hooks.get
-        self.hooks.get(name)
-    }
+    pub fn find_entry_function<'s>(&'s self, name: &str) -> Result<(&'s Function, &'s Module)> {
+        let mut return_function = None;
+        for module in self.modules {
+            for function in &module.functions {
+                let demangled = demangle(&function.name);
 
-    fn find_fn_by_name<F>(&self, name: &str, convert: F) -> Result<Option<(&Function, &Module)>>
-    where
-        F: Fn(&str) -> String,
-    {
-        // Find functions that match the name in any modules.
-        let results: Vec<_> = self
-            .modules
-            .iter()
-            .filter_map(|module| {
-                module
-                    .functions
-                    .iter()
-                    .find(|f| convert(&f.name) == name)
-                    .map(|f| (f, module))
-            })
-            .collect();
-
-        if results.len() > 1 {
-            // Found more than one matching function.
-            panic!(
-                "Found {} function with name {} in modules",
-                results.len(),
-                name
-            );
+                if function.name == name
+                    || demangled.to_string() == name
+                    || format!("{:#}", demangled) == name
+                {
+                    if return_function.is_some() {
+                        panic!("Multiple functions with name {} exist", name);
+                    }
+                    return_function = Some((function, module));
+                }
+            }
         }
 
-        if let Some(d) = results.first() {
-            Ok(Some(*d))
-        } else {
-            Ok(None)
-        }
+        return_function.ok_or_else(|| VMError::FunctionNotFound(name.to_string()))
     }
 
     pub fn get_named_struct(&self, name: &str) -> Option<&NamedStructDef> {
@@ -158,19 +150,19 @@ impl Project {
         ret
     }
 
-    // pub fn get_all_functions(&self) -> impl Iterator<Item = (&Module, &Function)> {
-    //     self.modules
-    //         .iter()
-    //         .map(|module| iter::repeat(module).zip(module.functions.iter()))
-    //         .flatten()
-    // }
+    pub fn get_all_functions<'s>(&'s self) -> impl Iterator<Item = (&'s Module, &'s Function)> {
+        self.modules
+            .iter()
+            .map(|module| iter::repeat(module).zip(module.functions.iter()))
+            .flatten()
+    }
 
-    // pub fn get_all_global_vars(&self) -> impl Iterator<Item = (&Module, &GlobalVariable)> {
-    //     self.modules
-    //         .iter()
-    //         .map(|module| iter::repeat(module).zip(module.global_vars.iter()))
-    //         .flatten()
-    // }
+    pub fn get_all_global_vars(&self) -> impl Iterator<Item = (&Module, &GlobalVariable)> {
+        self.modules
+            .iter()
+            .map(|module| iter::repeat(module).zip(module.global_vars.iter()))
+            .flatten()
+    }
 
     // pub fn get_all_global_aliases(&self) -> impl Iterator<Item = (&Module, &GlobalAlias)> {
     //     self.modules
@@ -185,4 +177,8 @@ impl Project {
 
     // fn add_hook() {}
     // fn add_hook_to_module() {} // may be interesting to only add hooks to certain modules
+
+    pub fn size_of(&self, ty: impl Typed) -> Option<u32> {
+        todo!()
+    }
 }

@@ -1,4 +1,4 @@
-use boolector::BVSolution;
+use ::boolector::BVSolution;
 
 mod bv;
 mod solver;
@@ -14,10 +14,14 @@ pub enum BinaryOperation {
     SDiv,
     URem,
     SRem,
+    And,
+    Or,
+    Xor,
 }
 
 pub enum UnaryOperation {}
 
+#[derive(Debug)]
 pub enum Solutions {
     /// Could not find any solutions with the current constraints.
     None,

@@ -43,11 +43,7 @@ impl Memory {
 
     pub fn read(&self, addr: &BV, bits: u32) -> Result<BV> {
         trace!("{} read addr={:?}, bits={}", self.name, addr, bits);
-        assert_eq!(
-            addr.get_width(),
-            self.ptr_size,
-            "passed wrong sized address"
-        );
+        assert_eq!(addr.len(), self.ptr_size, "passed wrong sized address");
 
         // if self.null_detection {
         //     panic!("");
@@ -77,31 +73,27 @@ impl Memory {
 
     pub fn write(&mut self, addr: &BV, value: BV) -> Result<()> {
         trace!("{} write addr={:?}, value={:?}", self.name, addr, value);
-        assert_eq!(
-            addr.get_width(),
-            self.ptr_size,
-            "passed wrong sized address"
-        );
+        assert_eq!(addr.len(), self.ptr_size, "passed wrong sized address");
 
         // if self.null_detection {
         //     panic!("");
         // }
 
         // Check if we should zero extend the value (if it less than 8-bits).
-        let value = if value.get_width() < BITS_IN_BYTE {
-            value.uext(BITS_IN_BYTE - value.get_width()).into()
+        let value = if value.len() < BITS_IN_BYTE {
+            value.uext(BITS_IN_BYTE - value.len()).into()
         } else {
             value
         };
 
         // Ensure the value we write is a multiple of `BITS_IN_BYTE`.
-        assert_eq!(value.get_width() & BITS_IN_BYTE, 0);
+        assert_eq!(value.len() & BITS_IN_BYTE, 0);
 
-        let num_bytes = value.get_width() / BITS_IN_BYTE;
+        let num_bytes = value.len() / BITS_IN_BYTE;
         for n in 0..num_bytes {
             let low_bit = n * BITS_IN_BYTE;
             let high_bit = (n + 1) * BITS_IN_BYTE - 1;
-            let byte = value.slice(high_bit, low_bit);
+            let byte = value.slice(low_bit, high_bit);
 
             let offset = self.solver.bv_from_u64(n as u64, self.ptr_size);
             let addr = addr.add(&offset);
