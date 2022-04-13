@@ -29,8 +29,7 @@ trait Global {
 
 #[derive(Debug, Clone)]
 pub struct Allocation<'p> {
-    addr: u64,
-
+    //addr: u64,
     pub addr_bv: BV,
 
     pub kind: AllocationType<'p>,
@@ -133,7 +132,7 @@ impl<'p> Globals<'p> {
     pub fn add_global_variable(&mut self, var: &'p GlobalVariable, module: &'p Module, addr: BV) {
         let init = var.initializer.clone().unwrap();
         let g = Allocation {
-            addr: 0,
+            //addr: 0,
             addr_bv: addr,
             kind: AllocationType::Variable(GlobalVar {
                 initializer: init,
@@ -146,7 +145,7 @@ impl<'p> Globals<'p> {
 
     pub fn add_function(&mut self, f: &'p Function, module: &'p Module, addr: BV, addr_u64: u64) {
         let g = Allocation {
-            addr: 0,
+            //addr: 0,
             addr_bv: addr,
             kind: AllocationType::Function(FFunction {
                 module,

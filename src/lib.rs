@@ -3,21 +3,14 @@
 #![allow(clippy::module_inception)]
 //#![allow(unused_imports)]
 
-//pub mod bv;
-mod hooks;
-// pub mod llvm;
+pub mod hooks;
 pub mod memory;
 pub mod project;
 pub mod solver;
-//mod solvert;
-pub(crate) mod modpriv;
-// pub mod util;
+pub mod traits;
 pub mod vm;
 
 pub use solver::{Solutions, Solver, BV};
-
-// new
-pub mod traits;
 
 #[cfg(test)]
 mod tests {

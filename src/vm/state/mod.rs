@@ -6,7 +6,7 @@ use llvm_ir::{
 };
 use log::warn;
 
-use super::{varmap::VarMap, Allocation, Globals, Location, Result};
+use super::{Allocation, Globals, Result};
 use crate::{
     memory::bump_allocator::BumpAllocator,
     memory::simple_memory::Memory,
@@ -14,6 +14,12 @@ use crate::{
     traits::{Op, Size, ToBV},
     {Solver, BV},
 };
+
+mod location;
+mod varmap;
+
+pub use location::*;
+pub use varmap::*;
 
 #[derive(Debug, Clone)]
 pub enum Call<'a> {
@@ -176,17 +182,6 @@ impl<'a> State<'a> {
         self.vars.insert(name, bv).unwrap();
         Ok(())
     }
-
-    // pub fn get_bv(&mut self, op: &Operand) -> Result<BV> {
-    //     // let bv = op.to_bv(self).unwrap();
-    //     let bv = operand_to_bv(op, self).unwrap();
-    //     Ok(bv)
-    // }
-
-    // pub fn get_bv_from_constant(&mut self, c: &Constant) -> Result<BV> {
-    //     let bv = const_to_bv(c, self).unwrap();
-    //     Ok(bv)
-    // }
 
     // -------------------------------------------------------------------------
     // Globals

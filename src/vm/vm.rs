@@ -7,37 +7,9 @@ use log::{debug, trace};
 use crate::project::Project;
 use crate::solver::{Solver, BV};
 use crate::traits::Size;
-use crate::vm::location::Location;
+use crate::vm::Location;
 use crate::vm::Result;
-use crate::vm::{Call, Path, State, VMError};
-
-// #[derive(Debug, PartialEq, Eq)]
-// pub enum ReturnValue {
-//     /// The function returns a `BV` value.
-//     Return(BV),
-
-//     /// The function returns void.
-//     Void,
-
-//     /// The function throws.
-//     Throw(BV),
-
-//     /// The function aborted.
-//     Abort,
-// }
-
-// Might be what I actually want.
-//
-// So Throw & Abort are errors which are caught. And then before returning
-// to the user it could be transformed into another one.
-//
-// So the issue with the ReturnValue enum is that for, at least, abort we want
-// to basically return back to the caller. Going up our current callstack
-// (and the interpreted program's callstack).
-//
-// TODO: Check throw how that is supposed to work. If I use an error for that
-// it might mess up when they have to be caught and stuff. Esp since variables
-// are scoped the to interpreteted callstack.
+use crate::vm::{Call, Path, State};
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum ReturnValue {
@@ -134,11 +106,7 @@ impl<'a> VM<'a> {
                 self.backtracking_paths.len()
             );
 
-            let mut r = self.backtrack_and_continue();
-
-            // if let Err(VMError::Abort) = r {
-            //     r = Ok(ReturnValue::Abort);
-            // }
+            let r = self.backtrack_and_continue();
 
             println!("Result: {:?}", r);
             results.push(r);
@@ -467,6 +435,7 @@ impl<'a> VM<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::vm::VMError;
 
     fn run(path: &str, f: &str) -> Vec<Result<ReturnValue>> {
         let _ = env_logger::builder().is_test(true).try_init();

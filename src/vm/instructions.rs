@@ -7,8 +7,8 @@ use crate::hooks::FnInfo;
 use crate::project::FunctionType;
 use crate::solver::BinaryOperation;
 use crate::traits::*;
-use crate::vm::location::Location;
 use crate::vm::Callsite;
+use crate::vm::Location;
 use crate::vm::Result;
 
 impl<'a> VM<'a> {
