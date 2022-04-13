@@ -1,9 +1,8 @@
-use anyhow::Result;
 use boolector::Btor;
 use log::trace;
 use std::rc::Rc;
 
-use super::BITS_IN_BYTE;
+use super::{MemoryError, BITS_IN_BYTE};
 use crate::{Solver, BV};
 
 type Array = boolector::Array<Rc<Btor>>;
@@ -41,7 +40,7 @@ impl Memory {
         self.mem = self.mem.write(addr, val);
     }
 
-    pub fn read(&self, addr: &BV, bits: u32) -> Result<BV> {
+    pub fn read(&self, addr: &BV, bits: u32) -> Result<BV, MemoryError> {
         trace!("{} read addr={:?}, bits={}", self.name, addr, bits);
         assert_eq!(addr.len(), self.ptr_size, "passed wrong sized address");
 
@@ -71,7 +70,7 @@ impl Memory {
         Ok(value)
     }
 
-    pub fn write(&mut self, addr: &BV, value: BV) -> Result<()> {
+    pub fn write(&mut self, addr: &BV, value: BV) -> Result<(), MemoryError> {
         trace!("{} write addr={:?}, value={:?}", self.name, addr, value);
         assert_eq!(addr.len(), self.ptr_size, "passed wrong sized address");
 

@@ -1,5 +1,7 @@
 use thiserror::Error;
 
+use crate::memory::MemoryError;
+
 pub type Result<T> = std::result::Result<T, VMError>;
 
 pub type StatusCode = i64;
@@ -47,6 +49,9 @@ pub enum VMError {
 
     #[error("Expected type to be non-zero sized")]
     UnexpectedZeroSize,
+
+    #[error(transparent)]
+    MemoryError(#[from] MemoryError),
 
     #[error(transparent)]
     Other(#[from] anyhow::Error),

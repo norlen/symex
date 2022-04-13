@@ -1,7 +1,11 @@
 use llvm_ir::types::{FPType, NamedStructDef, Type, TypeRef};
 
 use super::Size;
-use crate::{memory::to_bytes, project::Project, vm::Result};
+use crate::{
+    memory::to_bytes,
+    project::Project,
+    vm::{Result, VMError},
+};
 
 impl Size for Type {
     fn size(&self, project: &Project) -> Option<u64> {
@@ -17,13 +21,18 @@ impl Size for Type {
     }
 
     fn size_in_bytes(&self, project: &Project) -> Result<Option<u64>> {
-        self.size(project).map(to_bytes).transpose()
+        self.size(project)
+            .map(to_bytes)
+            .transpose()
+            .map_err(|err| VMError::MemoryError(err))
     }
 
     fn offset_in_bytes(&self, index: u64, project: &Project) -> Result<Option<(u64, TypeRef)>> {
         match self.offset(index, project) {
             None => Ok(None),
-            Some((size, ty)) => to_bytes(size).map(|s| Some((s, ty))),
+            Some((size, ty)) => to_bytes(size)
+                .map(|s| Some((s, ty)))
+                .map_err(|err| VMError::MemoryError(err)),
         }
     }
 }
@@ -42,13 +51,18 @@ impl Size for TypeRef {
     }
 
     fn size_in_bytes(&self, project: &Project) -> Result<Option<u64>> {
-        self.size(project).map(to_bytes).transpose()
+        self.size(project)
+            .map(to_bytes)
+            .transpose()
+            .map_err(|err| VMError::MemoryError(err))
     }
 
     fn offset_in_bytes(&self, index: u64, project: &Project) -> Result<Option<(u64, TypeRef)>> {
         match self.offset(index, project) {
             None => Ok(None),
-            Some((size, ty)) => to_bytes(size).map(|s| Some((s, ty))),
+            Some((size, ty)) => to_bytes(size)
+                .map(|s| Some((s, ty)))
+                .map_err(|err| VMError::MemoryError(err)),
         }
     }
 }

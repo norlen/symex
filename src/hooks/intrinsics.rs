@@ -63,10 +63,10 @@ impl Intrinsics {
         s
     }
 
-    /// Add a fixed length intrinsic.
-    fn add_fixed(&mut self, name: impl Into<String>, hook: Hook) {
-        self.fixed.insert(name.into(), hook);
-    }
+    // /// Add a fixed length intrinsic.
+    // fn add_fixed(&mut self, name: impl Into<String>, hook: Hook) {
+    //     self.fixed.insert(name.into(), hook);
+    // }
 
     /// Add a variable length intrinsic, e.g. if they support any kind of
     /// bidwidth such as `llvm.abs.*`.

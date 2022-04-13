@@ -6,7 +6,7 @@ use llvm_ir::{
 };
 use log::warn;
 
-use super::{Allocation, AllocationType, Globals, Result};
+use super::{Allocation, Globals, Result};
 use crate::{
     memory::bump_allocator::BumpAllocator,
     memory::simple_memory::Memory,
@@ -144,7 +144,7 @@ impl<'a> State<'a> {
             globals: Globals::new(),
         };
 
-        state.allocate_globals(project.modules);
+        state.allocate_globals(project.modules).unwrap();
         state
     }
 
@@ -167,13 +167,8 @@ impl<'a> State<'a> {
             align
         };
 
-        let ptr = self
-            .stack
-            .get_address(allocation_size as usize, align as usize);
-
-        let bv = self
-            .solver
-            .bv_from_u64(ptr as u64, self.project.ptr_size as u32);
+        let ptr = self.stack.get_address(allocation_size, align)?;
+        let bv = self.solver.bv_from_u64(ptr, self.project.ptr_size as u32);
         Ok(bv)
     }
 
@@ -232,7 +227,7 @@ impl<'a> State<'a> {
         self.current_loc.module.type_of(t)
     }
 
-    fn allocate_globals(&mut self, modules: &'static [Module]) {
+    fn allocate_globals(&mut self, modules: &'static [Module]) -> Result<()> {
         for module in modules {
             for var in &module.global_vars {
                 // All declaration have initiaizers, so skip over definitions.
@@ -260,7 +255,7 @@ impl<'a> State<'a> {
                         }
                     };
 
-                    let addr = self.stack_alloc(size, var.alignment as u64).unwrap();
+                    let addr = self.stack_alloc(size, var.alignment as u64)?;
 
                     println!("[GLOBALS] Adding global variable: {:?}", var.name);
                     self.globals.add_global_variable(var, module, addr);
@@ -269,13 +264,15 @@ impl<'a> State<'a> {
 
             for function in &module.functions {
                 let ptr_size = self.project.ptr_size;
-                let ptr = self.stack.get_address(ptr_size as usize, 4);
-                let bv = self.solver.bv_from_u64(ptr as u64, ptr_size as u32);
+                let ptr = self.stack.get_address(ptr_size, 4)?;
+                let bv = self.solver.bv_from_u64(ptr, ptr_size as u32);
 
                 println!("[GLOBALS] Adding function: {:?}", function.name);
-                self.globals.add_function(function, module, bv, ptr as u64);
+                self.globals.add_function(function, module, bv, ptr);
             }
         }
+
+        Ok(())
 
         // let current_globals = self.globals.clone();
         // // Initialize all the global variables.
