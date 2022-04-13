@@ -1,9 +1,8 @@
 use either::Either;
 use llvm_ir::instruction::{HasResult, InlineAssembly};
-use llvm_ir::{Constant, Function, Name, Operand, Type};
+use llvm_ir::{Constant, Function, Name, Operand};
 use log::{debug, trace};
 
-// use crate::llvm::size_in_bits;
 use crate::project::Project;
 use crate::solver::{Solver, BV};
 use crate::traits::Size;
@@ -52,22 +51,18 @@ impl<'a> VM<'a> {
         let state = State::new(project, module, function, solver.clone());
 
         let mut vm = VM {
-            // Dummy state. The same state will come from the backtracking
-            // point created later.
-            state: state.clone(),
+            state,
             project,
             backtracking_paths: Vec::new(),
             solver,
         };
-
-        vm.allocate_globals();
 
         // Setup before exeuction of function can start.
         vm.state.vars.enter_scope();
         vm.setup_parameters()?;
 
         // Create a backtracking point to the start of the function.
-        let bb_label = &state.current_loc.block.name;
+        let bb_label = &vm.state.current_loc.block.name;
         vm.save_backtracking_path(bb_label, None)?;
 
         Ok(vm)
@@ -388,48 +383,48 @@ impl<'a> VM<'a> {
     //     todo!()
     // }
 
-    fn allocate_globals(&mut self) {
-        for (module, v) in self.project.get_all_global_vars() {
-            // TODO
-            if v.initializer.is_none() {
-                continue;
-            }
+    // fn allocate_globals(&mut self) {
+    //     for (module, v) in self.project.get_all_global_vars() {
+    //         // TODO
+    //         if v.initializer.is_none() {
+    //             continue;
+    //         }
 
-            if let Type::PointerType { pointee_type, .. } = v.ty.as_ref() {
-                let size = {
-                    let size = pointee_type.size(self.project).unwrap();
+    //         if let Type::PointerType { pointee_type, .. } = v.ty.as_ref() {
+    //             let size = {
+    //                 let size = pointee_type.size(self.project).unwrap();
 
-                    // Allocate a default of 8 bits for zero sized allocations.
-                    if size == 0 {
-                        8
-                    } else {
-                        size
-                    }
-                };
+    //                 // Allocate a default of 8 bits for zero sized allocations.
+    //                 if size == 0 {
+    //                     8
+    //                 } else {
+    //                     size
+    //                 }
+    //             };
 
-                let addr = self.state.stack_alloc(size, v.alignment as u64).unwrap();
-                println!("--GLOBAL: addr={:?}, v={}", addr, v.name);
+    //             let addr = self.state.stack_alloc(size, v.alignment as u64).unwrap();
+    //             println!("--GLOBAL: addr={:?}, v={}", addr, v.name);
 
-                self.state.globals.add_global_variable(v, module, addr);
-            }
-        }
+    //             self.state.globals.add_global_variable(v, module, addr);
+    //         }
+    //     }
 
-        for (module, f) in self.project.get_all_functions() {
-            let ptr = self
-                .state
-                .stack
-                .get_address(self.project.ptr_size as usize, 4);
+    //     for (module, f) in self.project.get_all_functions() {
+    //         let ptr = self
+    //             .state
+    //             .stack
+    //             .get_address(self.project.ptr_size as usize, 4);
 
-            let bv = self
-                .solver
-                .bv_from_u64(ptr as u64, self.project.ptr_size as u32);
+    //         let bv = self
+    //             .solver
+    //             .bv_from_u64(ptr as u64, self.project.ptr_size as u32);
 
-            self.state.globals.add_function(f, module, bv, ptr as u64);
-        }
+    //         self.state.globals.add_function(f, module, bv, ptr as u64);
+    //     }
 
-        // After all globals have been added we can initialize them.
-        // self.state.initialize_globals();
-    }
+    //     // After all globals have been added we can initialize them.
+    //     // self.state.initialize_globals();
+    // }
 }
 
 #[cfg(test)]

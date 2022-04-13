@@ -1,7 +1,9 @@
 //! Global variables.
 //!
+//! # Privacy
+//!
 //! Global variables in LLVM-IR can have different linkage types. This module
-//! divides these up into two different kinds; weak and strong.
+//! divides these up into two different kinds: weak and strong.
 //!
 //! The implementation as it is right now, treats `private`, `internal` and
 //! `external` linkage as strong globals. Which overwrites weak globals.
@@ -13,6 +15,15 @@
 //!
 //! Further, `private` keeps the global private to the module it is declared in
 //! while the rest allows access from the outside.
+//!
+//! # Constant
+//!
+//! If the global variable is declared as `constant` the contents will never
+//! be modified.
+//!
+//! # Address
+//!
+//! If the global variable has `unnamed_addr` an address won't be allocated.
 use llvm_ir::{
     module::{GlobalVariable, Linkage},
     ConstantRef, Function, Module, Name,
@@ -21,9 +32,15 @@ use std::{cell::Cell, collections::HashMap};
 
 use crate::BV;
 
+/// Helper trait so functions can accept both [GlobalVariable] and [Function].
 trait Global {
+    /// Returns true if this global should be module private.
     fn is_private() -> bool;
+
+    /// Returns true if an address should be allocated for the global.
     fn has_address() -> bool;
+
+    /// Returns true if the global is immutable.
     fn is_constant() -> bool;
 }
 
@@ -64,8 +81,8 @@ type GlobalMap<'p> = HashMap<Name, Allocation<'p>>;
 /// Globals keeps track of global variables and functions.
 ///
 /// This structure keeps track of both global variables and functions since
-/// a `[Constant::ConstantReference]` can refer to both. The globals are further
-/// divided up into public and module private. The `[Linkage]` determines their
+/// a [ConstantRef] can refer to both. The globals are further
+/// divided up into public and module private. The [Linkage] determines their
 /// type. `External` linkage is treated as public, while `Internal` and `Private`
 /// are treated as module private. Other linkage types are currently not supported.
 ///
@@ -84,22 +101,11 @@ pub struct Globals<'p> {
 impl<'p> Globals<'p> {
     pub fn new() -> Self {
         Self {
-            // fns: HashMap::new(),
-            // private_fns: HashMap::new(),
             globals: HashMap::new(),
             private_globals: HashMap::new(),
             public_addr_to_fn: HashMap::new(),
             private_addr_to_fn: HashMap::new(),
         }
-    }
-
-    pub fn from_modules(modules: &[Module]) -> Self {
-        for module in modules {
-            for var in &module.global_vars {}
-
-            for function in &module.functions {}
-        }
-        todo!()
     }
 
     pub fn get(&self, name: &Name, module: &Module) -> Option<&Allocation<'p>> {
@@ -132,7 +138,6 @@ impl<'p> Globals<'p> {
     pub fn add_global_variable(&mut self, var: &'p GlobalVariable, module: &'p Module, addr: BV) {
         let init = var.initializer.clone().unwrap();
         let g = Allocation {
-            //addr: 0,
             addr_bv: addr,
             kind: AllocationType::Variable(GlobalVar {
                 initializer: init,
@@ -145,7 +150,6 @@ impl<'p> Globals<'p> {
 
     pub fn add_function(&mut self, f: &'p Function, module: &'p Module, addr: BV, addr_u64: u64) {
         let g = Allocation {
-            //addr: 0,
             addr_bv: addr,
             kind: AllocationType::Function(FFunction {
                 module,
@@ -243,30 +247,3 @@ impl<'p> Globals<'p> {
         }
     }
 }
-
-// fn is_weak(linkage: Linkage) -> bool {
-//     use llvm_ir::module::Linkage::*;
-
-//     // TODO: Check all these.
-//     match linkage {
-//         Private | Internal | External => false,
-//         ExternalWeak => true,
-//         AvailableExternally => true,
-//         LinkOnceAny => true,
-//         LinkOnceODR => true,
-//         LinkOnceODRAutoHide => true,
-//         WeakAny => true,
-//         WeakODR => true,
-//         Common => true,
-//         Appending => true,
-//         DLLImport => true,
-//         DLLExport => true,
-//         Ghost => true,
-//         LinkerPrivate => true,
-//         LinkerPrivateWeak => true,
-//     }
-// }
-
-// fn is_private(linkage: Linkage) -> bool {
-//     matches!(linkage, Linkage::Private)
-// }

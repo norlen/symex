@@ -31,7 +31,7 @@ pub enum FunctionType<'a> {
 /// The `VM` takes `Project` and the entry function and exectues over that.
 pub struct Project {
     /// The modules the project consists of.
-    modules: &'static [Module],
+    pub(crate) modules: &'static [Module],
 
     /// Pointer size in bits used in the project.
     pub ptr_size: u64,

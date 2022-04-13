@@ -88,6 +88,19 @@ pub fn size_in_bits(ty: &Type, project: &Project) -> Option<u64> {
     }
 }
 
+/// Returns the size of a floating point type.
+pub fn fp_size_in_bits(ty: &FPType) -> u64 {
+    match ty {
+        FPType::Half => 16,
+        FPType::BFloat => 16,
+        FPType::Single => 32,
+        FPType::Double => 64,
+        FPType::FP128 => 128,
+        FPType::X86_FP80 => 80,
+        FPType::PPC_FP128 => 128,
+    }
+}
+
 /// Calculates an index based offset for a [`Type`].
 pub fn get_offset(ty: &Type, index: u64, project: &Project) -> Option<(u64, TypeRef)> {
     use Type::*;
@@ -98,10 +111,7 @@ pub fn get_offset(ty: &Type, index: u64, project: &Project) -> Option<(u64, Type
             let size = size_in_bits(element_type, project)?;
             Some((size * index, element_type.clone()))
         }
-        ArrayType {
-            element_type,
-            num_elements,
-        } => {
+        ArrayType { element_type, .. } => {
             let size = size_in_bits(element_type, project)?;
             Some((size * index, element_type.clone()))
         }
@@ -123,13 +133,9 @@ pub fn get_offset(ty: &Type, index: u64, project: &Project) -> Option<(u64, Type
             NamedStructDef::Defined(ty) => get_offset(ty, index, project),
         },
         VoidType => todo!(),
-        IntegerType { bits } => todo!(),
+        IntegerType { .. } => todo!(),
         FPType(_) => todo!(),
-        FuncType {
-            result_type,
-            param_types,
-            is_var_arg,
-        } => todo!(),
+        FuncType { .. } => todo!(),
         X86_MMXType => todo!(),
         X86_AMXType => todo!(),
         MetadataType => todo!(),
@@ -153,25 +159,15 @@ pub fn get_inner_type(ty: &Type, project: &Project) -> Option<TypeRef> {
         FuncType { .. } => todo!(),
         VectorType { .. } => todo!(),
         ArrayType { element_type, .. } => Some(element_type.clone()),
-        StructType { element_types, .. } => todo!(),
-        NamedStructType { name } => todo!(),
+        StructType { .. } => todo!(),
+        NamedStructType { name } => match project.get_named_struct(name).unwrap() {
+            NamedStructDef::Opaque => todo!(),
+            NamedStructDef::Defined(ty) => get_inner_type(ty, project),
+        },
         X86_MMXType => todo!(),
         X86_AMXType => todo!(),
         MetadataType => todo!(),
         LabelType => todo!(),
         TokenType => todo!(),
-    }
-}
-
-/// Returns the size of a floating point type.
-pub fn fp_size_in_bits(ty: &FPType) -> u64 {
-    match ty {
-        FPType::Half => 16,
-        FPType::BFloat => 16,
-        FPType::Single => 32,
-        FPType::Double => 64,
-        FPType::FP128 => 128,
-        FPType::X86_FP80 => 80,
-        FPType::PPC_FP128 => 128,
     }
 }

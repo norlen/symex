@@ -3,7 +3,7 @@ use llvm_ir::{Constant, Operand};
 
 use crate::{
     solver::{BinaryOperation, BV},
-    vm::{Result, State, VMError},
+    vm::{AllocationType, Result, State, VMError},
 };
 
 use super::*;
@@ -52,18 +52,18 @@ impl ToBV for &Constant {
             GlobalReference { name, .. } => {
                 if let Some(global) = state.get_global(name).cloned() {
                     match &global.kind {
-                        crate::vm::AllocationType::Variable(v) => {
+                        AllocationType::Variable(v) => {
                             if !v.initialized.get() {
                                 let value = state.get_var(&v.initializer)?;
                                 state.mem.write(&global.addr_bv, value)?;
                                 v.initialized.set(true);
                             }
                         }
-                        crate::vm::AllocationType::Function(_) => {}
+                        AllocationType::Function(_) => {}
                     }
                     Ok(global.addr_bv.clone())
                 } else {
-                    panic!("global ref not found");
+                    panic!("global ref not found, {:?}", name);
                 }
             }
             TokenNone => todo!(),

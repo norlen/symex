@@ -2,11 +2,11 @@ use llvm_ir::{
     instruction::{self, HasResult},
     terminator,
     types::Typed,
-    Function, Module, Name, TypeRef,
+    Function, Module, Name, Type, TypeRef,
 };
 use log::warn;
 
-use super::{Allocation, Globals, Result};
+use super::{Allocation, AllocationType, Globals, Result};
 use crate::{
     memory::bump_allocator::BumpAllocator,
     memory::simple_memory::Memory,
@@ -133,7 +133,7 @@ impl<'a> State<'a> {
         function: &'a Function,
         solver: Solver,
     ) -> Self {
-        Self {
+        let mut state = Self {
             stack: BumpAllocator::new(),
             project,
             current_loc: Location::new(module, function),
@@ -142,7 +142,10 @@ impl<'a> State<'a> {
             solver,
             callstack: Vec::new(),
             globals: Globals::new(),
-        }
+        };
+
+        state.allocate_globals(project.modules);
+        state
     }
 
     pub fn get_var<'b, T>(&mut self, op: T) -> Result<BV>
@@ -228,4 +231,69 @@ impl<'a> State<'a> {
     pub fn type_of<T: Typed>(&self, t: &T) -> TypeRef {
         self.current_loc.module.type_of(t)
     }
+
+    fn allocate_globals(&mut self, modules: &'static [Module]) {
+        for module in modules {
+            for var in &module.global_vars {
+                // All declaration have initiaizers, so skip over definitions.
+                if var.initializer.is_none() {
+                    continue;
+                }
+
+                // All global variable should be a pointer.
+                if let Type::PointerType { pointee_type, .. } = var.ty.as_ref() {
+                    // TODO:
+                    // If a variable has `unnamed_addr` the address is not significant, so we can
+                    // skip allocating an address for those.
+                    //
+                    // For `local_unnamed_addr` the address is not significant in *that* module. To
+                    // be safe, allocate addresses for those.
+                    let size = {
+                        // TODO: Can the types not have a size here?
+                        let size = pointee_type.size(&self.project).unwrap();
+
+                        // TODO: How to handle zero sized allocations?
+                        if size == 0 {
+                            8
+                        } else {
+                            size
+                        }
+                    };
+
+                    let addr = self.stack_alloc(size, var.alignment as u64).unwrap();
+
+                    println!("[GLOBALS] Adding global variable: {:?}", var.name);
+                    self.globals.add_global_variable(var, module, addr);
+                }
+            }
+
+            for function in &module.functions {
+                let ptr_size = self.project.ptr_size;
+                let ptr = self.stack.get_address(ptr_size as usize, 4);
+                let bv = self.solver.bv_from_u64(ptr as u64, ptr_size as u32);
+
+                println!("[GLOBALS] Adding function: {:?}", function.name);
+                self.globals.add_function(function, module, bv, ptr as u64);
+            }
+        }
+
+        // let current_globals = self.globals.clone();
+        // // Initialize all the global variables.
+        // for private_globals in current_globals.private_globals.values() {
+        //     for allocation in private_globals.values() {
+        //         self.initalize_global_variable(allocation);
+        //     }
+        // }
+        // for allocation in current_globals.globals.values() {
+        //     self.initalize_global_variable(allocation);
+        // }
+    }
+
+    // fn initalize_global_variable(&mut self, allocation: &Allocation<'_>) {
+    //     if let AllocationType::Variable(var) = &allocation.kind {
+    //         let value = self.get_var(&var.initializer).unwrap();
+    //         println!("value: {:?}", value);
+    //         self.mem.write(&allocation.addr_bv, value).unwrap();
+    //     }
+    // }
 }

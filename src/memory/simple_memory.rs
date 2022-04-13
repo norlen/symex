@@ -87,7 +87,7 @@ impl Memory {
         };
 
         // Ensure the value we write is a multiple of `BITS_IN_BYTE`.
-        assert_eq!(value.len() & BITS_IN_BYTE, 0);
+        assert_eq!(value.len() % BITS_IN_BYTE, 0);
 
         let num_bytes = value.len() / BITS_IN_BYTE;
         for n in 0..num_bytes {
