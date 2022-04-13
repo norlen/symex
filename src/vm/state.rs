@@ -1,22 +1,19 @@
-use crate::{
-    llvm::*,
-    memory::bump_allocator::BumpAllocator,
-    memory::simple_memory::Memory,
-    project::Project,
-    traits::Op,
-    {Solver, BV},
-};
 use llvm_ir::{
     instruction::{self, HasResult},
     terminator,
     types::Typed,
-    Constant, Function, Module, Name, Operand, TypeRef,
+    Function, Module, Name, TypeRef,
 };
 use log::warn;
 
-use super::{varmap::VarMap, Globals};
-use super::{Allocation, Location};
-use super::{AllocationType, Result};
+use super::{varmap::VarMap, Allocation, Globals, Location, Result};
+use crate::{
+    memory::bump_allocator::BumpAllocator,
+    memory::simple_memory::Memory,
+    project::Project,
+    traits::{Op, Size, ToBV},
+    {Solver, BV},
+};
 
 #[derive(Debug, Clone)]
 pub enum Call<'a> {
@@ -142,10 +139,13 @@ impl<'a> State<'a> {
         }
     }
 
-    pub fn get(&mut self, op: Op<'_>) -> Result<BV> {
-        match op {
-            Op::Operand(o) => self.get_bv(o),
-            Op::Constant(c) => self.get_bv_from_constant(c),
+    pub fn get_var<'b, T>(&mut self, op: T) -> Result<BV>
+    where
+        T: Into<Op<'b>>,
+    {
+        match op.into() {
+            Op::Operand(op) => op.to_bv(self),
+            Op::Constant(c) => c.to_bv(self),
         }
     }
 
@@ -177,16 +177,16 @@ impl<'a> State<'a> {
         Ok(())
     }
 
-    pub fn get_bv(&mut self, op: &Operand) -> Result<BV> {
-        // let bv = op.to_bv(self).unwrap();
-        let bv = operand_to_bv(op, self).unwrap();
-        Ok(bv)
-    }
+    // pub fn get_bv(&mut self, op: &Operand) -> Result<BV> {
+    //     // let bv = op.to_bv(self).unwrap();
+    //     let bv = operand_to_bv(op, self).unwrap();
+    //     Ok(bv)
+    // }
 
-    pub fn get_bv_from_constant(&mut self, c: &Constant) -> Result<BV> {
-        let bv = const_to_bv(c, self).unwrap();
-        Ok(bv)
-    }
+    // pub fn get_bv_from_constant(&mut self, c: &Constant) -> Result<BV> {
+    //     let bv = const_to_bv(c, self).unwrap();
+    //     Ok(bv)
+    // }
 
     // -------------------------------------------------------------------------
     // Globals

@@ -6,7 +6,7 @@ use llvm_ir::{
 use log::trace;
 use std::collections::HashMap;
 
-use crate::vm::{Result, ReturnValue, VM};
+use crate::vm::{Result, ReturnValue, VMError, VM};
 
 use intrinsics::{is_instrinsic, Intrinsics};
 
@@ -56,5 +56,5 @@ impl Hooks {
 
 /// Hook that tells the VM to abort.
 pub fn abort(_vm: &mut VM<'_>, _info: FnInfo) -> Result<ReturnValue> {
-    Ok(ReturnValue::Abort)
+    Err(VMError::Abort(-1))
 }

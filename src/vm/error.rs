@@ -2,6 +2,8 @@ use thiserror::Error;
 
 pub type Result<T> = std::result::Result<T, VMError>;
 
+pub type StatusCode = i64;
+
 /// VMError
 #[derive(Debug, Error)]
 #[allow(dead_code)]
@@ -10,7 +12,7 @@ pub enum VMError {
     // Errors in the code being analyzed.
     // -------------------------------------------------------------------------
     #[error("Abort")]
-    Abort,
+    Abort(StatusCode),
 
     #[error("Throw")]
     Throw,

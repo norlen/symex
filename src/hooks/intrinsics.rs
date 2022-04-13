@@ -105,8 +105,8 @@ fn binary_op_overflow(vm: &mut VM<'_>, f: FnInfo, op: BinaryOpOverflow) -> Resul
     let (a0, _) = f.arguments.get(0).unwrap();
     let (a1, _) = f.arguments.get(1).unwrap();
 
-    let a0 = vm.state.get_bv(a0)?;
-    let a1 = vm.state.get_bv(a1)?;
+    let a0 = vm.state.get_var(a0)?;
+    let a1 = vm.state.get_var(a1)?;
 
     let (result, overflow) = match op {
         BinaryOpOverflow::SAdd => (a0.add(&a1), a0.saddo(&a1)),
@@ -119,7 +119,7 @@ fn binary_op_overflow(vm: &mut VM<'_>, f: FnInfo, op: BinaryOpOverflow) -> Resul
     assert_eq!(overflow.len(), 1);
 
     let result_with_overflow = overflow.concat(&result);
-    Ok(ReturnValue::Return(result_with_overflow))
+    Ok(ReturnValue::Value(result_with_overflow))
 }
 
 /// Signed addition on any bitwidth, performs a signed addition and indicates
@@ -163,14 +163,14 @@ fn binary_op_saturate(vm: &mut VM<'_>, f: FnInfo, op: BinaryOpSaturate) -> Resul
     let (a0, _) = f.arguments.get(0).unwrap();
     let (a1, _) = f.arguments.get(1).unwrap();
 
-    let a0 = vm.state.get_bv(a0)?;
-    let a1 = vm.state.get_bv(a1)?;
+    let a0 = vm.state.get_var(a0)?;
+    let a1 = vm.state.get_var(a1)?;
 
     let result = match op {
         BinaryOpSaturate::SAdd => a0.uadds(&a1),
         BinaryOpSaturate::UAdd => a0.sadds(&a1),
     };
-    Ok(ReturnValue::Return(result))
+    Ok(ReturnValue::Value(result))
 }
 
 pub fn llvm_uadd_sat(vm: &mut VM<'_>, f: FnInfo) -> Result<ReturnValue> {
@@ -183,7 +183,7 @@ pub fn llvm_sadd_sat(vm: &mut VM<'_>, f: FnInfo) -> Result<ReturnValue> {
 pub fn llvm_expect(vm: &mut VM<'_>, f: FnInfo) -> Result<ReturnValue> {
     assert_eq!(f.arguments.len(), 2);
     let (a0, _) = f.arguments.get(0).unwrap();
-    let val = vm.state.get_bv(a0).unwrap();
+    let val = vm.state.get_var(a0).unwrap();
 
-    Ok(ReturnValue::Return(val))
+    Ok(ReturnValue::Value(val))
 }

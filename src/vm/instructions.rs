@@ -1,18 +1,15 @@
-use llvm_ir::instruction::{BinaryOp, HasResult, Instruction, UnaryOp};
-use llvm_ir::{instruction, terminator, IntPredicate, Operand, Terminator, Type};
+use llvm_ir::instruction::{BinaryOp, HasResult, Instruction};
+use llvm_ir::{instruction, terminator, Terminator, Type};
 use log::{debug, warn};
 
-use super::{ReturnValue, State, VMError, VM};
+use super::{ReturnValue, VMError, VM};
 use crate::hooks::FnInfo;
-use crate::llvm::{AsConcrete, Size};
 use crate::project::FunctionType;
 use crate::solver::BinaryOperation;
 use crate::traits::*;
-use crate::util::gep_op;
 use crate::vm::location::Location;
 use crate::vm::Callsite;
 use crate::vm::Result;
-use crate::BV;
 
 impl<'a> VM<'a> {
     pub fn process_instruction(&mut self, instr: &'a Instruction) -> Result<()> {
@@ -98,8 +95,8 @@ impl<'a> VM<'a> {
     fn ret(&mut self, instr: &terminator::Ret) -> Result<ReturnValue> {
         debug!("{}", instr);
         let ret_val = if let Some(op) = &instr.return_operand {
-            let value = self.state.get_bv(op).unwrap();
-            ReturnValue::Return(value)
+            let value = self.state.get_var(op).unwrap();
+            ReturnValue::Value(value)
         } else {
             ReturnValue::Void
         };
@@ -120,7 +117,7 @@ impl<'a> VM<'a> {
     fn condbr(&mut self, instr: &terminator::CondBr) -> Result<ReturnValue> {
         debug!("{}", instr);
 
-        let cond = self.state.get_bv(&instr.condition).unwrap();
+        let cond = self.state.get_var(&instr.condition).unwrap();
         let true_possible = self.solver.is_sat_with_constraint(&cond).unwrap();
         let false_possible = self
             .solver
@@ -131,7 +128,7 @@ impl<'a> VM<'a> {
             (true, true) => {
                 // Explore true first, then backtrack to false.
                 self.save_backtracking_path(&instr.false_dest, Some(cond.not().into()))?;
-                cond.assert();
+                self.solver.assert(&cond);
                 Ok(&instr.true_dest)
             }
             (true, false) => Ok(&instr.true_dest),
@@ -144,7 +141,7 @@ impl<'a> VM<'a> {
 
     fn switch(&mut self, instr: &terminator::Switch) -> Result<ReturnValue> {
         debug!("{}", instr);
-        let value = self.state.get_bv(&instr.operand).unwrap();
+        let value = self.state.get_var(&instr.operand).unwrap();
 
         // The condition for the default term in the switch. The default case is built such that
         //   C = true ^ (val != path_cond_1) ^ (val != path_cond_2) ^ ...
@@ -155,7 +152,7 @@ impl<'a> VM<'a> {
 
         // Check if any of the non-default cases can be reached.
         for (constant, target) in instr.dests.iter() {
-            let path_cond = self.state.get_bv_from_constant(constant).unwrap();
+            let path_cond = self.state.get_var(constant).unwrap();
 
             // Build default condition.
             default_cond = default_cond.and(&value.ne(&path_cond)).into();
@@ -180,7 +177,7 @@ impl<'a> VM<'a> {
 
         // Jump the the one path that didn't get saved as a backtracking point.
         if let Some((target, cond)) = paths.first() {
-            cond.assert();
+            self.solver.assert(&cond);
             self.branch(target)
         } else {
             // Should never happen, since if we have no paths at all, the
@@ -426,7 +423,7 @@ impl<'a> VM<'a> {
     fn extractvalue(&mut self, instr: &instruction::ExtractValue) -> Result<()> {
         debug!("{}", instr);
 
-        let value = self.state.get_bv(&instr.aggregate).unwrap();
+        let value = self.state.get_var(&instr.aggregate).unwrap();
 
         let mut base_ty = self.state.type_of(&instr.aggregate);
         let mut total_offset = 0;
@@ -466,7 +463,7 @@ impl<'a> VM<'a> {
     fn alloca(&mut self, instr: &instruction::Alloca) -> Result<()> {
         debug!("{}", instr);
 
-        let num_elements = instr.num_elements.as_concrete().unwrap();
+        let num_elements = instr.num_elements.to_value()?;
         let element_size = instr.allocated_type.size(self.project).unwrap();
 
         // let num_elements = u64_from_operand(&instr.num_elements).unwrap() as usize;
@@ -493,7 +490,7 @@ impl<'a> VM<'a> {
     fn load(&mut self, instr: &instruction::Load) -> Result<()> {
         debug!("{}", instr);
 
-        let addr = self.state.get_bv(&instr.address).unwrap();
+        let addr = self.state.get_var(&instr.address).unwrap();
         let dst_ty = self.state.type_of(instr);
         let dst_size = dst_ty.size(self.project).unwrap() as u32;
         // let dst_size = size_in_bits(&dst_ty, self.project).unwrap() as u32;
@@ -516,8 +513,8 @@ impl<'a> VM<'a> {
     fn store(&mut self, instr: &instruction::Store) -> Result<()> {
         debug!("{}", instr);
 
-        let value = self.state.get_bv(&instr.value).unwrap();
-        let addr = self.state.get_bv(&instr.address).unwrap();
+        let value = self.state.get_var(&instr.value).unwrap();
+        let addr = self.state.get_var(&instr.address).unwrap();
         self.state.mem.write(&addr, value).unwrap();
 
         Ok(())
@@ -544,11 +541,11 @@ impl<'a> VM<'a> {
     /// Reference: https://llvm.org/docs/LangRef.html#getelementptr-instruction
     fn getelementptr(&mut self, instr: &instruction::GetElementPtr) -> Result<()> {
         debug!("{}", instr);
-        let target_address = gep_op(
-            &instr.address,
-            &instr.indices,
-            instr.in_bounds,
+        let target_address = gep(
             &mut self.state,
+            &instr.address,
+            instr.indices.iter().map(|op| op.into()),
+            instr.in_bounds,
         )?;
 
         self.assign(instr, target_address)
@@ -578,7 +575,7 @@ impl<'a> VM<'a> {
         match (ty0.as_ref(), instr.to_type.as_ref()) {
             (Type::IntegerType { bits: n }, Type::IntegerType { bits: m }) => {
                 assert!(n < m);
-                let value = self.state.get_bv(&instr.operand).unwrap();
+                let value = self.state.get_var(&instr.operand).unwrap();
                 assert_eq!(*n, value.len());
 
                 let value = value.zero_ext(*m);
@@ -609,7 +606,7 @@ impl<'a> VM<'a> {
         match (ty0.as_ref(), instr.to_type.as_ref()) {
             (Type::IntegerType { bits: n }, Type::IntegerType { bits: m }) => {
                 assert!(n < m);
-                let value = self.state.get_bv(&instr.operand).unwrap();
+                let value = self.state.get_var(&instr.operand).unwrap();
                 assert_eq!(*n, value.len());
 
                 let value = value.sign_ext(*m);
@@ -751,7 +748,7 @@ impl<'a> VM<'a> {
                 let arguments = instr
                     .arguments
                     .iter()
-                    .map(|(op, _)| self.state.get_bv(op))
+                    .map(|(op, _)| self.state.get_var(op))
                     .collect::<Result<Vec<_>>>()?;
 
                 // Create new location at the start of function to call, and store our current
@@ -774,10 +771,10 @@ impl<'a> VM<'a> {
 
         // Assign return value
         let ret_val = match ret_val {
-            ReturnValue::Return(v) => Some(v),
+            ReturnValue::Value(v) => Some(v),
             ReturnValue::Void => None,
-            ReturnValue::Throw(_) => todo!("support throw in calls"),
-            ReturnValue::Abort => return Err(VMError::Abort),
+            // ReturnValue::Throw(_) => todo!("support throw in calls"),
+            // ReturnValue::Abort => return Err(VMError::Abort),
         };
 
         if let Some(name) = instr.dest.clone() {

@@ -1,11 +1,7 @@
-use llvm_ir::types::Typed;
-use llvm_ir::{Constant, ConstantRef, Operand};
+use llvm_ir::{types::Typed, Constant, ConstantRef, Operand};
 
-use super::Size;
-use crate::llvm::AsConcrete;
-use crate::solver::BV;
-use crate::vm::{Result, State, VMError};
-use llvm_ir::Type;
+use super::ToValue;
+use crate::vm::Result;
 
 #[derive(Clone, Copy)]
 pub enum Op<'a> {
@@ -40,11 +36,11 @@ impl<'a> Typed for Op<'a> {
     }
 }
 
-impl<'a> AsConcrete<u64> for Op<'a> {
-    fn as_concrete(&self) -> anyhow::Result<u64, crate::vm::VMError> {
+impl<'a> ToValue<u64> for Op<'a> {
+    fn to_value(&self) -> Result<u64> {
         match self {
-            Op::Operand(operand) => operand.as_concrete(),
-            Op::Constant(constant) => constant.as_concrete(),
+            Op::Operand(operand) => operand.to_value(),
+            Op::Constant(constant) => constant.to_value(),
         }
     }
 }

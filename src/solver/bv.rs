@@ -1,9 +1,6 @@
 use boolector::{BVSolution, Btor};
-use llvm_ir::instruction::BinaryOp;
 use std::convert::From;
 use std::{ops::Deref, rc::Rc};
-
-use super::{BinaryOperation, UnaryOperation};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BV(pub(super) boolector::BV<Rc<Btor>>);
@@ -36,25 +33,6 @@ impl BV {
             std::cmp::Ordering::Equal => self.clone(),
             std::cmp::Ordering::Greater => todo!(),
         }
-    }
-
-    // pub fn binary_op(&self, other: BV, binop: BinaryOperation) -> Self {
-    //     match binop {
-    //         BinaryOperation::Add => self.add(&other),
-    //         BinaryOperation::Sub => self.sub(&other),
-    //         BinaryOperation::Mul => self.mul(&other),
-    //         BinaryOperation::UDiv => self.udiv(&other),
-    //         BinaryOperation::SDiv => self.sdiv(&other),
-    //         BinaryOperation::URem => self.urem(&other),
-    //         BinaryOperation::SRem => self.srem(&other),
-    //         BinaryOperation::And => self.and(&other),
-    //         BinaryOperation::Or => self.or(&other),
-    //         BinaryOperation::Xor => self.xor(&other),
-    //     }
-    // }
-
-    pub fn unary_op(&self, _unary_op: UnaryOperation) -> Self {
-        todo!()
     }
 
     // -------------------------------------------------------------------------

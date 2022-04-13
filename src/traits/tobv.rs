@@ -1,20 +1,12 @@
 use anyhow::anyhow;
-use llvm_ir::{constant::GetElementPtr, Constant, Operand};
-use log::warn;
+use llvm_ir::{Constant, Operand};
 
-use crate::vm::VMError;
 use crate::{
     solver::{BinaryOperation, BV},
-    vm::{Result, State},
+    vm::{Result, State, VMError},
 };
 
 use super::*;
-
-pub trait ToBV {
-    fn to_bv(&self, state: &mut State<'_>) -> Result<BV>;
-
-    fn try_to_bv(&self, state: &mut State<'_>) -> Result<Option<BV>>;
-}
 
 impl ToBV for &Operand {
     fn to_bv(&self, state: &mut State<'_>) -> Result<BV> {
@@ -27,7 +19,7 @@ impl ToBV for &Operand {
         }
     }
 
-    fn try_to_bv(&self, state: &mut State<'_>) -> Result<Option<BV>> {
+    fn try_to_bv(&self, _state: &mut State<'_>) -> Result<Option<BV>> {
         todo!()
     }
 }
@@ -62,7 +54,7 @@ impl ToBV for &Constant {
                     match &global.kind {
                         crate::vm::AllocationType::Variable(v) => {
                             if !v.initialized.get() {
-                                let value = state.get_bv_from_constant(&v.initializer)?;
+                                let value = state.get_var(&v.initializer)?;
                                 state.mem.write(&global.addr_bv, value)?;
                                 v.initialized.set(true);
                             }
@@ -119,11 +111,19 @@ impl ToBV for &Constant {
             AddrSpaceCast(op) => cast_to(state, &op.to_type, &op.operand),
             ICmp(op) => icmp(state, &op.operand0, &op.operand1, op.predicate),
             FCmp(_) => todo!(),
-            Select(_) => todo!(),
+            Select(op) => {
+                // TODO: CHCKME
+                let condition = op.condition.to_value()?;
+                if condition == 1 {
+                    state.get_var(&op.true_value)
+                } else {
+                    state.get_var(&op.false_value)
+                }
+            }
         }
     }
 
-    fn try_to_bv(&self, state: &mut State<'_>) -> Result<Option<BV>> {
+    fn try_to_bv(&self, _state: &mut State<'_>) -> Result<Option<BV>> {
         todo!()
     }
 }

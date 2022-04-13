@@ -13,20 +13,13 @@
 //!
 //! Further, `private` keeps the global private to the module it is declared in
 //! while the rest allows access from the outside.
-#![allow(dead_code, unused_variables)]
-
-use anyhow::Result;
-use std::{cell::Cell, collections::HashMap};
-use z3::Model;
-
 use llvm_ir::{
     module::{GlobalVariable, Linkage},
     ConstantRef, Function, Module, Name,
 };
+use std::{cell::Cell, collections::HashMap};
 
 use crate::BV;
-
-use super::State;
 
 trait Global {
     fn is_private() -> bool;
@@ -54,18 +47,6 @@ pub struct GlobalVar {
     pub initializer: ConstantRef,
     pub initialized: Cell<bool>,
 }
-
-// impl<'p> Allocation<'p> {
-//     pub fn initialize(&self, state: &mut State<'p>) {
-//         match &self.kind {
-//             AllocationType::Variable(v) => {
-//                 let value = state.get_bv_from_constant(&v.initializer).unwrap();
-//                 state.mem.write(&self.addr_bv, value).unwrap();
-//             }
-//             AllocationType::Function(_) => {}
-//         }
-//     }
-// }
 
 #[derive(Clone)]
 pub struct FFunction<'p> {

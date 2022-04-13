@@ -1,27 +1,7 @@
-use std::error::Error;
+use llvm_ir::types::{FPType, NamedStructDef, Type, TypeRef};
 
-use anyhow::anyhow;
-use llvm_ir::constant::{self, GetElementPtr};
-use llvm_ir::types::{FPType, NamedStructDef, Typed};
-use llvm_ir::{Constant, ConstantRef, Operand, Type, TypeRef};
-use log::trace;
-
-use crate::memory::{to_bytes, BITS_IN_BYTE};
-use crate::project::Project;
-use crate::vm::{self, Result, State};
-use crate::BV;
-
-pub trait Size {
-    fn size(&self, project: &Project) -> Option<u64>;
-
-    fn size_in_bytes(&self, project: &Project) -> Result<Option<u64>>;
-
-    fn offset(&self, index: u64, project: &Project) -> Option<(u64, TypeRef)>;
-
-    fn offset_in_bytes(&self, index: u64, project: &Project) -> Result<Option<(u64, TypeRef)>>;
-
-    fn inner_ty(&self, project: &Project) -> Option<TypeRef>;
-}
+use super::Size;
+use crate::{memory::to_bytes, project::Project, vm::Result};
 
 impl Size for Type {
     fn size(&self, project: &Project) -> Option<u64> {
@@ -113,10 +93,7 @@ pub fn get_offset(ty: &Type, index: u64, project: &Project) -> Option<(u64, Type
     use Type::*;
 
     match ty {
-        PointerType {
-            pointee_type,
-            addr_space,
-        } => Some((project.ptr_size * index, pointee_type.clone())),
+        PointerType { pointee_type, .. } => Some((project.ptr_size * index, pointee_type.clone())),
         VectorType { element_type, .. } => {
             let size = size_in_bits(element_type, project)?;
             Some((size * index, element_type.clone()))

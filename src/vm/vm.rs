@@ -4,27 +4,27 @@ use llvm_ir::{Constant, Function, Name, Operand, Type};
 use log::{debug, trace};
 
 // use crate::llvm::size_in_bits;
-use crate::llvm::*;
-use crate::project::{FunctionType, Project};
+use crate::project::Project;
 use crate::solver::{Solver, BV};
+use crate::traits::Size;
 use crate::vm::location::Location;
+use crate::vm::Result;
 use crate::vm::{Call, Path, State, VMError};
-use crate::vm::{Globals, Result};
 
-#[derive(Debug, PartialEq, Eq)]
-pub enum ReturnValue {
-    /// The function returns a `BV` value.
-    Return(BV),
+// #[derive(Debug, PartialEq, Eq)]
+// pub enum ReturnValue {
+//     /// The function returns a `BV` value.
+//     Return(BV),
 
-    /// The function returns void.
-    Void,
+//     /// The function returns void.
+//     Void,
 
-    /// The function throws.
-    Throw(BV),
+//     /// The function throws.
+//     Throw(BV),
 
-    /// The function aborted.
-    Abort,
-}
+//     /// The function aborted.
+//     Abort,
+// }
 
 // Might be what I actually want.
 //
@@ -38,7 +38,9 @@ pub enum ReturnValue {
 // TODO: Check throw how that is supposed to work. If I use an error for that
 // it might mess up when they have to be caught and stuff. Esp since variables
 // are scoped the to interpreteted callstack.
-pub enum ReturnVal {
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum ReturnValue {
     Value(BV),
 
     Void,
@@ -134,9 +136,9 @@ impl<'a> VM<'a> {
 
             let mut r = self.backtrack_and_continue();
 
-            if let Err(VMError::Abort) = r {
-                r = Ok(ReturnValue::Abort);
-            }
+            // if let Err(VMError::Abort) = r {
+            //     r = Ok(ReturnValue::Abort);
+            // }
 
             println!("Result: {:?}", r);
             results.push(r);
@@ -164,7 +166,7 @@ impl<'a> VM<'a> {
             };
 
             match result {
-                ReturnValue::Return(ret_val) => {
+                ReturnValue::Value(ret_val) => {
                     let dst_name = match callsite.instruction {
                         super::Call::Call(instr) => instr.dest.clone(),
                         super::Call::Invoke(instr) => Some(instr.result.clone()),
@@ -176,10 +178,10 @@ impl<'a> VM<'a> {
                     }
                 }
                 ReturnValue::Void => {}
-                ReturnValue::Throw(_) => panic!("Throws are not handled yet"),
+                // ReturnValue::Throw(_) => panic!("Throws are not handled yet"),
 
                 // If we hit an abort, abort this as well.
-                ReturnValue::Abort => return Ok(result),
+                // ReturnValue::Abort => return Ok(result),
             }
 
             // For `Call` we go to the next instruction, and for `Invoke` we enter the label that
@@ -357,7 +359,7 @@ impl<'a> VM<'a> {
                     _ => todo!(),
                 },
                 Operand::LocalOperand { .. } => {
-                    let addr = self.state.get_bv(operand)?;
+                    let addr = self.state.get_var(operand)?;
                     let solutions = self.solver.get_solutions_for_bv(&addr, 1).unwrap();
                     dbg!(&solutions);
                     match solutions {
@@ -516,15 +518,15 @@ mod tests {
         let res = run("tests/bcs/oob.bc", "oob::get");
         assert!(res.len() > 0);
         assert_eq!(res[0], Err(VMError::OutOfBounds));
-        assert_eq!(res[1], Ok(ReturnValue::Abort));
+        assert_eq!(res[1], Err(VMError::Abort(-1)));
     }
 
     #[test]
     fn vm_get_array_checked2() {
         let res = run("tests/bcs/oob.bc", "oob::get2");
         assert!(res.len() > 0);
-        assert!(matches!(res[0], Ok(ReturnValue::Return(_))));
-        assert_eq!(res[1], Ok(ReturnValue::Abort));
+        assert!(matches!(res[0], Ok(ReturnValue::Value(_))));
+        assert_eq!(res[1], Err(VMError::Abort(-1)));
     }
 
     #[test]
@@ -551,8 +553,8 @@ mod tests {
             "tests/samples/out_of_bounds.bc",
             "out_of_bounds::out_of_bounds",
         );
-        assert!(matches!(res[0], Ok(ReturnValue::Return(_))));
-        assert_eq!(res[1], Ok(ReturnValue::Abort));
+        assert!(matches!(res[0], Ok(ReturnValue::Value(_))));
+        assert_eq!(res[1], Err(VMError::Abort(-1)));
     }
 
     // #[test]
@@ -573,7 +575,7 @@ mod tests {
     #[test]
     fn vm_test_globals() {
         let res = run("tests/samples/globals.bc", "globals::foo");
-        assert!(matches!(res[0], Ok(ReturnValue::Return(_))));
-        assert!(matches!(res[1], Ok(ReturnValue::Return(_))));
+        assert!(matches!(res[0], Ok(ReturnValue::Value(_))));
+        assert!(matches!(res[1], Ok(ReturnValue::Value(_))));
     }
 }

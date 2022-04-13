@@ -1,30 +1,7 @@
 use llvm_ir::{Function, Module};
-use rustc_demangle::demangle;
 use std::collections::HashMap;
 
 type Value<'m> = (&'m Function, &'m Module);
-
-fn is_private(f: &Function) -> bool {
-    match f.linkage {
-        llvm_ir::module::Linkage::Private => true,
-        llvm_ir::module::Linkage::Internal => true,
-        llvm_ir::module::Linkage::External => false,
-        llvm_ir::module::Linkage::ExternalWeak => todo!(),
-        llvm_ir::module::Linkage::AvailableExternally => todo!(),
-        llvm_ir::module::Linkage::LinkOnceAny => todo!(),
-        llvm_ir::module::Linkage::LinkOnceODR => todo!(),
-        llvm_ir::module::Linkage::LinkOnceODRAutoHide => todo!(),
-        llvm_ir::module::Linkage::WeakAny => todo!(),
-        llvm_ir::module::Linkage::WeakODR => todo!(),
-        llvm_ir::module::Linkage::Common => todo!(),
-        llvm_ir::module::Linkage::Appending => todo!(),
-        llvm_ir::module::Linkage::DLLImport => todo!(),
-        llvm_ir::module::Linkage::DLLExport => todo!(),
-        llvm_ir::module::Linkage::Ghost => todo!(),
-        llvm_ir::module::Linkage::LinkerPrivate => todo!(),
-        llvm_ir::module::Linkage::LinkerPrivateWeak => todo!(),
-    }
-}
 
 pub struct ModulePrivateMap<'m> {
     public: HashMap<String, Value<'m>>,
@@ -69,5 +46,27 @@ impl<'m> ModulePrivateMap<'m> {
         } else {
             self.public.get(key).cloned()
         }
+    }
+}
+
+fn is_private(f: &Function) -> bool {
+    match f.linkage {
+        llvm_ir::module::Linkage::Private => true,
+        llvm_ir::module::Linkage::Internal => true,
+        llvm_ir::module::Linkage::External => false,
+        llvm_ir::module::Linkage::ExternalWeak => todo!(),
+        llvm_ir::module::Linkage::AvailableExternally => todo!(),
+        llvm_ir::module::Linkage::LinkOnceAny => todo!(),
+        llvm_ir::module::Linkage::LinkOnceODR => todo!(),
+        llvm_ir::module::Linkage::LinkOnceODRAutoHide => todo!(),
+        llvm_ir::module::Linkage::WeakAny => todo!(),
+        llvm_ir::module::Linkage::WeakODR => todo!(),
+        llvm_ir::module::Linkage::Common => todo!(),
+        llvm_ir::module::Linkage::Appending => todo!(),
+        llvm_ir::module::Linkage::DLLImport => todo!(),
+        llvm_ir::module::Linkage::DLLExport => todo!(),
+        llvm_ir::module::Linkage::Ghost => todo!(),
+        llvm_ir::module::Linkage::LinkerPrivate => todo!(),
+        llvm_ir::module::Linkage::LinkerPrivateWeak => todo!(),
     }
 }

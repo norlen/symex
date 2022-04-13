@@ -1,26 +1,12 @@
-use llvm_ir::types::Typed;
-use llvm_ir::{Constant, IntPredicate, Operand};
+use llvm_ir::{IntPredicate, Type};
 
-use super::{Op, Size};
-use crate::llvm::AsConcrete;
-use crate::solver::{BinaryOperation, BV};
-use crate::vm::{Result, State, VMError};
-use llvm_ir::Type;
+use super::{Op, Size, ToValue};
+use crate::{
+    solver::{BinaryOperation, BV},
+    vm::{Result, State, VMError},
+};
 
-// pub fn bitcast<'p, T>(state: &mut State<'_>, to: &Type, op: T) -> Result<BV>
-// where
-//     T: Into<Op<'p>>,
-// {
-//     let bv = state.get(op.into())?;
-
-//     assert_eq!(
-//         bv.len() as u64,
-//         to.size(&state.project)
-//             .ok_or_else(|| VMError::UnexpectedZeroSize)?
-//     );
-
-//     Ok(bv)
-// }
+const ENABLE_BOUNDS_CHECK: bool = false;
 
 pub fn gep<'p, T, I>(state: &mut State<'_>, address: T, indices: I, in_bounds: bool) -> Result<BV>
 where
@@ -34,11 +20,12 @@ where
     //
     // Hence, we check if the current type is a struct. And if it is, the
     // operand is required to be a constant, for now.
-    let mut addr = state.get(address).unwrap();
+    let mut addr = state.get_var(address).unwrap();
     let ptr_size = addr.len();
 
-    let bounds = if in_bounds {
-        let size = state.project.size_of(address).unwrap() as u64;
+    let bounds = if ENABLE_BOUNDS_CHECK && in_bounds {
+        let ty = state.type_of(&address);
+        let size = ty.size(&state.project).unwrap();
         let size = state.solver.bv_from_u64(size, ptr_size);
         let upper_bound = addr.add(&size);
 
@@ -58,15 +45,8 @@ where
 
         let (offset, ty) = if is_struct {
             // Concrete indexing into a struct.
-            let index = index.as_concrete().unwrap();
-            let (offset, ty) = curr_ty
-                .offset_in_bytes(index, state.project)
-                .unwrap()
-                .unwrap();
-            // let index = u64_from_operand(index).unwrap() as usize;
-            // let (offset, ty) = get_offset_in_bits(&curr_ty, index, self.project);
-
-            println!("offset: {}", offset);
+            let index = index.to_value()?;
+            let (offset, ty) = curr_ty.offset_in_bytes(index, state.project)?.unwrap();
 
             let offset = state.solver.bv_from_u64(offset, ptr_size);
 
@@ -75,7 +55,7 @@ where
             // Symbolic index. We cannot support struct indexing here, since
             // we calculate the offset as size of type * index, which won't
             // offset correctly for structs.
-            let index = state.get(index).unwrap();
+            let index = state.get_var(index)?;
             let index = index.zero_ext(ptr_size);
 
             let bytes = curr_ty.size(state.project).unwrap();
@@ -124,8 +104,8 @@ where
     let rhs = rhs.into();
     assert_eq!(state.type_of(&lhs), state.type_of(&rhs));
 
-    let lhs = state.get(lhs.into())?;
-    let rhs = state.get(rhs.into())?;
+    let lhs = state.get_var(lhs)?;
+    let rhs = state.get_var(rhs)?;
     assert_eq!(lhs.len(), rhs.len());
 
     let result = match op {
@@ -147,7 +127,7 @@ pub fn cast_to<'p, T>(state: &mut State<'_>, ty: &Type, op: T) -> Result<BV>
 where
     T: Into<Op<'p>>,
 {
-    let bv = state.get(op.into())?;
+    let bv = state.get_var(op.into())?;
     assert_eq!(bv.len(), ty.size(state.project).unwrap() as u32);
     Ok(bv)
 }
@@ -156,8 +136,8 @@ pub fn icmp<'p, T>(state: &mut State<'_>, lhs: T, rhs: T, predicate: IntPredicat
 where
     T: Into<Op<'p>>,
 {
-    let lhs = state.get(lhs.into())?;
-    let rhs = state.get(rhs.into())?;
+    let lhs = state.get_var(lhs.into())?;
+    let rhs = state.get_var(rhs.into())?;
     let result = match predicate {
         IntPredicate::EQ => lhs.eq(&rhs),
         IntPredicate::NE => lhs.ne(&rhs),

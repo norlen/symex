@@ -1,12 +1,7 @@
-use llvm_ir::{
-    module::GlobalVariable,
-    types::{NamedStructDef, Typed},
-    Function, Module, Type, TypeRef,
-};
+use llvm_ir::{module::GlobalVariable, types::NamedStructDef, Function, Module};
 use log::info;
 use rustc_demangle::demangle;
-use std::iter;
-use std::path::Path;
+use std::{iter, path::Path};
 use thiserror::Error;
 
 use crate::{
@@ -177,8 +172,4 @@ impl Project {
 
     // fn add_hook() {}
     // fn add_hook_to_module() {} // may be interesting to only add hooks to certain modules
-
-    pub fn size_of(&self, ty: impl Typed) -> Option<u32> {
-        todo!()
-    }
 }
