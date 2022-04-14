@@ -3,7 +3,7 @@ use llvm_ir::{types::Typed, Constant, ConstantRef, Operand};
 use super::ToValue;
 use crate::vm::Result;
 
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub enum Op<'a> {
     Operand(&'a Operand),
     Constant(&'a Constant),
@@ -41,6 +41,19 @@ impl<'a> ToValue<u64> for Op<'a> {
         match self {
             Op::Operand(operand) => operand.to_value(),
             Op::Constant(constant) => constant.to_value(),
+        }
+    }
+}
+
+impl<'a> Op<'a> {
+    pub fn is_constant(&self) -> bool {
+        match self {
+            Op::Operand(op) => match op {
+                Operand::LocalOperand { .. } => false,
+                Operand::ConstantOperand(_) => true,
+                Operand::MetadataOperand => false,
+            },
+            Op::Constant(_) => true,
         }
     }
 }

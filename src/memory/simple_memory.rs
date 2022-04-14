@@ -16,7 +16,9 @@ pub struct Memory {
     mem: Array,
 
     ptr_size: u32,
-    //null_detection: bool,
+
+    null_detection: bool,
+    nullptr: BV,
 }
 
 impl Memory {
@@ -24,11 +26,15 @@ impl Memory {
         const NAME: &str = "simple_memory";
 
         let mem = solver.array(ptr_size, BITS_IN_BYTE, Some(NAME));
+        let nullptr = solver.bv_zero(ptr_size);
+
         Self {
             name: NAME.to_owned(),
             solver,
             mem,
             ptr_size,
+            null_detection: false,
+            nullptr,
         }
     }
 
@@ -44,9 +50,9 @@ impl Memory {
         trace!("{} read addr={:?}, bits={}", self.name, addr, bits);
         assert_eq!(addr.len(), self.ptr_size, "passed wrong sized address");
 
-        // if self.null_detection {
-        //     panic!("");
-        // }
+        if self.null_detection && self.solver.can_equal(&addr, &self.nullptr)? {
+            return Err(MemoryError::NullPointer);
+        }
 
         let value = if bits < BITS_IN_BYTE {
             self.read_u8(addr).slice(bits - 1, 0).into()
@@ -74,9 +80,9 @@ impl Memory {
         trace!("{} write addr={:?}, value={:?}", self.name, addr, value);
         assert_eq!(addr.len(), self.ptr_size, "passed wrong sized address");
 
-        // if self.null_detection {
-        //     panic!("");
-        // }
+        if self.null_detection && self.solver.can_equal(addr, &self.nullptr)? {
+            return Err(MemoryError::NullPointer);
+        }
 
         // Check if we should zero extend the value (if it less than 8-bits).
         let value = if value.len() < BITS_IN_BYTE {

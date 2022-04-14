@@ -3,7 +3,7 @@ use llvm_ir::{
     function::{FunctionAttribute, ParameterAttribute},
     Operand,
 };
-use log::trace;
+use log::{debug, trace};
 use std::collections::HashMap;
 
 use crate::vm::{Result, ReturnValue, VMError, VM};
@@ -56,5 +56,6 @@ impl Hooks {
 
 /// Hook that tells the VM to abort.
 pub fn abort(_vm: &mut VM<'_>, _info: FnInfo) -> Result<ReturnValue> {
+    debug!("Hook: ABORT");
     Err(VMError::Abort(-1))
 }

@@ -4,9 +4,9 @@ use llvm_ir::{
     types::Typed,
     Function, Module, Name, Type, TypeRef,
 };
-use log::warn;
+use log::{debug, warn};
 
-use super::{Allocation, Globals, Result};
+use super::{Allocation, Globals, Result, VMError};
 use crate::{
     memory::bump_allocator::BumpAllocator,
     memory::simple_memory::Memory,
@@ -158,6 +158,19 @@ impl<'a> State<'a> {
         }
     }
 
+    pub fn allocate(&mut self, allocation_size: u64, align: u64) -> Result<u64> {
+        let align = if align == 0 {
+            warn!("Alignment of 0");
+            self.project.default_alignment
+        } else {
+            align
+        };
+
+        self.stack
+            .get_address(allocation_size, align)
+            .map_err(|err| VMError::MemoryError(err))
+    }
+
     /// Allocate an unitialized value `name` on the stack with size `allocation_size`.
     pub fn stack_alloc(&mut self, allocation_size: u64, align: u64) -> Result<BV> {
         let align = if align == 0 {
@@ -255,20 +268,18 @@ impl<'a> State<'a> {
                         }
                     };
 
-                    let addr = self.stack_alloc(size, var.alignment as u64)?;
+                    let addr = self.allocate(size, var.alignment as u64)?;
 
-                    println!("[GLOBALS] Adding global variable: {:?}", var.name);
+                    debug!("Add GLOBAL_VARIABLE: {}", var.name);
                     self.globals.add_global_variable(var, module, addr);
                 }
             }
 
             for function in &module.functions {
-                let ptr_size = self.project.ptr_size;
-                let ptr = self.stack.get_address(ptr_size, 4)?;
-                let bv = self.solver.bv_from_u64(ptr, ptr_size as u32);
+                let addr = self.allocate(self.project.ptr_size, 4)?;
 
-                println!("[GLOBALS] Adding function: {:?}", function.name);
-                self.globals.add_function(function, module, bv, ptr);
+                debug!("Add FUNCTION: {}", function.name);
+                self.globals.add_function(function, module, addr);
             }
         }
 

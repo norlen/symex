@@ -8,7 +8,6 @@ pub type StatusCode = i64;
 
 /// VMError
 #[derive(Debug, Error)]
-#[allow(dead_code)]
 pub enum VMError {
     // -------------------------------------------------------------------------
     // Errors in the code being analyzed.
@@ -22,8 +21,8 @@ pub enum VMError {
     #[error("Unsat")]
     Unsat,
 
-    #[error("Out of bounds")]
-    OutOfBounds,
+    // #[error("Out of bounds")]
+    // OutOfBounds,
 
     // -------------------------------------------------------------------------
     // Errors in IR

@@ -1,5 +1,7 @@
 use thiserror::Error;
 
+use crate::solver::SolverError;
+
 pub mod bump_allocator;
 pub mod simple_memory;
 
@@ -21,6 +23,13 @@ pub enum MemoryError {
     /// When the address space becomes exhausted.
     #[error("Tried to allocate {0} bits which would overflow the address space")]
     AddressSpaceExhausted(u64),
+
+    /// Possible to try and read/write a null pointer.
+    #[error("Null pointer encountered")]
+    NullPointer,
+
+    #[error(transparent)]
+    Solver(#[from] SolverError),
 }
 
 /// The number of bits per byte the memory system expects.

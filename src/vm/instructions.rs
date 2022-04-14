@@ -422,29 +422,8 @@ impl<'a> VM<'a> {
 
     fn extractvalue(&mut self, instr: &instruction::ExtractValue) -> Result<()> {
         debug!("{}", instr);
-
-        let value = self.state.get_var(&instr.aggregate).unwrap();
-
-        let mut base_ty = self.state.type_of(&instr.aggregate);
-        let mut total_offset = 0;
-        for index in instr.indices.iter() {
-            let (offset, ty) = base_ty.offset(*index as u64, self.project).unwrap();
-
-            base_ty = ty;
-            total_offset += offset;
-        }
-
-        let offset_high = total_offset + base_ty.size(self.project).unwrap();
-        // let offset_high = total_offset + size_in_bits(&base_ty, self.project).unwrap();
-        assert!(value.len() >= offset_high as u32);
-
-        let value = value.slice(total_offset as u32, offset_high as u32 - 1);
-
-        self.state
-            .assign_bv(instr.get_result().clone(), value.into())
-            .unwrap();
-
-        Ok(())
+        let value = extract_value(&mut self.state, &instr.aggregate, &instr.indices)?;
+        self.assign(instr, value)
     }
 
     fn insertvalue(&mut self, instr: &instruction::InsertValue) -> Result<()> {
@@ -494,10 +473,10 @@ impl<'a> VM<'a> {
         let dst_ty = self.state.type_of(instr);
         let dst_size = dst_ty.size(self.project).unwrap() as u32;
         // let dst_size = size_in_bits(&dst_ty, self.project).unwrap() as u32;
-        println!("dst size: {}", dst_size);
+        // println!("dst size: {}", dst_size);
 
         let value = self.state.mem.read(&addr, dst_size).unwrap();
-        println!("got value: {:?}", value);
+        // println!("got value: {:?}", value);
         self.state
             .assign_bv(instr.get_result().clone(), value)
             .unwrap();
@@ -727,10 +706,10 @@ impl<'a> VM<'a> {
     }
 
     fn call(&mut self, instr: &'a instruction::Call) -> Result<()> {
-        debug!("{:?}", instr);
+        debug!("{}", instr);
 
         let fn_name = self.resolve_function(&instr.function)?;
-        println!("fn_name: {:?}", fn_name);
+        debug!("resolved function: {}", fn_name);
 
         let ret_val = match self
             .project
@@ -742,7 +721,7 @@ impl<'a> VM<'a> {
                     return_attrs: instr.return_attributes.clone(),
                     fn_attrs: instr.function_attributes.clone(),
                 };
-                hook(self, info).unwrap()
+                hook(self, info)?
             }
             FunctionType::Function { function, module } => {
                 let arguments = instr

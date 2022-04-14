@@ -25,6 +25,10 @@ impl BumpAllocator {
         }
     }
 
+    pub fn get_allocated_size(&self, addr: u64) -> Option<u64> {
+        self.sizes.get(&addr).copied()
+    }
+
     /// Returns the first available address.
     ///
     /// `bits` must be the correct size, if it is too small subsequent

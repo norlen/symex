@@ -30,25 +30,25 @@ use llvm_ir::{
 };
 use std::{cell::Cell, collections::HashMap};
 
-use crate::BV;
+// /// Helper trait so functions can accept both [GlobalVariable] and [Function].
+// trait Global {
+//     /// Returns true if this global should be module private.
+//     fn is_private() -> bool;
 
-/// Helper trait so functions can accept both [GlobalVariable] and [Function].
-trait Global {
-    /// Returns true if this global should be module private.
-    fn is_private() -> bool;
+//     /// Returns true if an address should be allocated for the global.
+//     fn has_address() -> bool;
 
-    /// Returns true if an address should be allocated for the global.
-    fn has_address() -> bool;
+//     /// Returns true if the global is immutable.
+//     fn is_constant() -> bool;
+// }
 
-    /// Returns true if the global is immutable.
-    fn is_constant() -> bool;
-}
-
+/// A global allocation which can be either a [GlobalVariable] or a [Function].
+///
+/// These always have concrete addresses.
 #[derive(Debug, Clone)]
 pub struct Allocation<'p> {
-    //addr: u64,
-    pub addr_bv: BV,
-
+    pub addr: u64,
+    // pub addr_bv: BV,
     pub kind: AllocationType<'p>,
 }
 
@@ -135,10 +135,10 @@ impl<'p> Globals<'p> {
         self.get(name, module)
     }
 
-    pub fn add_global_variable(&mut self, var: &'p GlobalVariable, module: &'p Module, addr: BV) {
+    pub fn add_global_variable(&mut self, var: &'p GlobalVariable, module: &'p Module, addr: u64) {
         let init = var.initializer.clone().unwrap();
         let g = Allocation {
-            addr_bv: addr,
+            addr,
             kind: AllocationType::Variable(GlobalVar {
                 initializer: init,
                 initialized: Cell::new(false),
@@ -148,9 +148,9 @@ impl<'p> Globals<'p> {
         self.add_global(g, &var.linkage, module, var.name.clone());
     }
 
-    pub fn add_function(&mut self, f: &'p Function, module: &'p Module, addr: BV, addr_u64: u64) {
+    pub fn add_function(&mut self, f: &'p Function, module: &'p Module, addr: u64) {
         let g = Allocation {
-            addr_bv: addr,
+            addr,
             kind: AllocationType::Function(FFunction {
                 module,
                 function: f,
@@ -158,7 +158,7 @@ impl<'p> Globals<'p> {
         };
 
         self.add_global(g, &f.linkage, module, Name::from(&*f.name));
-        self.add_func(&f.linkage, module, Name::from(&*f.name), addr_u64);
+        self.add_func(&f.linkage, module, Name::from(&*f.name), addr);
     }
 
     fn add_func(&mut self, linkage: &Linkage, module: &Module, name: Name, addr: u64) {

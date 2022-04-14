@@ -51,17 +51,22 @@ impl ToBV for &Constant {
             BlockAddress => todo!(),
             GlobalReference { name, .. } => {
                 if let Some(global) = state.get_global(name).cloned() {
+                    let addr_bv = state
+                        .solver
+                        .bv_from_u64(global.addr, state.project.ptr_size as u32);
+
                     match &global.kind {
                         AllocationType::Variable(v) => {
                             if !v.initialized.get() {
                                 let value = state.get_var(&v.initializer)?;
-                                state.mem.write(&global.addr_bv, value)?;
+
+                                state.mem.write(&addr_bv, value)?;
                                 v.initialized.set(true);
                             }
                         }
                         AllocationType::Function(_) => {}
                     }
-                    Ok(global.addr_bv.clone())
+                    Ok(addr_bv)
                 } else {
                     panic!("global ref not found, {:?}", name);
                 }
@@ -88,7 +93,7 @@ impl ToBV for &Constant {
             ExtractElement(_) => todo!(),
             InsertElement(_) => todo!(),
             ShuffleVector(_) => todo!(),
-            ExtractValue(_) => todo!(),
+            ExtractValue(op) => extract_value(state, &op.aggregate, &op.indices),
             InsertValue(_) => todo!(),
             GetElementPtr(op) => gep(
                 state,

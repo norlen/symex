@@ -1,7 +1,6 @@
 #![warn(rust_2018_idioms, rust_2021_compatibility)]
 // For now.
 #![allow(clippy::module_inception)]
-//#![allow(unused_imports)]
 
 pub mod hooks;
 pub mod memory;

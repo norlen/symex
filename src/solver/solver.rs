@@ -1,11 +1,10 @@
-use anyhow::{anyhow, Result};
 use boolector::{
     option::{BtorOption, ModelGen, NumberFormat},
     Btor, SolverResult,
 };
 use std::rc::Rc;
 
-use super::{Solutions, BV};
+use super::{Solutions, SolverError, BV};
 
 #[derive(Debug, Clone)]
 pub struct Solver {
@@ -31,16 +30,16 @@ impl Solver {
     }
 
     /// Check if it is satisfiable.
-    pub fn is_sat(&self) -> Result<bool> {
+    pub fn is_sat(&self) -> Result<bool, SolverError> {
         match self.btor.sat() {
             SolverResult::Sat => Ok(true),
             SolverResult::Unsat => Ok(false),
-            SolverResult::Unknown => Err(anyhow!("solver result unknown")),
+            SolverResult::Unknown => Err(SolverError::Unknown),
         }
     }
 
     /// Check if sat with the extra constraint.
-    pub fn is_sat_with_constraint(&self, constraint: &BV) -> Result<bool> {
+    pub fn is_sat_with_constraint(&self, constraint: &BV) -> Result<bool, SolverError> {
         // Can't i use assume here?
         // it should only be valid until the next call to is_sat
 
@@ -69,14 +68,16 @@ impl Solver {
     //     Ok(!result)
     // }
 
-    // /// Returns `true` if `lhs` and `rhs` can be equal under the current
-    // /// constraints.
-    // pub fn bvs_can_be_equal(&self, lhs: &BV, rhs: &BV) -> Result<bool> {
-    //     let constraint = lhs._eq(rhs);
-    //     self.is_sat_with_constraint(&constraint)
-    // }
+    /// Check if `lhs` and `rhs` can be equal under the current constraints.
+    pub fn can_equal(&self, lhs: &BV, rhs: &BV) -> Result<bool, SolverError> {
+        self.is_sat_with_constraint(&lhs.eq(&rhs))
+    }
 
-    pub fn get_solutions_for_bv(&self, bv: &BV, max_solutions: usize) -> Result<Solutions> {
+    pub fn get_solutions_for_bv(
+        &self,
+        bv: &BV,
+        max_solutions: usize,
+    ) -> Result<Solutions, SolverError> {
         // Setup before checking for solutions.
         self.btor.push(1);
         self.btor.set_opt(BtorOption::ModelGen(ModelGen::All));
@@ -91,31 +92,35 @@ impl Solver {
     }
 
     /// Helper to ensure we always set `ModelGen::Disabled` for all paths in this function.
-    fn internal_get_solutions_for_bv(&self, bv: &BV, max_solutions: usize) -> Result<Solutions> {
+    fn internal_get_solutions_for_bv(
+        &self,
+        bv: &BV,
+        max_solutions: usize,
+    ) -> Result<Solutions, SolverError> {
         if !self.is_sat()? {
             return Ok(Solutions::None);
         }
 
-        let mut solutions_found = 0;
         let mut solutions = Vec::new();
-        while solutions_found <= max_solutions && self.is_sat()? {
+        while solutions.len() < max_solutions && self.is_sat()? {
             let solution = bv.get_solution().disambiguate();
 
             // Constrain the next value to not be an already found solution.
             let solution_bv = self.from_binary_string(solution.as_01x_str());
             self.assert(&bv.ne(&solution_bv));
 
-            solutions_found += 1;
-            // if solutions.len() != max_solutions {
             solutions.push(solution);
-            // }
         }
 
-        Ok(match solutions.len() {
-            0 => Solutions::None,
-            n if n > max_solutions => Solutions::AtLeast(solutions),
-            _ => Solutions::Exactly(solutions),
-        })
+        if solutions.len() == 0 {
+            Ok(Solutions::None)
+        } else {
+            let exists_more_solutions = self.is_sat()?;
+            match exists_more_solutions {
+                false => Ok(Solutions::Exactly(solutions)),
+                true => Ok(Solutions::AtLeast(solutions)),
+            }
+        }
     }
 
     // -------------------------------------------------------------------------

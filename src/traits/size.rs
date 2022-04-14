@@ -1,10 +1,12 @@
+use anyhow::anyhow;
 use llvm_ir::types::{FPType, NamedStructDef, Type, TypeRef};
 
 use super::Size;
 use crate::{
     memory::to_bytes,
     project::Project,
-    vm::{Result, VMError},
+    vm::{Result, State, VMError},
+    BV,
 };
 
 impl Size for Type {
@@ -12,14 +14,6 @@ impl Size for Type {
         size_in_bits(self, project)
     }
 
-    fn offset(&self, index: u64, project: &Project) -> Option<(u64, TypeRef)> {
-        get_offset(self, index, project)
-    }
-
-    fn inner_ty(&self, project: &Project) -> Option<TypeRef> {
-        get_inner_type(self, project)
-    }
-
     fn size_in_bytes(&self, project: &Project) -> Result<Option<u64>> {
         self.size(project)
             .map(to_bytes)
@@ -27,43 +21,48 @@ impl Size for Type {
             .map_err(|err| VMError::MemoryError(err))
     }
 
-    fn offset_in_bytes(&self, index: u64, project: &Project) -> Result<Option<(u64, TypeRef)>> {
-        match self.offset(index, project) {
-            None => Ok(None),
-            Some((size, ty)) => to_bytes(size)
-                .map(|s| Some((s, ty)))
-                .map_err(|err| VMError::MemoryError(err)),
-        }
+    fn offset_constant(&self, index: u64, project: &Project) -> Result<(u64, TypeRef)> {
+        get_offset_concrete(self, index, project)
+    }
+
+    fn offset_constant_in_bytes(&self, index: u64, project: &Project) -> Result<(u64, TypeRef)> {
+        let (offset, ty) = self.offset_constant(index, project)?;
+        let offset = to_bytes(offset).map_err(|err| VMError::MemoryError(err))?;
+        Ok((offset, ty))
+    }
+
+    fn offset_symbol(&self, index: &BV, state: &mut State<'_>) -> Result<(BV, TypeRef)> {
+        get_offset_bv(self, index, state)
+    }
+
+    fn inner_ty(&self, project: &Project) -> Option<TypeRef> {
+        get_inner_type(self, project)
     }
 }
 
 impl Size for TypeRef {
     fn size(&self, project: &Project) -> Option<u64> {
-        size_in_bits(self, project)
-    }
-
-    fn offset(&self, index: u64, project: &Project) -> Option<(u64, TypeRef)> {
-        get_offset(self, index, project)
-    }
-
-    fn inner_ty(&self, project: &Project) -> Option<TypeRef> {
-        get_inner_type(self, project)
+        self.as_ref().size(project)
     }
 
     fn size_in_bytes(&self, project: &Project) -> Result<Option<u64>> {
-        self.size(project)
-            .map(to_bytes)
-            .transpose()
-            .map_err(|err| VMError::MemoryError(err))
+        self.as_ref().size_in_bytes(project)
     }
 
-    fn offset_in_bytes(&self, index: u64, project: &Project) -> Result<Option<(u64, TypeRef)>> {
-        match self.offset(index, project) {
-            None => Ok(None),
-            Some((size, ty)) => to_bytes(size)
-                .map(|s| Some((s, ty)))
-                .map_err(|err| VMError::MemoryError(err)),
-        }
+    fn offset_constant(&self, index: u64, project: &Project) -> Result<(u64, TypeRef)> {
+        self.as_ref().offset_constant(index, project)
+    }
+
+    fn offset_constant_in_bytes(&self, index: u64, project: &Project) -> Result<(u64, TypeRef)> {
+        self.as_ref().offset_constant_in_bytes(index, project)
+    }
+
+    fn offset_symbol(&self, index: &BV, state: &mut State<'_>) -> Result<(BV, TypeRef)> {
+        self.as_ref().offset_symbol(index, state)
+    }
+
+    fn inner_ty(&self, project: &Project) -> Option<TypeRef> {
+        self.as_ref().inner_ty(project)
     }
 }
 
@@ -84,7 +83,15 @@ pub fn size_in_bits(ty: &Type, project: &Project) -> Option<u64> {
         ArrayType {
             element_type,
             num_elements,
-        } => size_in_bits(element_type, project).map(|size| *num_elements as u64 * size),
+        } => size_in_bits(element_type, project).map(|size| {
+            println!(
+                "ARRAY TYPE: element_size: {}, num_elements: {}, total: {}",
+                size,
+                *num_elements,
+                size * *num_elements as u64
+            );
+            *num_elements as u64 * size
+        }),
         StructType { element_types, .. } => element_types
             .iter()
             .map(|ty| size_in_bits(ty, project))
@@ -115,37 +122,90 @@ pub fn fp_size_in_bits(ty: &FPType) -> u64 {
     }
 }
 
-/// Calculates an index based offset for a [`Type`].
-pub fn get_offset(ty: &Type, index: u64, project: &Project) -> Option<(u64, TypeRef)> {
+pub fn get_offset_bv(ty: &Type, index: &BV, state: &mut State<'_>) -> Result<(BV, TypeRef)> {
     use Type::*;
 
     match ty {
-        PointerType { pointee_type, .. } => Some((project.ptr_size * index, pointee_type.clone())),
-        VectorType { element_type, .. } => {
-            let size = size_in_bits(element_type, project)?;
-            Some((size * index, element_type.clone()))
+        PointerType {
+            pointee_type: inner_ty,
+            ..
         }
-        ArrayType { element_type, .. } => {
-            let size = size_in_bits(element_type, project)?;
-            Some((size * index, element_type.clone()))
+        // LLVM docs:
+        // Q: Can GEP index into vector elements?
+        // A: This hasn’t always been forcefully disallowed, though it’s not
+        //    recommended. It leads to awkward special cases in the optimizers, 
+        //    and fundamental inconsistency in the IR. In the future, it will
+        //    probably be outright disallowed.
+        | VectorType {
+            element_type: inner_ty,
+            ..
         }
-        StructType { element_types, .. } => {
-            let index = index as usize;
+        | ArrayType {
+            element_type: inner_ty,
+            ..
+        } => {
+            let size = inner_ty.size(&state.project).unwrap();
+            let size = state.solver.bv_from_u64(size, index.len());
+            Ok((size.mul(index), inner_ty.clone()))
+        }
 
+        // Not supported for non-constant indexes.
+        NamedStructType { .. } => todo!(),
+        StructType { .. } => todo!(),
+
+        // Should not happend for these instructions.
+        VoidType => todo!(),
+        IntegerType { .. } => todo!(),
+        FPType(_) => todo!(),
+        FuncType { .. } => todo!(),
+        X86_MMXType => todo!(),
+        X86_AMXType => todo!(),
+        MetadataType => todo!(),
+        LabelType => todo!(),
+        TokenType => todo!(),
+    }
+}
+
+/// Calculate the offset from a concrete index.
+///
+/// TODO: LLVM docs note that it is allowed for negative indices.
+pub fn get_offset_concrete(ty: &Type, index: u64, project: &Project) -> Result<(u64, TypeRef)> {
+    use Type::*;
+
+    match ty {
+        PointerType {
+            pointee_type: inner_ty,
+            ..
+        }
+        | VectorType {
+            element_type: inner_ty,
+            ..
+        }
+        | ArrayType {
+            element_type: inner_ty,
+            ..
+        } => {
+            let size = inner_ty.size(project).unwrap();
+            Ok((size * index, inner_ty.clone()))
+        }
+        // TODO: Structs have an `is_packed`, this should probably affect the results...
+        StructType { element_types, .. } => {
             let offset = element_types
                 .iter()
-                .take(index)
-                .map(|ty| size_in_bits(ty, project))
-                .sum::<Option<_>>()?;
+                .take(index as usize)
+                .map(|ty| size_in_bits(ty, project).ok_or_else(|| VMError::Other(anyhow!("Oops"))))
+                .sum::<Result<u64>>()?;
 
-            let inner_ty = element_types.get(index)?.clone();
+            let ty = element_types.get(index as usize).cloned().unwrap();
 
-            Some((offset, inner_ty))
+            Ok((offset, ty))
         }
         NamedStructType { name } => match project.get_named_struct(name).unwrap() {
             NamedStructDef::Opaque => todo!(),
-            NamedStructDef::Defined(ty) => get_offset(ty, index, project),
+            NamedStructDef::Defined(ty) => get_offset_concrete(ty, index, project),
         },
+
+        // Should not happend for these instructions.
         VoidType => todo!(),
         IntegerType { .. } => todo!(),
         FPType(_) => todo!(),

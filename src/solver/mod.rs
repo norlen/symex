@@ -1,10 +1,17 @@
 use ::boolector::BVSolution;
+use thiserror::Error;
 
 mod bv;
 mod solver;
 
 pub use bv::BV;
 pub use solver::Solver;
+
+#[derive(Debug, Error, PartialEq, Eq)]
+pub enum SolverError {
+    #[error("Solver state unknown")]
+    Unknown,
+}
 
 pub enum BinaryOperation {
     Add,
