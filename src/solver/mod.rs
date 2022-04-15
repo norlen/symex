@@ -15,22 +15,6 @@ pub enum SolverError {
     Unknown,
 }
 
-pub enum BinaryOperation {
-    Add,
-    Sub,
-    Mul,
-    UDiv,
-    SDiv,
-    URem,
-    SRem,
-    And,
-    Or,
-    Xor,
-    Sll,
-    Srl,
-    Sra,
-}
-
 pub enum UnaryOperation {}
 
 #[derive(Debug)]
