@@ -1,6 +1,7 @@
 //! Hooks
 use llvm_ir::{
     function::{FunctionAttribute, ParameterAttribute},
+    instruction::Call,
     Operand,
 };
 use log::{debug, trace};
@@ -22,6 +23,16 @@ pub struct FnInfo {
     pub arguments: Vec<Argument>,
     pub return_attrs: Vec<ParameterAttribute>,
     pub fn_attrs: Vec<FunctionAttribute>,
+}
+
+impl FnInfo {
+    pub fn from_call(call: &Call) -> Self {
+        Self {
+            arguments: call.arguments.clone(),
+            return_attrs: call.return_attributes.clone(),
+            fn_attrs: call.function_attributes.clone(),
+        }
+    }
 }
 
 pub struct Hooks {

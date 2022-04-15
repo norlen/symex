@@ -8,7 +8,7 @@ use super::{Array, Solutions, SolverError, BV};
 
 #[derive(Debug, Clone)]
 pub struct Solver {
-    pub(super) btor: Rc<Btor>,
+    pub(crate) btor: Rc<Btor>,
 }
 
 impl Default for Solver {

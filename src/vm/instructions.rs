@@ -438,24 +438,18 @@ impl<'a> VM<'a> {
     /// Reference: https://llvm.org/docs/LangRef.html#alloca-instruction
     fn alloca(&mut self, instr: &instruction::Alloca) -> Result<()> {
         debug!("{}", instr);
-
         let num_elements = instr.num_elements.to_value()?;
-        let element_size = instr.allocated_type.size(self.project).unwrap();
+        let element_size = self.project.bit_size(&instr.allocated_type)? as u64;
 
-        // let num_elements = u64_from_operand(&instr.num_elements).unwrap() as usize;
-        // let element_size = size_in_bits(&instr.allocated_type, self.project).unwrap();
         let mut allocation_size = element_size * num_elements;
-
         if allocation_size == 0 {
-            // panic!("zero sized alloca is not supported yet");
             warn!("zero sized alloca");
             allocation_size = self.project.ptr_size;
         }
 
         let addr = self
             .state
-            .stack_alloc(allocation_size, instr.alignment as u64)
-            .unwrap();
+            .stack_alloc(allocation_size, instr.alignment as u64)?;
 
         self.assign(instr, addr)
     }
@@ -465,20 +459,13 @@ impl<'a> VM<'a> {
     /// Reference: https://llvm.org/docs/LangRef.html#load-instruction
     fn load(&mut self, instr: &instruction::Load) -> Result<()> {
         debug!("{}", instr);
+        let addr = self.state.get_var(&instr.address)?;
 
-        let addr = self.state.get_var(&instr.address).unwrap();
-        let dst_ty = self.state.type_of(instr);
-        let dst_size = dst_ty.size(self.project).unwrap() as u32;
-        // let dst_size = size_in_bits(&dst_ty, self.project).unwrap() as u32;
-        // println!("dst size: {}", dst_size);
+        let target_ty = self.state.type_of(instr);
+        let target_size = self.project.bit_size(&target_ty)?;
+        let value = self.state.mem.read(&addr, target_size)?;
 
-        let value = self.state.mem.read(&addr, dst_size).unwrap();
-        // println!("got value: {:?}", value);
-        self.state
-            .assign_bv(instr.get_result().clone(), value)
-            .unwrap();
-
-        Ok(())
+        self.assign(instr, value)
     }
 
     /// Store writes to a value to memory.
@@ -705,19 +692,14 @@ impl<'a> VM<'a> {
     fn call(&mut self, instr: &'a instruction::Call) -> Result<()> {
         debug!("{}", instr);
 
-        let fn_name = self.resolve_function(&instr.function)?;
-        debug!("resolved function: {}", fn_name);
+        let current_module = self.state.current_loc.module;
+        let name = self.resolve_function(&instr.function)?;
+        debug!("resolved function: {}", name);
+        let function = self.project.get_function(&name, current_module)?;
 
-        let ret_val = match self
-            .project
-            .get_function(&fn_name, self.state.current_loc.module)?
-        {
+        let return_value = match function {
             FunctionType::Hook(hook) => {
-                let info = FnInfo {
-                    arguments: instr.arguments.clone(),
-                    return_attrs: instr.return_attributes.clone(),
-                    fn_attrs: instr.function_attributes.clone(),
-                };
+                let info = FnInfo::from_call(instr);
                 hook(self, info)?
             }
             FunctionType::Function { function, module } => {
@@ -745,23 +727,17 @@ impl<'a> VM<'a> {
             }
         };
 
-        // Assign return value
-        let ret_val = match ret_val {
-            ReturnValue::Value(v) => Some(v),
-            ReturnValue::Void => None,
-            // ReturnValue::Throw(_) => todo!("support throw in calls"),
-            // ReturnValue::Abort => return Err(VMError::Abort),
-        };
-
+        // Assign the return value if the call has a target.
         if let Some(name) = instr.dest.clone() {
-            match ret_val {
-                Some(bv) => self.state.assign_bv(name, bv).unwrap(),
-                // None => return Err(anyhow!("call expected return value, got void")),
-                None => panic!("call expected return value, but got void"),
-            };
+            match return_value {
+                ReturnValue::Value(symbol) => self.state.assign_bv(name, symbol),
+                ReturnValue::Void => panic!("call expected return value, but got void"),
+            }
+        } else {
+            // If it expected void that's fine. Note that the case where we returned a value
+            // but the caller expected void is not covered.
+            Ok(())
         }
-
-        Ok(())
     }
 
     fn va_arg(&mut self, instr: &instruction::VAArg) -> Result<()> {

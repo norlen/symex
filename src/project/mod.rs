@@ -1,4 +1,5 @@
-use llvm_ir::{module::GlobalVariable, types::NamedStructDef, Function, Module};
+use anyhow::anyhow;
+use llvm_ir::{module::GlobalVariable, types::NamedStructDef, Function, Module, Type, TypeRef};
 use log::info;
 use rustc_demangle::demangle;
 use std::{iter, path::Path};
@@ -6,7 +7,13 @@ use thiserror::Error;
 
 use crate::{
     hooks::{Hook, Hooks},
+    memory::to_bytes,
+    traits::{
+        get_bit_offset_concrete, get_bit_offset_symbol, get_byte_offset_concrete,
+        get_byte_offset_symbol, size_in_bits,
+    },
     vm::{Result, VMError},
+    BV,
 };
 use map::ModulePrivateMap;
 
@@ -172,4 +179,36 @@ impl Project {
 
     // fn add_hook() {}
     // fn add_hook_to_module() {} // may be interesting to only add hooks to certain modules
+
+    // -------------------------------------------------------------------------
+    // Helpers for types and stuff
+    // -------------------------------------------------------------------------
+
+    pub fn bit_size(&self, ty: &Type) -> Result<u32> {
+        let size = size_in_bits(ty, self)
+            .ok_or_else(|| VMError::Other(anyhow!("Cannot take size of type")))?;
+        Ok(size as u32)
+    }
+
+    pub fn byte_size(&self, ty: &Type) -> Result<u32> {
+        let size = self.bit_size(ty)?;
+        let size = to_bytes(size as u64)? as u32;
+        Ok(size)
+    }
+
+    pub fn bit_offset_concrete(&self, ty: &Type, index: u64) -> Result<(u64, TypeRef)> {
+        get_bit_offset_concrete(ty, index, self)
+    }
+
+    pub fn byte_offset_concrete(&self, ty: &Type, index: u64) -> Result<(u64, TypeRef)> {
+        get_byte_offset_concrete(ty, index, self)
+    }
+
+    pub fn bit_offset_symbol(&self, ty: &Type, index: &BV) -> Result<(BV, TypeRef)> {
+        get_bit_offset_symbol(ty, index, self)
+    }
+
+    pub fn byte_offset_symbol(&self, ty: &Type, index: &BV) -> Result<(BV, TypeRef)> {
+        get_byte_offset_symbol(ty, index, self)
+    }
 }

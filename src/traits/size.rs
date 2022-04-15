@@ -1,44 +1,43 @@
 use anyhow::anyhow;
 use llvm_ir::types::{FPType, NamedStructDef, Type, TypeRef};
 
-use super::Size;
 use crate::{
     memory::to_bytes,
     project::Project,
-    vm::{Result, State, VMError},
+    vm::{Result, VMError},
     BV,
 };
 
-impl Size for Type {
-    fn size(&self, project: &Project) -> Option<u64> {
-        size_in_bits(self, project)
-    }
+// impl Size for Type {
+//     fn size(&self, project: &Project) -> Option<u64> {
+//         size_in_bits(self, project)
+//     }
 
-    fn size_in_bytes(&self, project: &Project) -> Result<Option<u64>> {
-        self.size(project)
-            .map(to_bytes)
-            .transpose()
-            .map_err(|err| VMError::MemoryError(err))
-    }
+//     fn size_in_bytes(&self, project: &Project) -> Result<Option<u64>> {
+//         self.size(project)
+//             .map(to_bytes)
+//             .transpose()
+//             .map_err(|err| VMError::MemoryError(err))
+//     }
 
-    fn inner_ty(&self, project: &Project) -> Option<TypeRef> {
-        get_inner_type(self, project)
-    }
-}
+//     // fn inner_ty(&self, project: &Project) -> Option<TypeRef> {
+//     //     get_inner_type(self, project)
+//     // }
+// }
 
-impl Size for TypeRef {
-    fn size(&self, project: &Project) -> Option<u64> {
-        self.as_ref().size(project)
-    }
+// impl Size for TypeRef {
+//     fn size(&self, project: &Project) -> Option<u64> {
+//         self.as_ref().size(project)
+//     }
 
-    fn size_in_bytes(&self, project: &Project) -> Result<Option<u64>> {
-        self.as_ref().size_in_bytes(project)
-    }
+//     fn size_in_bytes(&self, project: &Project) -> Result<Option<u64>> {
+//         self.as_ref().size_in_bytes(project)
+//     }
 
-    fn inner_ty(&self, project: &Project) -> Option<TypeRef> {
-        self.as_ref().inner_ty(project)
-    }
-}
+//     // fn inner_ty(&self, project: &Project) -> Option<TypeRef> {
+//     //     self.as_ref().inner_ty(project)
+//     // }
+// }
 
 /// Calculates the size of the type in bits.
 pub fn size_in_bits(ty: &Type, project: &Project) -> Option<u64> {
@@ -220,7 +219,7 @@ pub fn get_bit_offset_concrete(ty: &Type, index: u64, project: &Project) -> Resu
 /// Get the byte offset with a symbol as index.
 /// 
 /// This checks that each offset is byte divisible.
-pub fn get_byte_offset_symbol(ty: &Type, index: &BV, state: &mut State<'_>) -> Result<(BV, TypeRef)> {
+pub fn get_byte_offset_symbol(ty: &Type, index: &BV, project: &Project) -> Result<(BV, TypeRef)> {
     use Type::*;
 
     match ty {
@@ -230,11 +229,11 @@ pub fn get_byte_offset_symbol(ty: &Type, index: &BV, state: &mut State<'_>) -> R
         PointerType { pointee_type: inner_ty, .. }
         | VectorType { element_type: inner_ty, .. }
         | ArrayType { element_type: inner_ty, .. } => {
-            let size = size_in_bits(ty, &state.project)
+            let size = size_in_bits(ty, project)
                 .ok_or_else(|| VMError::Other(anyhow!("Cannot take size of type")))?;
             
             let size = to_bytes(size)?;
-            let size = state.solver.bv_from_u64(size, index.len());
+            let size = index.get_solver().bv_from_u64(size, index.len());
             Ok((size.mul(&index), inner_ty.clone()))
         },
         
@@ -258,7 +257,7 @@ pub fn get_byte_offset_symbol(ty: &Type, index: &BV, state: &mut State<'_>) -> R
 }
 
 /// Get the offset in bits with a symbol as index.
-pub fn get_bit_offset_symbol(ty: &Type, index: &BV, state: &mut State<'_>) -> Result<(BV, TypeRef)> {
+pub fn get_bit_offset_symbol(ty: &Type, index: &BV, project: &Project) -> Result<(BV, TypeRef)> {
     use Type::*;
 
     match ty {
@@ -268,10 +267,10 @@ pub fn get_bit_offset_symbol(ty: &Type, index: &BV, state: &mut State<'_>) -> Re
         PointerType { pointee_type: inner_ty, .. }
         | VectorType { element_type: inner_ty, .. }
         | ArrayType { element_type: inner_ty, .. } => {
-            let size = size_in_bits(ty, &state.project)
+            let size = size_in_bits(ty, project)
                 .ok_or_else(|| VMError::Other(anyhow!("Cannot take size of type")))?;
             
-            let size = state.solver.bv_from_u64(size, index.len());
+            let size = index.get_solver().bv_from_u64(size, index.len());
             Ok((size.mul(&index), inner_ty.clone()))
         },
 

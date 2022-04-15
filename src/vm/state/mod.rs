@@ -13,7 +13,7 @@ use crate::{
     project::Project,
     traits::{
         const_to_symbol, const_to_symbol_zero_size, operand_to_symbol, operand_to_symbol_zero_size,
-        Op, Size,
+        Op,
     },
     {Solver, BV},
 };
@@ -222,8 +222,8 @@ impl<'a> State<'a> {
     pub fn get_result<T: Typed + HasResult>(&self, t: &T) -> (Name, u64) {
         let name = t.get_result().clone();
         let ty = self.type_of(t);
-        let size = ty.size(self.project).unwrap();
-        (name, size)
+        let size = self.project.bit_size(&ty).unwrap();
+        (name, size as u64)
     }
 
     pub fn type_of<T: Typed>(&self, t: &T) -> TypeRef {
@@ -248,7 +248,7 @@ impl<'a> State<'a> {
                     // be safe, allocate addresses for those.
                     let size = {
                         // TODO: Can the types not have a size here?
-                        let size = pointee_type.size(&self.project).unwrap();
+                        let size = self.project.bit_size(&pointee_type)?;
 
                         // TODO: How to handle zero sized allocations?
                         if size == 0 {
@@ -258,7 +258,7 @@ impl<'a> State<'a> {
                         }
                     };
 
-                    let addr = self.allocate(size, var.alignment as u64)?;
+                    let addr = self.allocate(size as u64, var.alignment as u64)?;
 
                     debug!("Add GLOBAL_VARIABLE: {}", var.name);
                     self.globals.add_global_variable(var, module, addr);

@@ -1,6 +1,6 @@
 use llvm_ir::{IntPredicate, Type};
 
-use super::{get_bit_offset_concrete, Op, Size, ToValue};
+use super::{get_bit_offset_concrete, Op, ToValue};
 use crate::{
     solver::{BinaryOperation, BV},
     traits::{get_byte_offset_concrete, get_byte_offset_symbol},
@@ -23,7 +23,7 @@ where
         ty = inner_ty;
     }
 
-    let offset_upper_bound = total_offset + ty.size(&state.project).unwrap();
+    let offset_upper_bound = total_offset + state.project.bit_size(&ty)? as u64;
 
     // Get the value and check that the BV is big enough to accomodate our slice.
     let value = state.get_var(aggregate)?;
@@ -60,7 +60,7 @@ where
             (offset, ty)
         } else {
             let index = state.get_var(index)?;
-            get_byte_offset_symbol(&curr_ty, &index, state)?
+            get_byte_offset_symbol(&curr_ty, &index, &state.project)?
         };
 
         addr = addr.add(&offset);
@@ -109,7 +109,7 @@ where
     T: Into<Op<'p>>,
 {
     let bv = state.get_var(op.into())?;
-    assert_eq!(bv.len(), ty.size(state.project).unwrap() as u32);
+    assert_eq!(bv.len(), state.project.bit_size(ty).unwrap() as u32);
     Ok(bv)
 }
 

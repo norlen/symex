@@ -1,6 +1,8 @@
 use boolector::{BVSolution, Btor};
 use std::rc::Rc;
 
+use crate::Solver;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BV(pub(crate) boolector::BV<Rc<Btor>>);
 
@@ -277,6 +279,16 @@ impl BV {
 
     pub fn get_solution(&self) -> BVSolution {
         self.0.get_a_solution()
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // If we want to create a bv from basically another, we can use the same solver
+    // ---------------------------------------------------------------------------------------------
+
+    pub fn get_solver(&self) -> Solver {
+        Solver {
+            btor: self.0.get_btor(),
+        }
     }
 }
 

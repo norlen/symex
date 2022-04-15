@@ -70,10 +70,7 @@ pub fn const_to_symbol_zero_size(state: &mut State<'_>, constant: &Constant) -> 
         // Not sure if the generated LLVM does not allow for these errors to happen, but if it does
         // those kind of errors are covered.
         Undef(ty) => {
-            let size = ty
-                .size(&state.project)
-                .ok_or_else(|| VMError::Other(anyhow!("no size")))?;
-
+            let size = state.project.bit_size(&ty)?;
             Ok(match size {
                 0 => None,
                 n => Some(state.solver.bv(n as u32)),
@@ -82,10 +79,7 @@ pub fn const_to_symbol_zero_size(state: &mut State<'_>, constant: &Constant) -> 
 
         // Both null pointers and the aggregate of zeroes are initialized to zero.
         Null(ty) | AggregateZero(ty) => {
-            let size = ty
-                .size(&state.project)
-                .ok_or_else(|| VMError::Other(anyhow!("no size")))?;
-
+            let size = state.project.bit_size(&ty)?;
             Ok(match size {
                 0 => None,
                 n => Some(state.solver.bv_zero(n as u32)),
@@ -178,10 +172,10 @@ pub fn const_to_symbol_zero_size(state: &mut State<'_>, constant: &Constant) -> 
 
         // Truncate operand to target type. The target type *must* be smaller than the current.
         Trunc(op) => {
-            let target_size = op.to_type.size(&state.project).unwrap() as u32;
+            let target_size = state.project.bit_size(&op.to_type)?;
             let value = const_to_symbol_zero_size(state, &op.operand)?
                 .ok_or_else(|| VMError::UnexpectedZeroSize)?;
-            assert!(value.len() > target_size as u32);
+            assert!(value.len() > target_size);
 
             Ok(Some(value.slice(0, target_size - 1)))
         }
@@ -189,10 +183,10 @@ pub fn const_to_symbol_zero_size(state: &mut State<'_>, constant: &Constant) -> 
         // Zero extend operand to target type. The current value must have a smaller bitwidth
         // compared to the target type.
         ZExt(op) => {
-            let target_size = op.to_type.size(&state.project).unwrap() as u32;
+            let target_size = state.project.bit_size(&op.to_type)?;
             let value = const_to_symbol_zero_size(state, &op.operand)?
                 .ok_or_else(|| VMError::UnexpectedZeroSize)?;
-            assert!(value.len() < target_size as u32);
+            assert!(value.len() < target_size);
 
             Ok(Some(value.zero_ext(target_size)))
         }
@@ -200,10 +194,10 @@ pub fn const_to_symbol_zero_size(state: &mut State<'_>, constant: &Constant) -> 
         // Sign extend operand to target type. The current value must have a smaller bitwidth
         // compared to the target type.
         SExt(op) => {
-            let target_size = op.to_type.size(&state.project).unwrap() as u32;
+            let target_size = state.project.bit_size(&op.to_type)?;
             let value = const_to_symbol_zero_size(state, &op.operand)?
                 .ok_or_else(|| VMError::UnexpectedZeroSize)?;
-            assert!(value.len() < target_size as u32);
+            assert!(value.len() < target_size);
 
             Ok(Some(value.sign_ext(target_size)))
         }
@@ -373,7 +367,7 @@ pub fn const_to_symbol_zero_size(state: &mut State<'_>, constant: &Constant) -> 
 /// the underlying symbol.
 fn const_cast(state: &mut State<'_>, ty: &Type, constant: &ConstantRef) -> Result<Option<BV>> {
     let result = const_to_symbol_zero_size(state, constant)?.map(|bv| {
-        assert_eq!(bv.len(), ty.size(&state.project).unwrap() as u32);
+        assert_eq!(bv.len(), state.project.bit_size(&ty).unwrap() as u32);
         bv
     });
     Ok(result)
@@ -411,4 +405,12 @@ fn bin(
         Sra => lhs.sra(&rhs),
     };
     Ok(Some(result))
+}
+
+#[cfg(test)]
+mod tests {
+    // TODO: Quite hard to setup tests, as the constants are not self-contained. They need access
+    // to the state since they can have global references.
+    //
+    // Could create a sample file with a lot of constants, and try to evaluate those.
 }

@@ -5,7 +5,6 @@ use log::{debug, trace};
 
 use crate::project::Project;
 use crate::solver::{Solver, BV};
-use crate::traits::Size;
 use crate::vm::Result;
 use crate::vm::{AllocationType, Location};
 use crate::vm::{Call, Path, State};
@@ -72,9 +71,7 @@ impl<'a> VM<'a> {
     // Helper to create unconstrained symbols for all parameters.
     fn setup_parameters(&mut self) -> Result<()> {
         for param in self.state.current_loc.func.parameters.iter() {
-            // let size = size_in_bits(&param.ty, self.project).unwrap();
-            // let size = self.project.get_size(&param.ty).unwrap();
-            let size = param.ty.size(self.project).unwrap();
+            let size = self.project.bit_size(&param.ty)?;
             assert_ne!(size, 0);
 
             let bv = self.solver.bv(size as u32);
@@ -280,22 +277,11 @@ impl<'a> VM<'a> {
     }
 
     pub fn assign(&mut self, dst: &impl HasResult, src_bv: BV) -> Result<()> {
-        let dst_ty = self.state.type_of(dst);
-        // let dst_sz = size_in_bits(&dst_ty, self.project).unwrap();
-        // let dst_sz = self.project.get_size(&dst_ty).unwrap();
-        let dst_sz = dst_ty.size(self.project).unwrap();
+        let target_ty = self.state.type_of(dst);
+        let target_size = self.project.bit_size(&target_ty)?;
+        assert_eq!(target_size, src_bv.len());
 
-        // println!(
-        //     "assign ty: {:?}, size: {:?}, bv_size: {}",
-        //     dst_ty,
-        //     dst_sz,
-        //     src_bv.get_width()
-        // );
-        assert_eq!(dst_sz, src_bv.len() as u64);
-
-        let dst_name = dst.get_result().clone();
-        self.state.assign_bv(dst_name, src_bv).unwrap();
-        Ok(())
+        self.state.assign_bv(dst.get_result().clone(), src_bv)
     }
 
     // ---------------------------------------------------------------------------------------------
