@@ -96,6 +96,9 @@ where
         BinaryOperation::And => lhs.and(&rhs),
         BinaryOperation::Or => lhs.or(&rhs),
         BinaryOperation::Xor => lhs.xor(&rhs),
+        BinaryOperation::Sll => lhs.sll(&rhs),
+        BinaryOperation::Srl => lhs.srl(&rhs),
+        BinaryOperation::Sra => lhs.sra(&rhs),
     };
     Ok(result)
 }

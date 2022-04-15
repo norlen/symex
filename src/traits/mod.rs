@@ -43,13 +43,3 @@ pub trait Size {
     /// Get the inner type.
     fn inner_ty(&self, project: &Project) -> Option<TypeRef>;
 }
-
-/// Converts and [llvm_ir::Operand] or [llvm_ir::Constant] to a [BV].
-pub trait ToBV {
-    /// Converts the value to a BV. If the type is zero sized call
-    /// [ToBV::try_to_bv] instead.
-    fn to_bv(&self, state: &mut State<'_>) -> Result<BV>;
-
-    /// Converts the value to a BV. Returns `None` if the type is zero sized.
-    fn try_to_bv(&self, state: &mut State<'_>) -> Result<Option<BV>>;
-}

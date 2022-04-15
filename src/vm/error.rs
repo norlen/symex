@@ -31,6 +31,9 @@ pub enum VMError {
     #[error("Function not found: {0}")]
     FunctionNotFound(String),
 
+    #[error("Local not found: {0}")]
+    LocalNotFound(String),
+
     /// MalformedInstruction
     #[error("MalformedInstruction")]
     MalformedInstruction,

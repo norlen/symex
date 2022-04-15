@@ -6,12 +6,15 @@ use llvm_ir::{
 };
 use log::{debug, warn};
 
-use super::{Allocation, Globals, Result, VMError};
+use super::{Allocation, AllocationType, Globals, Result, VMError};
 use crate::{
     memory::bump_allocator::BumpAllocator,
     memory::simple_memory::Memory,
     project::Project,
-    traits::{Op, Size, ToBV},
+    traits::{
+        const_to_symbol, const_to_symbol_zero_size, operand_to_symbol, operand_to_symbol_zero_size,
+        Op, Size,
+    },
     {Solver, BV},
 };
 
@@ -153,8 +156,18 @@ impl<'a> State<'a> {
         T: Into<Op<'b>>,
     {
         match op.into() {
-            Op::Operand(op) => op.to_bv(self),
-            Op::Constant(c) => c.to_bv(self),
+            Op::Operand(operand) => operand_to_symbol(self, operand),
+            Op::Constant(constant) => const_to_symbol(self, constant),
+        }
+    }
+
+    pub fn get_var_maybe_zero<'b, T>(&mut self, op: T) -> Result<Option<BV>>
+    where
+        T: Into<Op<'b>>,
+    {
+        match op.into() {
+            Op::Operand(operand) => operand_to_symbol_zero_size(self, operand),
+            Op::Constant(constant) => const_to_symbol_zero_size(self, constant),
         }
     }
 
@@ -201,29 +214,6 @@ impl<'a> State<'a> {
     pub fn get_global(&self, name: &Name) -> Option<&Allocation<'a>> {
         self.globals.get(name, self.current_loc.module)
     }
-
-    // pub fn initialize_globals(&mut self) {
-    //     for (_, allocation) in &self.globals.globals {
-    //         match &allocation.kind {
-    //             AllocationType::Variable(v) => {
-    //                 let value = self.get_bv_from_constant(&v.initializer).unwrap();
-    //                 self.mem.write(&allocation.addr_bv, value).unwrap();
-    //             }
-    //             AllocationType::Function(_) => {}
-    //         }
-    //     }
-    //     for (_, map) in &self.globals.private_globals {
-    //         for (_, allocation) in map {
-    //             match &allocation.kind {
-    //                 AllocationType::Variable(v) => {
-    //                     let value = self.get_bv_from_constant(&v.initializer).unwrap();
-    //                     self.mem.write(&allocation.addr_bv, value).unwrap();
-    //                 }
-    //                 AllocationType::Function(_) => {}
-    //             }
-    //         }
-    //     }
-    // }
 
     // -------------------------------------------------------------------------
     // Helpers I may need, check if these should be in State.
@@ -283,25 +273,32 @@ impl<'a> State<'a> {
             }
         }
 
-        Ok(())
+        let current_globals = self.globals.clone();
+        // Initialize all the global variables.
+        for private_globals in current_globals.private_globals.values() {
+            for allocation in private_globals.values() {
+                self.initalize_global_variable(allocation);
+            }
+        }
+        for allocation in current_globals.globals.values() {
+            self.initalize_global_variable(allocation);
+        }
 
-        // let current_globals = self.globals.clone();
-        // // Initialize all the global variables.
-        // for private_globals in current_globals.private_globals.values() {
-        //     for allocation in private_globals.values() {
-        //         self.initalize_global_variable(allocation);
-        //     }
-        // }
-        // for allocation in current_globals.globals.values() {
-        //     self.initalize_global_variable(allocation);
-        // }
+        Ok(())
     }
 
-    // fn initalize_global_variable(&mut self, allocation: &Allocation<'_>) {
-    //     if let AllocationType::Variable(var) = &allocation.kind {
-    //         let value = self.get_var(&var.initializer).unwrap();
-    //         println!("value: {:?}", value);
-    //         self.mem.write(&allocation.addr_bv, value).unwrap();
-    //     }
-    // }
+    fn initalize_global_variable(&mut self, allocation: &Allocation<'_>) {
+        if let AllocationType::Variable(var) = &allocation.kind {
+            let initializer = var.initializer.clone().unwrap();
+            println!("var: {}", var.name);
+            let value = self.get_var(&initializer).unwrap();
+            println!("var: {}, value: {:?}", var.name, value);
+
+            let bv = self
+                .solver
+                .bv_from_u64(allocation.addr, self.project.ptr_size as u32);
+
+            self.mem.write(&bv, value).unwrap();
+        }
+    }
 }

@@ -26,9 +26,9 @@
 //! If the global variable has `unnamed_addr` an address won't be allocated.
 use llvm_ir::{
     module::{GlobalVariable, Linkage},
-    ConstantRef, Function, Module, Name,
+    Function, Module, Name,
 };
-use std::{cell::Cell, collections::HashMap};
+use std::{collections::HashMap, fmt};
 
 // /// Helper trait so functions can accept both [GlobalVariable] and [Function].
 // trait Global {
@@ -45,35 +45,31 @@ use std::{cell::Cell, collections::HashMap};
 /// A global allocation which can be either a [GlobalVariable] or a [Function].
 ///
 /// These always have concrete addresses.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct Allocation<'p> {
+    /// Address to the global.
     pub addr: u64,
-    // pub addr_bv: BV,
+
+    pub module: &'p Module,
+
+    /// If it is a [GlobalVariable] or [Function].
     pub kind: AllocationType<'p>,
+}
+
+impl<'p> fmt::Debug for Allocation<'p> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Allocation")
+            .field("addr", &self.addr)
+            .field("module", &self.module.name)
+            .field("kind", &self.kind)
+            .finish()
+    }
 }
 
 #[derive(Debug, Clone)]
 pub enum AllocationType<'p> {
-    Variable(GlobalVar),
-    Function(FFunction<'p>),
-}
-
-#[derive(Debug, Clone)]
-pub struct GlobalVar {
-    pub initializer: ConstantRef,
-    pub initialized: Cell<bool>,
-}
-
-#[derive(Clone)]
-pub struct FFunction<'p> {
-    pub module: &'p Module,
-    pub function: &'p llvm_ir::Function,
-}
-
-impl<'p> std::fmt::Debug for FFunction<'p> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("FFunction").finish()
-    }
+    Variable(&'p GlobalVariable),
+    Function(&'p Function),
 }
 
 type GlobalMap<'p> = HashMap<Name, Allocation<'p>>;
@@ -136,13 +132,10 @@ impl<'p> Globals<'p> {
     }
 
     pub fn add_global_variable(&mut self, var: &'p GlobalVariable, module: &'p Module, addr: u64) {
-        let init = var.initializer.clone().unwrap();
         let g = Allocation {
             addr,
-            kind: AllocationType::Variable(GlobalVar {
-                initializer: init,
-                initialized: Cell::new(false),
-            }),
+            module,
+            kind: AllocationType::Variable(var),
         };
 
         self.add_global(g, &var.linkage, module, var.name.clone());
@@ -151,10 +144,8 @@ impl<'p> Globals<'p> {
     pub fn add_function(&mut self, f: &'p Function, module: &'p Module, addr: u64) {
         let g = Allocation {
             addr,
-            kind: AllocationType::Function(FFunction {
-                module,
-                function: f,
-            }),
+            module,
+            kind: AllocationType::Function(f),
         };
 
         self.add_global(g, &f.linkage, module, Name::from(&*f.name));

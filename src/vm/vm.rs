@@ -6,9 +6,10 @@ use log::{debug, trace};
 use crate::project::Project;
 use crate::solver::{Solver, BV};
 use crate::traits::Size;
-use crate::vm::Location;
 use crate::vm::Result;
+use crate::vm::{AllocationType, Location};
 use crate::vm::{Call, Path, State};
+use crate::Solutions;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum ReturnValue {
@@ -326,8 +327,8 @@ impl<'a> VM<'a> {
                     let solutions = self.solver.get_solutions_for_bv(&addr, 1).unwrap();
                     dbg!(&solutions);
                     match solutions {
-                        crate::Solutions::None => todo!(),
-                        crate::Solutions::Exactly(v) => {
+                        Solutions::None => todo!(),
+                        Solutions::Exactly(v) => {
                             let addr = v[0].as_u64().unwrap();
                             let f = self
                                 .state
@@ -335,13 +336,11 @@ impl<'a> VM<'a> {
                                 .get_func(addr, self.state.current_loc.module)
                                 .unwrap();
                             match &f.kind {
-                                crate::vm::AllocationType::Variable(_) => todo!(),
-                                crate::vm::AllocationType::Function(f) => {
-                                    Ok(f.function.name.to_string())
-                                }
+                                AllocationType::Variable(_) => todo!(),
+                                AllocationType::Function(f) => Ok(f.name.to_string()),
                             }
                         }
-                        crate::Solutions::AtLeast(_) => todo!(),
+                        Solutions::AtLeast(_) => todo!(),
                     }
                 }
                 Operand::MetadataOperand => todo!(),

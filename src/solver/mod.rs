@@ -24,6 +24,9 @@ pub enum BinaryOperation {
     And,
     Or,
     Xor,
+    Sll,
+    Srl,
+    Sra,
 }
 
 pub enum UnaryOperation {}
