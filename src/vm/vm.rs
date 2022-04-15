@@ -235,11 +235,7 @@ impl<'a> VM<'a> {
 
     fn backtrack_and_continue(&mut self) -> Result<ReturnValue> {
         if let Some(path) = self.backtracking_paths.pop() {
-            trace!(
-                "Backtrack to {:?}, {} paths remain",
-                path,
-                self.backtracking_paths.len()
-            );
+            trace!("Backtrack, {} paths remain", self.backtracking_paths.len());
 
             // Replace the current state.
             self.state = path.state;

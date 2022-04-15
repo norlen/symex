@@ -21,20 +21,6 @@ impl Size for Type {
             .map_err(|err| VMError::MemoryError(err))
     }
 
-    fn offset_constant(&self, index: u64, project: &Project) -> Result<(u64, TypeRef)> {
-        get_offset_concrete(self, index, project)
-    }
-
-    fn offset_constant_in_bytes(&self, index: u64, project: &Project) -> Result<(u64, TypeRef)> {
-        let (offset, ty) = self.offset_constant(index, project)?;
-        let offset = to_bytes(offset).map_err(|err| VMError::MemoryError(err))?;
-        Ok((offset, ty))
-    }
-
-    fn offset_symbol(&self, index: &BV, state: &mut State<'_>) -> Result<(BV, TypeRef)> {
-        get_offset_bv(self, index, state)
-    }
-
     fn inner_ty(&self, project: &Project) -> Option<TypeRef> {
         get_inner_type(self, project)
     }
@@ -47,18 +33,6 @@ impl Size for TypeRef {
 
     fn size_in_bytes(&self, project: &Project) -> Result<Option<u64>> {
         self.as_ref().size_in_bytes(project)
-    }
-
-    fn offset_constant(&self, index: u64, project: &Project) -> Result<(u64, TypeRef)> {
-        self.as_ref().offset_constant(index, project)
-    }
-
-    fn offset_constant_in_bytes(&self, index: u64, project: &Project) -> Result<(u64, TypeRef)> {
-        self.as_ref().offset_constant_in_bytes(index, project)
-    }
-
-    fn offset_symbol(&self, index: &BV, state: &mut State<'_>) -> Result<(BV, TypeRef)> {
-        self.as_ref().offset_symbol(index, state)
     }
 
     fn inner_ty(&self, project: &Project) -> Option<TypeRef> {
@@ -122,90 +96,115 @@ pub fn fp_size_in_bits(ty: &FPType) -> u64 {
     }
 }
 
-pub fn get_offset_bv(ty: &Type, index: &BV, state: &mut State<'_>) -> Result<(BV, TypeRef)> {
-    use Type::*;
+// pub fn get_offset_bv(ty: &Type, index: &BV, state: &mut State<'_>) -> Result<(BV, TypeRef)> {
+//     use Type::*;
 
-    match ty {
-        PointerType {
-            pointee_type: inner_ty,
-            ..
-        }
-        // LLVM docs:
-        // Q: Can GEP index into vector elements?
-        // A: This hasn’t always been forcefully disallowed, though it’s not
-        //    recommended. It leads to awkward special cases in the optimizers, 
-        //    and fundamental inconsistency in the IR. In the future, it will
-        //    probably be outright disallowed.
-        | VectorType {
-            element_type: inner_ty,
-            ..
-        }
-        | ArrayType {
-            element_type: inner_ty,
-            ..
-        } => {
-            let size = inner_ty.size(&state.project).unwrap();
-            let size = state.solver.bv_from_u64(size, index.len());
-            Ok((size.mul(index), inner_ty.clone()))
-        }
+//     match ty {
+//         PointerType {
+//             pointee_type: inner_ty,
+//             ..
+//         }
+//         // LLVM docs:
+//         // Q: Can GEP index into vector elements?
+//         // A: This hasn’t always been forcefully disallowed, though it’s not
+//         //    recommended. It leads to awkward special cases in the optimizers, 
+//         //    and fundamental inconsistency in the IR. In the future, it will
+//         //    probably be outright disallowed.
+//         | VectorType {
+//             element_type: inner_ty,
+//             ..
+//         }
+//         | ArrayType {
+//             element_type: inner_ty,
+//             ..
+//         } => {
+//             let size = inner_ty.size(&state.project).unwrap();
+//             let size = state.solver.bv_from_u64(size, index.len());
+//             Ok((size.mul(index), inner_ty.clone()))
+//         }
 
-        // Not supported for non-constant indexes.
-        NamedStructType { .. } => todo!(),
-        StructType { .. } => todo!(),
+//         // Not supported for non-constant indexes.
+//         NamedStructType { .. } => todo!(),
+//         StructType { .. } => todo!(),
 
-        // Should not happend for these instructions.
-        VoidType => todo!(),
-        IntegerType { .. } => todo!(),
-        FPType(_) => todo!(),
-        FuncType { .. } => todo!(),
-        X86_MMXType => todo!(),
-        X86_AMXType => todo!(),
-        MetadataType => todo!(),
-        LabelType => todo!(),
-        TokenType => todo!(),
-    }
+//         // Should not happend for these instructions.
+//         VoidType => todo!(),
+//         IntegerType { .. } => todo!(),
+//         FPType(_) => todo!(),
+//         FuncType { .. } => todo!(),
+//         X86_MMXType => todo!(),
+//         X86_AMXType => todo!(),
+//         MetadataType => todo!(),
+//         LabelType => todo!(),
+//         TokenType => todo!(),
+//     }
+// }
+
+/// Calculate the offset in bytes from a concrete index.
+///
+/// Note that the conversion from bits to bytes is performed after the offset has been calculated.
+/// This means that is some of the offsets are not byte divisible, they may still work, as long as
+/// the final result is byte divisible. However, this is just an error in the IR then which is
+/// a compiler error and not a program error.
+pub fn get_byte_offset_concrete(
+    ty: &Type,
+    index: u64,
+    project: &Project,
+) -> Result<(u64, TypeRef)> {
+    let (offset_in_bits, ty) = get_bit_offset_concrete(ty, index, project)?;
+    let offset = to_bytes(offset_in_bits)?;
+    Ok((offset, ty))
 }
 
-/// Calculate the offset from a concrete index.
-///
-/// TODO: LLVM docs note that it is allowed for negative indices.
-pub fn get_offset_concrete(ty: &Type, index: u64, project: &Project) -> Result<(u64, TypeRef)> {
+/// Calculate the offset in bits from a concrete index.
+pub fn get_bit_offset_concrete(ty: &Type, index: u64, project: &Project) -> Result<(u64, TypeRef)> {
     use Type::*;
 
     match ty {
-        PointerType {
-            pointee_type: inner_ty,
-            ..
-        }
-        | VectorType {
-            element_type: inner_ty,
-            ..
-        }
-        | ArrayType {
-            element_type: inner_ty,
-            ..
+        // Offsets for pointers, vector and arrays are similar in that the offset is just the size
+        // of the base type times the index.
+        //
+        // Note that in the LLVM docs for GEP vector indexing may be disallowed in the future,
+        // thus it should not really happen.
+        #[rustfmt::skip]
+        PointerType { pointee_type: inner_ty, .. }
+        | VectorType { element_type: inner_ty, .. }
+        | ArrayType { element_type: inner_ty, .. } => {
+            size_in_bits(ty, project)
+                .map(|size| (size * index, inner_ty.clone()))
+                .ok_or_else(|| anyhow!("Cannot take size of type").into())
+        },
+
+        // For structs we have to collect the size of all the members until the index.
+        //
+        // TODO: How are non packed structs handled?
+        StructType {
+            element_types,
+            is_packed: _,
         } => {
-            let size = inner_ty.size(project).unwrap();
-            Ok((size * index, inner_ty.clone()))
-        }
-        // TODO: Structs have an `is_packed`, this should probably affect the results...
-        StructType { element_types, .. } => {
             let offset = element_types
                 .iter()
                 .take(index as usize)
-                .map(|ty| size_in_bits(ty, project).ok_or_else(|| VMError::Other(anyhow!("Oops"))))
+                .map(|ty| size_in_bits(ty, project).ok_or_else(|| anyhow!("Oops").into()))
                 .sum::<Result<u64>>()?;
 
-            let ty = element_types.get(index as usize).cloned().unwrap();
+            let inner_ty = element_types
+                .get(index as usize)
+                .cloned()
+                .ok_or_else(|| VMError::MalformedInstruction)?;
 
-            Ok((offset, ty))
+            Ok((offset, inner_ty))
         }
+
+        // For named structs we just have to look these up in the project.
+        //
+        // If the result in an Opaque struct it cannot proceeed.
         NamedStructType { name } => match project.get_named_struct(name).unwrap() {
             NamedStructDef::Opaque => todo!(),
-            NamedStructDef::Defined(ty) => get_offset_concrete(ty, index, project),
+            NamedStructDef::Defined(ty) => get_bit_offset_concrete(ty, index, project),
         },
 
-        // Should not happend for these instructions.
+        // TODO
         VoidType => todo!(),
         IntegerType { .. } => todo!(),
         FPType(_) => todo!(),
@@ -217,6 +216,136 @@ pub fn get_offset_concrete(ty: &Type, index: u64, project: &Project) -> Result<(
         TokenType => todo!(),
     }
 }
+
+/// Get the byte offset with a symbol as index.
+/// 
+/// This checks that each offset is byte divisible.
+pub fn get_byte_offset_symbol(ty: &Type, index: &BV, state: &mut State<'_>) -> Result<(BV, TypeRef)> {
+    use Type::*;
+
+    match ty {
+        // Offsets for pointers, vector and arrays are similar in that the offset is just the size
+        // of the base type times the index.
+        #[rustfmt::skip]
+        PointerType { pointee_type: inner_ty, .. }
+        | VectorType { element_type: inner_ty, .. }
+        | ArrayType { element_type: inner_ty, .. } => {
+            let size = size_in_bits(ty, &state.project)
+                .ok_or_else(|| VMError::Other(anyhow!("Cannot take size of type")))?;
+            
+            let size = to_bytes(size)?;
+            let size = state.solver.bv_from_u64(size, index.len());
+            Ok((size.mul(&index), inner_ty.clone()))
+        },
+        
+        // Not supported for non-constant indexes.
+        //
+        // With a symbol as an index we cannot index into structs, not without having to try
+        // solutions and fork the state. So these are not supported.
+        StructType { .. } | NamedStructType { .. } => panic!("Symbolic struct index is not supported"),
+
+        // TODO
+        VoidType => todo!(),
+        IntegerType { .. } => todo!(),
+        FPType(_) => todo!(),
+        FuncType { .. } => todo!(),
+        X86_MMXType => todo!(),
+        X86_AMXType => todo!(),
+        MetadataType => todo!(),
+        LabelType => todo!(),
+        TokenType => todo!(),
+    }
+}
+
+/// Get the offset in bits with a symbol as index.
+pub fn get_bit_offset_symbol(ty: &Type, index: &BV, state: &mut State<'_>) -> Result<(BV, TypeRef)> {
+    use Type::*;
+
+    match ty {
+        // Offsets for pointers, vector and arrays are similar in that the offset is just the size
+        // of the base type times the index.
+        #[rustfmt::skip]
+        PointerType { pointee_type: inner_ty, .. }
+        | VectorType { element_type: inner_ty, .. }
+        | ArrayType { element_type: inner_ty, .. } => {
+            let size = size_in_bits(ty, &state.project)
+                .ok_or_else(|| VMError::Other(anyhow!("Cannot take size of type")))?;
+            
+            let size = state.solver.bv_from_u64(size, index.len());
+            Ok((size.mul(&index), inner_ty.clone()))
+        },
+
+        
+        // Not supported for non-constant indexes.
+        //
+        // With a symbol as an index we cannot index into structs, not without having to try
+        // solutions and fork the state. So these are not supported.
+        StructType { .. } | NamedStructType { .. } => panic!("Symbolic struct index is not supported"),
+
+        // TODO
+        VoidType => todo!(),
+        IntegerType { .. } => todo!(),
+        FPType(_) => todo!(),
+        FuncType { .. } => todo!(),
+        X86_MMXType => todo!(),
+        X86_AMXType => todo!(),
+        MetadataType => todo!(),
+        LabelType => todo!(),
+        TokenType => todo!(),
+    }
+}
+
+// /// Calculate the offset from a concrete index.
+// ///
+// /// TODO: LLVM docs note that it is allowed for negative indices.
+// pub fn get_offset_concrete(ty: &Type, index: u64, project: &Project) -> Result<(u64, TypeRef)> {
+//     use Type::*;
+
+//     match ty {
+//         PointerType {
+//             pointee_type: inner_ty,
+//             ..
+//         }
+//         | VectorType {
+//             element_type: inner_ty,
+//             ..
+//         }
+//         | ArrayType {
+//             element_type: inner_ty,
+//             ..
+//         } => {
+//             let size = inner_ty.size(project).unwrap();
+//             Ok((size * index, inner_ty.clone()))
+//         }
+//         // TODO: Structs have an `is_packed`, this should probably affect the results...
+//         StructType { element_types, .. } => {
+//             let offset = element_types
+//                 .iter()
+//                 .take(index as usize)
+//                 .map(|ty| size_in_bits(ty, project).ok_or_else(|| VMError::Other(anyhow!("Oops"))))
+//                 .sum::<Result<u64>>()?;
+
+//             let ty = element_types.get(index as usize).cloned().unwrap();
+
+//             Ok((offset, ty))
+//         }
+//         NamedStructType { name } => match project.get_named_struct(name).unwrap() {
+//             NamedStructDef::Opaque => todo!(),
+//             NamedStructDef::Defined(ty) => get_offset_concrete(ty, index, project),
+//         },
+
+//         // Should not happend for these instructions.
+//         VoidType => todo!(),
+//         IntegerType { .. } => todo!(),
+//         FPType(_) => todo!(),
+//         FuncType { .. } => todo!(),
+//         X86_MMXType => todo!(),
+//         X86_AMXType => todo!(),
+//         MetadataType => todo!(),
+//         LabelType => todo!(),
+//         TokenType => todo!(),
+//     }
+// }
 
 /// Returns the inner type of the passed [`Type`].
 ///

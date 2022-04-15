@@ -1,8 +1,9 @@
 use llvm_ir::{IntPredicate, Type};
 
-use super::{get_offset_bv, get_offset_concrete, Op, Size, ToValue};
+use super::{get_bit_offset_concrete, Op, Size, ToValue};
 use crate::{
     solver::{BinaryOperation, BV},
+    traits::{get_byte_offset_concrete, get_byte_offset_symbol},
     vm::{Result, State},
 };
 
@@ -17,7 +18,7 @@ where
     let mut total_offset = 0;
 
     for index in indices.iter().copied() {
-        let (offset, inner_ty) = ty.offset_constant(index as u64, &state.project)?;
+        let (offset, inner_ty) = get_bit_offset_concrete(&ty, index as u64, &state.project)?;
         total_offset += offset;
         ty = inner_ty;
     }
@@ -53,13 +54,13 @@ where
     for index in indices {
         let (offset, ty) = if index.is_constant() {
             let index = index.to_value()?;
-            let (offset, ty) = get_offset_concrete(&curr_ty, index, &state.project)?;
+            let (offset, ty) = get_byte_offset_concrete(&curr_ty, index, &state.project)?;
 
             let offset = state.solver.bv_from_u64(offset, ptr_size);
             (offset, ty)
         } else {
             let index = state.get_var(index)?;
-            get_offset_bv(&curr_ty, &index, state)?
+            get_byte_offset_symbol(&curr_ty, &index, state)?
         };
 
         addr = addr.add(&offset);

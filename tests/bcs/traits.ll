@@ -10,7 +10,15 @@ target triple = "x86_64-unknown-linux-gnu"
 @alloc9 = private unnamed_addr constant <{ [9 x i8] }> <{ [9 x i8] c"traits.rs" }>, align 1
 @alloc10 = private unnamed_addr constant <{ i8*, [16 x i8] }> <{ i8* getelementptr inbounds (<{ [9 x i8] }>, <{ [9 x i8] }>* @alloc9, i32 0, i32 0, i32 0), [16 x i8] c"\09\00\00\00\00\00\00\00\0B\00\00\00\09\00\00\00" }>, align 8
 @str.0 = internal constant [28 x i8] c"attempt to add with overflow"
-@vtable.1 = private unnamed_addr constant <{ i8*, [16 x i8], i8*, [0 x i8] }> <{ i8* bitcast (void (i32*)* @"_ZN4core3ptr32drop_in_place$LT$traits..Bar$GT$17h5dbe101316bb053cE" to i8*), [16 x i8] c"\04\00\00\00\00\00\00\00\04\00\00\00\00\00\00\00", i8* bitcast (i32 (i32*)* @"_ZN43_$LT$traits..Bar$u20$as$u20$traits..Foo$GT$10get_random17h6d5dd3cd4d7c39b7E" to i8*), [0 x i8] zeroinitializer }>, align 8
+@vtable.1 = private unnamed_addr constant <{ i8*, [16 x i8], i8*, [0 x i8] }>
+  <{
+    i8* bitcast (void (i32*)* @"_ZN4core3ptr32drop_in_place$LT$traits..Bar$GT$17h5dbe101316bb053cE" to i8*),
+    [16 x i8] c"\04\00\00\00\00\00\00\00\04\00\00\00\00\00\00\00",
+    i8* bitcast (i32 (i32*)* @"_ZN43_$LT$traits..Bar$u20$as$u20$traits..Foo$GT$10get_random17h6d5dd3cd4d7c39b7E" to i8*),
+    [0 x i8] zeroinitializer 
+  }>, align 8
+
+
 @vtable.2 = private unnamed_addr constant <{ i8*, [16 x i8], i8*, i8*, i8*, [0 x i8] }> <{ i8* bitcast (void (i64**)* @"_ZN4core3ptr85drop_in_place$LT$std..rt..lang_start$LT$$LP$$RP$$GT$..$u7b$$u7b$closure$u7d$$u7d$$GT$17ha0fabb4ba73a18cbE" to i8*), [16 x i8] c"\08\00\00\00\00\00\00\00\08\00\00\00\00\00\00\00", i8* bitcast (i32 (i64**)* @"_ZN4core3ops8function6FnOnce40call_once$u7b$$u7b$vtable.shim$u7d$$u7d$17hd7815f3c5fd9e217E" to i8*), i8* bitcast (i32 (i64**)* @"_ZN3std2rt10lang_start28_$u7b$$u7b$closure$u7d$$u7d$17h2d1dd85a0d069c44E" to i8*), i8* bitcast (i32 (i64**)* @"_ZN3std2rt10lang_start28_$u7b$$u7b$closure$u7d$$u7d$17h2d1dd85a0d069c44E" to i8*), [0 x i8] zeroinitializer }>, align 8
 
 ; core::ops::function::FnOnce::call_once{{vtable.shim}}
@@ -95,11 +103,19 @@ panic:                                            ; preds = %start
 
 ; traits::rand
 ; Function Attrs: nounwind nonlazybind
-define internal i32 @_ZN6traits4rand17h81a48c484cbd35ceE({}* nonnull align 1 %f.0, [3 x i64]* align 8 dereferenceable(24) %f.1) unnamed_addr #1 {
+define internal i32 @_ZN6traits4rand17h81a48c484cbd35ceE(
+  {}* nonnull align 1 %f.0,
+  [3 x i64]* align 8 dereferenceable(24) %f.1
+) unnamed_addr #1 {
 start:
+  ; cast @vtable.1
   %0 = bitcast [3 x i64]* %f.1 to i32 ({}*)**
+  ; get addr to third element of @vtable1. which should be
+  ; i8* bitcast (i32 (i32*)* @"_ZN43_$LT$traits..Bar$u20$as$u20$traits..Foo$GT$10get_random17h6d5dd3cd4d7c39b7E" to i8*),
   %1 = getelementptr inbounds i32 ({}*)*, i32 ({}*)** %0, i64 3
+  ; load the address to the function
   %2 = load i32 ({}*)*, i32 ({}*)** %1, align 8, !invariant.load !3, !nonnull !3
+  ; call the function address.
   %3 = call i32 %2({}* align 1 %f.0) #7
   br label %bb1
 
@@ -115,7 +131,12 @@ start:
   store i32 5, i32* %b, align 4
   %_2.0 = bitcast i32* %b to {}*
 ; call traits::rand
-  %0 = call i32 @_ZN6traits4rand17h81a48c484cbd35ceE({}* nonnull align 1 %_2.0, [3 x i64]* align 8 dereferenceable(24) bitcast (<{ i8*, [16 x i8], i8*, [0 x i8] }>* @vtable.1 to [3 x i64]*)) #7
+  %0 = call i32 @_ZN6traits4rand17h81a48c484cbd35ceE(
+    {}* nonnull align 1 %_2.0,
+    [3 x i64]* align 8 dereferenceable(24) bitcast (
+      <{ i8*, [16 x i8],i8*, [0 x i8] }>* @vtable.1 to [3 x i64]*
+    )
+  ) #7
   br label %bb1
 
 bb1:                                              ; preds = %start

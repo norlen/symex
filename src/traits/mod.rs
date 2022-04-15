@@ -1,10 +1,6 @@
 use llvm_ir::TypeRef;
 
-use crate::{
-    project::Project,
-    solver::BV,
-    vm::{Result, State},
-};
+use crate::{project::Project, vm::Result};
 
 mod op;
 mod ops;
@@ -30,15 +26,6 @@ pub trait Size {
 
     /// Get the size in bytes.
     fn size_in_bytes(&self, project: &Project) -> Result<Option<u64>>;
-
-    /// Get the offset to the index in bits.
-    fn offset_constant(&self, index: u64, project: &Project) -> Result<(u64, TypeRef)>;
-
-    /// Get the offset to the index in bytes.
-    fn offset_constant_in_bytes(&self, index: u64, project: &Project) -> Result<(u64, TypeRef)>;
-
-    /// Get the offset to the index in bits.
-    fn offset_symbol(&self, index: &BV, state: &mut State<'_>) -> Result<(BV, TypeRef)>;
 
     /// Get the inner type.
     fn inner_ty(&self, project: &Project) -> Option<TypeRef>;
