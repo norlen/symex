@@ -30,21 +30,3 @@ pub trait ToValue<T> {
 //     fn as_bool(&self) -> bool;
 //     fn try_as_bool(&self) -> Result<bool>;
 // }
-
-// TODO: Should probably migrate Size functions to either the project or state.
-//
-// The reason why it might be the state is that for getting offsets with symbols as indices,
-// the state is required (or maybe just the solver)? Then the question becomes, is the solver tied
-// to the project or not? It does not seem like it, since
-
-// /// Trait to get type, size, and offset information from types.
-// pub trait Size {
-//     /// Get the size in bits.
-//     fn size(&self, project: &Project) -> Option<u64>;
-
-//     /// Get the size in bytes.
-//     fn size_in_bytes(&self, project: &Project) -> Result<Option<u64>>;
-
-//     // /// Get the inner type.
-//     // fn inner_ty(&self, project: &Project) -> Option<TypeRef>;
-// }
