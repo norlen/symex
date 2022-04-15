@@ -1,9 +1,8 @@
 use llvm_ir::{IntPredicate, Operand, Type};
-use std::cmp::Ordering;
 
 use super::{get_bit_offset_concrete, Op, ToValue};
 use crate::{
-    solver::{BinaryOperation, BV},
+    solver::BV,
     traits::{get_byte_offset_concrete, get_byte_offset_symbol},
     vm::{Result, State, VMError},
 };
@@ -84,32 +83,19 @@ where
 /// on a per element basis.
 ///
 /// TODO: No operations currently care about overflows and such.
-pub(crate) fn binop(
+pub(crate) fn binop<F>(
     state: &mut State<'_>,
     lhs: &Operand,
     rhs: &Operand,
-    op: BinaryOperation,
-) -> Result<BV> {
+    operation: F,
+) -> Result<BV>
+where
+    F: Fn(&BV, &BV) -> BV,
+{
     let lhs_ty = state.type_of(lhs);
     let rhs_ty = state.type_of(rhs);
     let lhs = state.get_var(lhs)?;
     let rhs = state.get_var(rhs)?;
-
-    let operation = match op {
-        BinaryOperation::Add => BV::add,
-        BinaryOperation::Sub => BV::sub,
-        BinaryOperation::Mul => BV::mul,
-        BinaryOperation::UDiv => BV::udiv,
-        BinaryOperation::SDiv => BV::sdiv,
-        BinaryOperation::URem => BV::urem,
-        BinaryOperation::SRem => BV::srem,
-        BinaryOperation::And => BV::and,
-        BinaryOperation::Or => BV::or,
-        BinaryOperation::Xor => BV::xor,
-        BinaryOperation::Sll => BV::sll,
-        BinaryOperation::Srl => BV::srl,
-        BinaryOperation::Sra => BV::sra,
-    };
 
     use Type::*;
     match (lhs_ty.as_ref(), rhs_ty.as_ref()) {
@@ -170,17 +156,19 @@ pub(crate) fn binop(
 ///
 /// No type checking is done, if this is of interest they have to be checked before calling this
 /// function.
-pub(crate) fn convert_to_map<F>(
+pub(crate) fn convert_to_map<'p, T, F>(
     state: &mut State<'_>,
     ty: &Type,
-    op: &Operand,
+    op: T,
     map: F,
 ) -> Result<BV>
 where
+    T: Into<Op<'p>>,
     F: Fn(BV, u32) -> BV,
 {
+    let op = op.into();
     let symbol = state.get_var(op)?;
-    let source_ty = state.type_of(op);
+    let source_ty = state.type_of(&op);
 
     use Type::*;
     match (source_ty.as_ref(), ty) {
@@ -230,22 +218,6 @@ where
         // The other types should not appear for this instruction.
         _ => Err(VMError::MalformedInstruction),
     }
-}
-
-/// Convert operand to type `ty`.
-///
-/// Converting works for different bit widths, if the target is larger it is zero extended. If the
-/// target is smaller the operand is truncated. Finally, if the are the same this is the same as
-/// a cast.
-pub(crate) fn convert_to(state: &mut State<'_>, ty: &Type, op: &Operand) -> Result<BV> {
-    fn convert_symbol(symbol: BV, target_bits: u32) -> BV {
-        match symbol.len().cmp(&target_bits) {
-            Ordering::Equal => symbol,
-            Ordering::Less => symbol.slice(0, target_bits - 1),
-            Ordering::Greater => symbol.zero_ext(target_bits),
-        }
-    }
-    convert_to_map(state, ty, op, convert_symbol)
 }
 
 /// Cast operand to type `ty`.

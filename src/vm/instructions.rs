@@ -7,8 +7,8 @@ use log::{debug, warn};
 use crate::{
     hooks::FnInfo,
     project::FunctionType,
-    solver::BinaryOperation,
-    traits::{binop, cast_to, convert_to, convert_to_map, extract_value, gep, icmp, ToValue},
+    solver::BV,
+    traits::{binop, cast_to, convert_to_map, extract_value, gep, icmp, ToValue},
     vm::{Callsite, Location, Result, ReturnValue, VMError, VM},
 };
 
@@ -264,7 +264,7 @@ impl<'a> VM<'a> {
             &mut self.state,
             instr.get_operand0(),
             instr.get_operand1(),
-            BinaryOperation::Add,
+            BV::add,
         )?;
         self.assign(instr, result)
     }
@@ -287,7 +287,7 @@ impl<'a> VM<'a> {
             &mut self.state,
             instr.get_operand0(),
             instr.get_operand1(),
-            BinaryOperation::Sub,
+            BV::sub,
         )?;
         self.assign(instr, result)
     }
@@ -310,7 +310,7 @@ impl<'a> VM<'a> {
             &mut self.state,
             instr.get_operand0(),
             instr.get_operand1(),
-            BinaryOperation::Mul,
+            BV::mul,
         )?;
         self.assign(instr, result)
     }
@@ -336,7 +336,7 @@ impl<'a> VM<'a> {
             &mut self.state,
             instr.get_operand0(),
             instr.get_operand1(),
-            BinaryOperation::UDiv,
+            BV::udiv,
         )?;
         self.assign(instr, result)
     }
@@ -354,7 +354,7 @@ impl<'a> VM<'a> {
             &mut self.state,
             instr.get_operand0(),
             instr.get_operand1(),
-            BinaryOperation::SDiv,
+            BV::sdiv,
         )?;
         self.assign(instr, result)
     }
@@ -377,7 +377,7 @@ impl<'a> VM<'a> {
             &mut self.state,
             instr.get_operand0(),
             instr.get_operand1(),
-            BinaryOperation::URem,
+            BV::urem,
         )?;
         self.assign(instr, result)
     }
@@ -392,7 +392,7 @@ impl<'a> VM<'a> {
             &mut self.state,
             instr.get_operand0(),
             instr.get_operand1(),
-            BinaryOperation::SRem,
+            BV::srem,
         )?;
         self.assign(instr, result)
     }
@@ -421,7 +421,7 @@ impl<'a> VM<'a> {
             &mut self.state,
             instr.get_operand0(),
             instr.get_operand1(),
-            BinaryOperation::Sll,
+            BV::sll,
         )?;
         self.assign(instr, result)
     }
@@ -434,7 +434,7 @@ impl<'a> VM<'a> {
             &mut self.state,
             instr.get_operand0(),
             instr.get_operand1(),
-            BinaryOperation::Srl,
+            BV::srl,
         )?;
         self.assign(instr, result)
     }
@@ -447,7 +447,7 @@ impl<'a> VM<'a> {
             &mut self.state,
             instr.get_operand0(),
             instr.get_operand1(),
-            BinaryOperation::Sra,
+            BV::sra,
         )?;
         self.assign(instr, result)
     }
@@ -459,7 +459,7 @@ impl<'a> VM<'a> {
             &mut self.state,
             instr.get_operand0(),
             instr.get_operand1(),
-            BinaryOperation::And,
+            BV::and,
         )?;
         self.assign(instr, result)
     }
@@ -471,7 +471,7 @@ impl<'a> VM<'a> {
             &mut self.state,
             instr.get_operand0(),
             instr.get_operand1(),
-            BinaryOperation::Or,
+            BV::or,
         )?;
         self.assign(instr, result)
     }
@@ -483,7 +483,7 @@ impl<'a> VM<'a> {
             &mut self.state,
             instr.get_operand0(),
             instr.get_operand1(),
-            BinaryOperation::Xor,
+            BV::xor,
         )?;
         self.assign(instr, result)
     }
@@ -700,7 +700,12 @@ impl<'a> VM<'a> {
     /// happens element by element.
     fn ptrtoint(&mut self, instr: &instruction::PtrToInt) -> Result<()> {
         debug!("{}", instr);
-        let bv = convert_to(&mut self.state, &instr.to_type, &instr.operand)?;
+        let bv = convert_to_map(
+            &mut self.state,
+            &instr.to_type,
+            &instr.operand,
+            |symbol, target_size| symbol.resize_unsigned(target_size),
+        )?;
         self.assign(instr, bv)
     }
 
@@ -710,7 +715,12 @@ impl<'a> VM<'a> {
     /// happens element by element.
     fn inttoptr(&mut self, instr: &instruction::IntToPtr) -> Result<()> {
         debug!("{}", instr);
-        let bv = convert_to(&mut self.state, &instr.to_type, &instr.operand)?;
+        let bv = convert_to_map(
+            &mut self.state,
+            &instr.to_type,
+            &instr.operand,
+            |symbol, target_size| symbol.resize_unsigned(target_size),
+        )?;
         self.assign(instr, bv)
     }
 

@@ -7,7 +7,7 @@ mod tobv;
 mod value;
 
 pub use op::*;
-pub use ops::*;
+pub(crate) use ops::*;
 pub use size::*;
 pub use tobv::*;
 

@@ -1,5 +1,5 @@
 use boolector::{BVSolution, Btor};
-use std::rc::Rc;
+use std::{cmp::Ordering, rc::Rc};
 
 use crate::Solver;
 
@@ -14,23 +14,33 @@ impl BV {
 
     /// Zero-extend the current [BV] to the passed bitwidth and return the resulting [BV].
     pub fn zero_ext(&self, width: u32) -> BV {
-        let w = self.0.get_width();
-
-        match w.cmp(&width) {
-            std::cmp::Ordering::Less => BV(self.0.uext(width - w)),
-            std::cmp::Ordering::Equal => self.clone(),
-            std::cmp::Ordering::Greater => todo!(),
+        match self.len().cmp(&width) {
+            Ordering::Less => BV(self.0.uext(width - self.len())),
+            Ordering::Equal => self.clone(),
+            Ordering::Greater => todo!(),
         }
     }
 
     /// Sign-extend the current [BV] to the passed bidwidth and return the resulting [BV].
     pub fn sign_ext(&self, width: u32) -> BV {
-        let w = self.0.get_width();
+        match self.len().cmp(&width) {
+            Ordering::Less => BV(self.0.sext(width - self.len())),
+            Ordering::Equal => self.clone(),
+            Ordering::Greater => todo!(),
+        }
+    }
 
-        match w.cmp(&width) {
-            std::cmp::Ordering::Less => BV(self.0.sext(width - w)),
-            std::cmp::Ordering::Equal => self.clone(),
-            std::cmp::Ordering::Greater => todo!(),
+    /// Resize the current [BV] to the passed bitwidth and return the resulting [BV].
+    ///
+    /// If `self.len()` is compared to `target_size`
+    /// - Same: the symbol is returned.
+    /// - Smaller: the symbol is zero extened to the the target size.
+    /// - Larger: the symbol is truncated to the target size.
+    pub fn resize_unsigned(self, width: u32) -> BV {
+        match self.len().cmp(&width) {
+            Ordering::Equal => self,
+            Ordering::Less => self.slice(0, width - 1),
+            Ordering::Greater => self.zero_ext(width),
         }
     }
 

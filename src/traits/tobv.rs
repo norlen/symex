@@ -2,7 +2,7 @@ use anyhow::anyhow;
 use llvm_ir::{Constant, ConstantRef, IntPredicate, Operand, Type};
 
 use crate::{
-    solver::{BinaryOperation, BV},
+    solver::BV,
     vm::{Result, State, VMError},
 };
 
@@ -125,24 +125,36 @@ pub fn const_to_symbol_zero_size(state: &mut State<'_>, constant: &Constant) -> 
 
         // Binary operations, the operands here cannot be zero sized. So if a zero sized type is
         // encountered it will return a [VMError::UnexpectedZeroSize].
-        Add(op) => bin(state, &op.operand0, &op.operand1, BinaryOperation::Add),
-        Sub(op) => bin(state, &op.operand0, &op.operand1, BinaryOperation::Sub),
-        Mul(op) => bin(state, &op.operand0, &op.operand1, BinaryOperation::Mul),
-        UDiv(op) => bin(state, &op.operand0, &op.operand1, BinaryOperation::UDiv),
-        SDiv(op) => bin(state, &op.operand0, &op.operand1, BinaryOperation::SDiv),
-        URem(op) => bin(state, &op.operand0, &op.operand1, BinaryOperation::URem),
-        SRem(op) => bin(state, &op.operand0, &op.operand1, BinaryOperation::SRem),
-        And(op) => bin(state, &op.operand0, &op.operand1, BinaryOperation::And),
-        Or(op) => bin(state, &op.operand0, &op.operand1, BinaryOperation::Or),
-        Xor(op) => bin(state, &op.operand0, &op.operand1, BinaryOperation::Xor),
-        Shl(op) => bin(state, &op.operand0, &op.operand1, BinaryOperation::Sll),
-        LShr(op) => bin(state, &op.operand0, &op.operand1, BinaryOperation::Srl),
-        AShr(op) => bin(state, &op.operand0, &op.operand1, BinaryOperation::Sra),
+        Add(op) => bin(state, &op.operand0, &op.operand1, BV::add),
+        Sub(op) => bin(state, &op.operand0, &op.operand1, BV::sub),
+        Mul(op) => bin(state, &op.operand0, &op.operand1, BV::mul),
+        UDiv(op) => bin(state, &op.operand0, &op.operand1, BV::udiv),
+        SDiv(op) => bin(state, &op.operand0, &op.operand1, BV::sdiv),
+        URem(op) => bin(state, &op.operand0, &op.operand1, BV::urem),
+        SRem(op) => bin(state, &op.operand0, &op.operand1, BV::srem),
+        And(op) => bin(state, &op.operand0, &op.operand1, BV::and),
+        Or(op) => bin(state, &op.operand0, &op.operand1, BV::or),
+        Xor(op) => bin(state, &op.operand0, &op.operand1, BV::xor),
+        Shl(op) => bin(state, &op.operand0, &op.operand1, BV::sll),
+        LShr(op) => bin(state, &op.operand0, &op.operand1, BV::srl),
+        AShr(op) => bin(state, &op.operand0, &op.operand1, BV::sra),
+
+        // These are conversion from ptr->int or int->ptr. These do not allow zero sized types now.
+        PtrToInt(op) => {
+            let result = convert_to_map(state, &op.to_type, &op.operand, |symbol, target_size| {
+                symbol.resize_unsigned(target_size)
+            })?;
+            Ok(Some(result))
+        }
+        IntToPtr(op) => {
+            let result = convert_to_map(state, &op.to_type, &op.operand, |symbol, target_size| {
+                symbol.resize_unsigned(target_size)
+            })?;
+            Ok(Some(result))
+        }
 
         // These are all just casts between types. If the constants they have inside are zero-sized
         // the result will be `None`. Not sure it makes sense to allow this though.
-        PtrToInt(op) => const_cast(state, &op.to_type, &op.operand),
-        IntToPtr(op) => const_cast(state, &op.to_type, &op.operand),
         BitCast(op) => const_cast(state, &op.to_type, &op.operand),
         AddrSpaceCast(op) => const_cast(state, &op.to_type, &op.operand),
 
@@ -172,34 +184,28 @@ pub fn const_to_symbol_zero_size(state: &mut State<'_>, constant: &Constant) -> 
 
         // Truncate operand to target type. The target type *must* be smaller than the current.
         Trunc(op) => {
-            let target_size = state.project.bit_size(&op.to_type)?;
-            let value = const_to_symbol_zero_size(state, &op.operand)?
-                .ok_or_else(|| VMError::UnexpectedZeroSize)?;
-            assert!(value.len() > target_size);
-
-            Ok(Some(value.slice(0, target_size - 1)))
+            let result = convert_to_map(state, &op.to_type, &op.operand, |symbol, target_size| {
+                symbol.slice(0, target_size - 1)
+            })?;
+            Ok(Some(result))
         }
 
         // Zero extend operand to target type. The current value must have a smaller bitwidth
         // compared to the target type.
         ZExt(op) => {
-            let target_size = state.project.bit_size(&op.to_type)?;
-            let value = const_to_symbol_zero_size(state, &op.operand)?
-                .ok_or_else(|| VMError::UnexpectedZeroSize)?;
-            assert!(value.len() < target_size);
-
-            Ok(Some(value.zero_ext(target_size)))
+            let result = convert_to_map(state, &op.to_type, &op.operand, |symbol, target_size| {
+                symbol.zero_ext(target_size)
+            })?;
+            Ok(Some(result))
         }
 
         // Sign extend operand to target type. The current value must have a smaller bitwidth
         // compared to the target type.
         SExt(op) => {
-            let target_size = state.project.bit_size(&op.to_type)?;
-            let value = const_to_symbol_zero_size(state, &op.operand)?
-                .ok_or_else(|| VMError::UnexpectedZeroSize)?;
-            assert!(value.len() < target_size);
-
-            Ok(Some(value.sign_ext(target_size)))
+            let result = convert_to_map(state, &op.to_type, &op.operand, |symbol, target_size| {
+                symbol.sign_ext(target_size)
+            })?;
+            Ok(Some(result))
         }
 
         // Extract a scalar element from a vector at a specific index.
@@ -379,32 +385,54 @@ fn const_cast(state: &mut State<'_>, ty: &Type, constant: &ConstantRef) -> Resul
 /// are always constants this is just a simpler version.
 ///
 /// Requires that `lhs` and `rhs` are not be zero sized.
-fn bin(
+fn bin<F>(
     state: &mut State<'_>,
     lhs: &ConstantRef,
     rhs: &ConstantRef,
-    op: BinaryOperation,
-) -> Result<Option<BV>> {
-    let lhs = const_to_symbol_zero_size(state, lhs)?.ok_or_else(|| VMError::UnexpectedZeroSize)?;
-    let rhs = const_to_symbol_zero_size(state, rhs)?.ok_or_else(|| VMError::UnexpectedZeroSize)?;
+    operation: F,
+) -> Result<Option<BV>>
+where
+    F: Fn(&BV, &BV) -> BV,
+{
+    // TODO: May want to replace this with the regular binary op thing from instructions.
+    use Constant::*;
+    match (lhs.as_ref(), rhs.as_ref()) {
+        // Assume the constants are similar as in the regular instruction, in that only integers,
+        // floating points and vectors of those are allowed.
+        (Int { .. }, Int { .. }) => {
+            let lhs = const_to_symbol(state, lhs)?;
+            let rhs = const_to_symbol(state, rhs)?;
 
-    use BinaryOperation::*;
-    let result = match op {
-        Add => lhs.add(&rhs),
-        Sub => lhs.sub(&rhs),
-        Mul => lhs.mul(&rhs),
-        UDiv => lhs.udiv(&rhs),
-        SDiv => lhs.sdiv(&rhs),
-        URem => lhs.urem(&rhs),
-        SRem => lhs.srem(&rhs),
-        And => lhs.and(&rhs),
-        Or => lhs.or(&rhs),
-        Xor => lhs.xor(&rhs),
-        Sll => lhs.sll(&rhs),
-        Srl => lhs.srl(&rhs),
-        Sra => lhs.sra(&rhs),
-    };
-    Ok(Some(result))
+            let result = operation(&lhs, &rhs);
+            Ok(Some(result))
+        }
+
+        // For vectors to the operation on a per element basis.
+        (Vector(e0), Vector(e1)) => {
+            if e0.len() != e1.len() {
+                return Err(VMError::MalformedInstruction);
+            }
+            let elements = e0.iter().zip(e1.iter());
+
+            // Perform the operations per element and concatenate.
+            let result = elements
+                .map(|(lhs, rhs)| {
+                    let lhs = const_to_symbol(state, lhs);
+                    let rhs = const_to_symbol(state, rhs);
+                    lhs.and_then(|lhs| rhs.map(|rhs| lhs.add(&rhs)))
+                })
+                .reduce(|acc, v| Ok(v?.concat(&acc?)))
+                .ok_or_else(|| VMError::MalformedInstruction)??;
+
+            Ok(Some(result))
+        }
+
+        // Not supported yet.
+        (Float(_), Float(_)) => Err(VMError::UnsupportedInstruction),
+
+        // These types should not appear here.
+        _ => Err(VMError::MalformedInstruction),
+    }
 }
 
 #[cfg(test)]
