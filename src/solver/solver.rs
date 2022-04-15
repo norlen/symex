@@ -4,11 +4,11 @@ use boolector::{
 };
 use std::rc::Rc;
 
-use super::{Solutions, SolverError, BV};
+use super::{Array, Solutions, SolverError, BV};
 
 #[derive(Debug, Clone)]
 pub struct Solver {
-    btor: Rc<Btor>,
+    pub(super) btor: Rc<Btor>,
 }
 
 impl Default for Solver {
@@ -138,34 +138,34 @@ impl Solver {
     // BV creation
     // -------------------------------------------------------------------------
 
-    pub fn array(
-        &self,
-        index_width: u32,
-        element_width: u32,
-        symbol: Option<&str>,
-    ) -> boolector::Array<Rc<Btor>> {
-        boolector::Array::new(self.btor.clone(), index_width, element_width, symbol)
+    pub fn array(&self, index_width: u32, element_width: u32, symbol: Option<&str>) -> Array {
+        Array(boolector::Array::new(
+            self.btor.clone(),
+            index_width,
+            element_width,
+            symbol,
+        ))
     }
 
     pub fn bv(&self, bits: u32) -> BV {
-        boolector::BV::new(self.btor.clone(), bits, None).into()
+        BV(boolector::BV::new(self.btor.clone(), bits, None))
     }
 
     pub fn bv_from_bool(&self, value: bool) -> BV {
-        boolector::BV::from_bool(self.btor.clone(), value).into()
+        BV(boolector::BV::from_bool(self.btor.clone(), value))
     }
 
     /// Creates new bv from a u64.
     pub fn bv_from_u64(&self, value: u64, bits: u32) -> BV {
-        boolector::BV::from_u64(self.btor.clone(), value, bits).into()
+        BV(boolector::BV::from_u64(self.btor.clone(), value, bits))
     }
 
     /// Gets a new bv with a zero value.
     pub fn bv_zero(&self, bits: u32) -> BV {
-        boolector::BV::zero(self.btor.clone(), bits).into()
+        BV(boolector::BV::zero(self.btor.clone(), bits))
     }
 
     pub fn from_binary_string(&self, bits: &str) -> BV {
-        boolector::BV::from_binary_str(self.btor.clone(), bits).into()
+        BV(boolector::BV::from_binary_str(self.btor.clone(), bits))
     }
 }

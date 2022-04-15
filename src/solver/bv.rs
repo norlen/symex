@@ -1,9 +1,8 @@
 use boolector::{BVSolution, Btor};
-use std::convert::From;
-use std::{ops::Deref, rc::Rc};
+use std::rc::Rc;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct BV(pub(super) boolector::BV<Rc<Btor>>);
+pub struct BV(pub(crate) boolector::BV<Rc<Btor>>);
 
 impl BV {
     /// Returns the bidwidth of the [BV].
@@ -11,8 +10,7 @@ impl BV {
         self.0.get_width()
     }
 
-    /// Zero-extend the current [BV] to the passed bitwidth and return the
-    /// resulting [BV].
+    /// Zero-extend the current [BV] to the passed bitwidth and return the resulting [BV].
     pub fn zero_ext(&self, width: u32) -> BV {
         let w = self.0.get_width();
 
@@ -23,8 +21,7 @@ impl BV {
         }
     }
 
-    /// Sign-extend the current [BV] to the passed bidwidth and return the
-    /// resulting [BV].
+    /// Sign-extend the current [BV] to the passed bidwidth and return the resulting [BV].
     pub fn sign_ext(&self, width: u32) -> BV {
         let w = self.0.get_width();
 
@@ -35,12 +32,12 @@ impl BV {
         }
     }
 
-    // -------------------------------------------------------------------------
+    // ---------------------------------------------------------------------------------------------
     // Operations
-    // -------------------------------------------------------------------------
+    // ---------------------------------------------------------------------------------------------
 
-    /// [BV] equality check. Both [BV]s must have the same bidwidth, the result
-    /// is returned as a [BV] of width 1.
+    /// [BV] equality check. Both [BV]s must have the same bidwidth, the result is returned as a
+    /// [BV] of width 1.
     pub fn eq(&self, other: &BV) -> BV {
         assert_eq!(self.len(), other.len());
         BV(self.0._eq(&other.0))
@@ -91,9 +88,9 @@ impl BV {
         BV(self.0.slte(&other.0))
     }
 
-    // -------------------------------------------------------------------------
+    // ---------------------------------------------------------------------------------------------
     // Binary ops
-    // -------------------------------------------------------------------------
+    // ---------------------------------------------------------------------------------------------
 
     pub fn add(&self, other: &BV) -> BV {
         assert_eq!(self.len(), other.len());
@@ -130,9 +127,9 @@ impl BV {
         BV(self.0.srem(&other.0))
     }
 
-    // -------------------------------------------------------------------------
+    // ---------------------------------------------------------------------------------------------
     // Overflowing operations
-    // -------------------------------------------------------------------------
+    // ---------------------------------------------------------------------------------------------
 
     pub fn uaddo(&self, other: &BV) -> BV {
         assert_eq!(self.len(), other.len());
@@ -164,17 +161,17 @@ impl BV {
         BV(self.0.smulo(&other.0))
     }
 
-    // -------------------------------------------------------------------------
+    // ---------------------------------------------------------------------------------------------
     // Saturating operations
-    // -------------------------------------------------------------------------
+    // ---------------------------------------------------------------------------------------------
 
-    /// Saturated unsigned addition. Adds `self` with `other` and if the result
-    /// overflows the maxmium value is returned.
+    /// Saturated unsigned addition. Adds `self` with `other` and if the result overflows the
+    /// maxmium value is returned.
     ///
     /// Requires that `self` and `other` have the same width.
     ///
-    /// The returned value is a if-then-else BV, which if the result would
-    /// overflow is the maximum, otherwise it is the result.
+    /// The returned value is a if-then-else BV, which if the result would overflow is the maximum,
+    /// otherwise it is the result.
     pub fn uadds(&self, other: &BV) -> BV {
         assert_eq!(self.len(), other.len());
 
@@ -185,15 +182,13 @@ impl BV {
         overflow.ite(&saturated, &result)
     }
 
-    /// Saturated signed addition. Adds `self` with `other` and if the result
-    /// overflows either the maximum or mimimum value is returned, depending
-    /// on the sign bit of `self`.
+    /// Saturated signed addition. Adds `self` with `other` and if the result overflows either the
+    /// maximum or mimimum value is returned, depending on the sign bit of `self`.
     ///
     /// Requires that `self` and `other` have the same width.
     ///
-    /// The returned value is an if-then-else BV, which returns either the
-    /// maximum or minimum if the result would overflow, and the result
-    /// otherwise.
+    /// The returned value is an if-then-else BV, which returns either the maximum or minimum if the
+    /// result would overflow, and the result otherwise.
     pub fn sadds(&self, other: &BV) -> BV {
         assert_eq!(self.len(), other.len());
         let width = self.len();
@@ -216,9 +211,13 @@ impl BV {
         overflow.ite(&is_negative.ite(&min, &max), &result)
     }
 
-    // -------------------------------------------------------------------------
+    // ---------------------------------------------------------------------------------------------
     // Logical ops
-    // -------------------------------------------------------------------------
+    // ---------------------------------------------------------------------------------------------
+
+    pub fn not(&self) -> BV {
+        BV(self.0.not())
+    }
 
     pub fn and(&self, other: &BV) -> BV {
         BV(self.0.and(&other.0))
@@ -230,9 +229,9 @@ impl BV {
         BV(self.0.xor(&other.0))
     }
 
-    // -------------------------------------------------------------------------
+    // ---------------------------------------------------------------------------------------------
     // Shifts
-    // -------------------------------------------------------------------------
+    // ---------------------------------------------------------------------------------------------
 
     /// Shift left logical
     pub fn sll(&self, other: &BV) -> BV {
@@ -249,9 +248,9 @@ impl BV {
         BV(self.0.xor(&other.0))
     }
 
-    // -------------------------------------------------------------------------
+    // ---------------------------------------------------------------------------------------------
     // Concat
-    // -------------------------------------------------------------------------
+    // ---------------------------------------------------------------------------------------------
 
     pub fn concat(&self, other: &BV) -> BV {
         BV(self.0.concat(&other.0))
@@ -263,58 +262,34 @@ impl BV {
         BV(self.0.slice(high, low))
     }
 
-    // -------------------------------------------------------------------------
+    // ---------------------------------------------------------------------------------------------
     // Conditionals
-    // -------------------------------------------------------------------------
+    // ---------------------------------------------------------------------------------------------
 
     pub fn ite(&self, then_bv: &BV, else_bv: &BV) -> BV {
         assert_eq!(self.len(), 1);
         BV(self.0.cond_bv(&then_bv.0, &else_bv.0))
     }
 
-    // -------------------------------------------------------------------------
+    // ---------------------------------------------------------------------------------------------
     // Solutions
-    // -------------------------------------------------------------------------
+    // ---------------------------------------------------------------------------------------------
 
     pub fn get_solution(&self) -> BVSolution {
         self.0.get_a_solution()
     }
-
-    // -------------------------------------------------------------------------
-    // Deprecated
-    // -------------------------------------------------------------------------
-
-    #[deprecated]
-    pub fn _ne(&self, other: &BV) -> BV {
-        self.0._ne(&other.0).into()
-    }
-
-    #[deprecated]
-    pub fn _eq(&self, other: &BV) -> BV {
-        self.0._eq(&other.0).into()
-    }
-
-    #[deprecated]
-    pub fn get_width(&self) -> u32 {
-        self.0.get_width()
-    }
-
-    #[deprecated]
-    pub fn assert(&self) {
-        self.0.assert();
-    }
 }
 
-impl Deref for BV {
-    type Target = boolector::BV<Rc<Btor>>;
+// impl Deref for BV {
+//     type Target = boolector::BV<Rc<Btor>>;
 
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
+//     fn deref(&self) -> &Self::Target {
+//         &self.0
+//     }
+// }
 
-impl From<boolector::BV<Rc<Btor>>> for BV {
-    fn from(bv: boolector::BV<Rc<Btor>>) -> Self {
-        Self(bv)
-    }
-}
+// impl From<boolector::BV<Rc<Btor>>> for BV {
+//     fn from(bv: boolector::BV<Rc<Btor>>) -> Self {
+//         Self(bv)
+//     }
+// }

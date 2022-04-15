@@ -1,9 +1,11 @@
 use ::boolector::BVSolution;
 use thiserror::Error;
 
+mod array;
 mod bv;
 mod solver;
 
+pub use array::Array;
 pub use bv::BV;
 pub use solver::Solver;
 

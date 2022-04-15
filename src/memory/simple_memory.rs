@@ -1,11 +1,7 @@
-use boolector::Btor;
 use log::trace;
-use std::rc::Rc;
 
 use super::{MemoryError, BITS_IN_BYTE};
-use crate::{Solver, BV};
-
-type Array = boolector::Array<Rc<Btor>>;
+use crate::solver::{Array, Solver, BV};
 
 #[derive(Debug, Clone)]
 pub struct Memory {
@@ -39,7 +35,7 @@ impl Memory {
     }
 
     pub fn read_u8(&self, addr: &BV) -> BV {
-        self.mem.read(addr).into()
+        self.mem.read(addr)
     }
 
     pub fn write_u8(&mut self, addr: &BV, val: &BV) {
@@ -86,7 +82,7 @@ impl Memory {
 
         // Check if we should zero extend the value (if it less than 8-bits).
         let value = if value.len() < BITS_IN_BYTE {
-            value.uext(BITS_IN_BYTE - value.len()).into()
+            value.zero_ext(BITS_IN_BYTE)
         } else {
             value
         };
@@ -102,7 +98,7 @@ impl Memory {
 
             let offset = self.solver.bv_from_u64(n as u64, self.ptr_size);
             let addr = addr.add(&offset);
-            self.write_u8(&addr, &byte.into());
+            self.write_u8(&addr, &byte);
         }
 
         Ok(())

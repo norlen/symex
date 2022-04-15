@@ -119,15 +119,12 @@ impl<'a> VM<'a> {
 
         let cond = self.state.get_var(&instr.condition).unwrap();
         let true_possible = self.solver.is_sat_with_constraint(&cond).unwrap();
-        let false_possible = self
-            .solver
-            .is_sat_with_constraint(&cond.not().into())
-            .unwrap();
+        let false_possible = self.solver.is_sat_with_constraint(&cond.not()).unwrap();
 
         let target = match (true_possible, false_possible) {
             (true, true) => {
                 // Explore true first, then backtrack to false.
-                self.save_backtracking_path(&instr.false_dest, Some(cond.not().into()))?;
+                self.save_backtracking_path(&instr.false_dest, Some(cond.not()))?;
                 self.solver.assert(&cond);
                 Ok(&instr.true_dest)
             }
