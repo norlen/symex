@@ -59,39 +59,19 @@ impl Memory {
         } else {
             // Ensure we only read full bytes now.
             assert_eq!(bits % BITS_IN_BYTE, 0, "Must read bytes, if bits >= 8");
-
             let num_bytes = bits / BITS_IN_BYTE;
-            println!("Reading {} bytes", num_bytes);
 
             let mut bytes = Vec::new();
             for byte in 0..num_bytes {
                 let offset = self.solver.bv_from_u64(byte as u64, self.ptr_size);
                 let read_addr = addr.add(&offset);
                 let value = self.read_u8(&read_addr);
-                println!(
-                    "Reading addr: {:?}, val_size: {}, value: {:?}",
-                    read_addr,
-                    value.len(),
-                    value
-                );
-                println!("sol: {:?}", self.solver.get_solutions_for_bv(&value, 5));
                 bytes.push(value);
             }
 
             let value = bytes.into_iter().reduce(|acc, v| v.concat(&acc)).unwrap();
-            println!("Final value: {:?}", value);
             value
-
-            // // ..
-            // (0..num_bytes)
-            //     .map(|byte| {
-            //         let offset = self.solver.bv_from_u64(byte as u64, self.ptr_size);
-            //         self.read_u8(&addr.add(&offset))
-            //     })
-            //     .reduce(|acc, byte| byte.concat(&acc).into())
-            //     .unwrap()
         };
-        trace!("Read value: {:?} at address: {:?}", value, addr);
 
         Ok(value)
     }
@@ -113,21 +93,12 @@ impl Memory {
 
         // Ensure the value we write is a multiple of `BITS_IN_BYTE`.
         assert_eq!(value.len() % BITS_IN_BYTE, 0);
-        println!(
-            "Writing {} bits, {} bytes",
-            value.len(),
-            value.len() / BITS_IN_BYTE
-        );
 
         let num_bytes = value.len() / BITS_IN_BYTE;
         for n in 0..num_bytes {
             let low_bit = n * BITS_IN_BYTE;
             let high_bit = (n + 1) * BITS_IN_BYTE - 1;
             let byte = value.slice(low_bit, high_bit);
-            // println!(
-            //     "offset: {}, low: {}, high: {}, byte: {:x?}",
-            //     n, low_bit, high_bit, byte
-            // );
 
             let offset = self.solver.bv_from_u64(n as u64, self.ptr_size);
             let addr = addr.add(&offset);
