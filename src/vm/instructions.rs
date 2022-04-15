@@ -1,15 +1,16 @@
-use llvm_ir::instruction::{BinaryOp, HasResult, Instruction};
-use llvm_ir::{instruction, terminator, Terminator, Type};
+use llvm_ir::{
+    instruction::{self, BinaryOp, Instruction},
+    terminator, Terminator,
+};
 use log::{debug, warn};
 
-use super::{ReturnValue, VMError, VM};
-use crate::hooks::FnInfo;
-use crate::project::FunctionType;
-use crate::solver::BinaryOperation;
-use crate::traits::*;
-use crate::vm::Callsite;
-use crate::vm::Location;
-use crate::vm::Result;
+use crate::{
+    hooks::FnInfo,
+    project::FunctionType,
+    solver::BinaryOperation,
+    traits::{binop, cast_to, convert_to, convert_to_map, extract_value, gep, icmp, ToValue},
+    vm::{Callsite, Location, Result, ReturnValue, VMError, VM},
+};
 
 impl<'a> VM<'a> {
     pub fn process_instruction(&mut self, instr: &'a Instruction) -> Result<()> {
@@ -88,9 +89,9 @@ impl<'a> VM<'a> {
         }
     }
 
-    // -------------------------------------------------------------------------
+    // ---------------------------------------------------------------------------------------------
     // Terminator Instructions
-    // -------------------------------------------------------------------------
+    // ---------------------------------------------------------------------------------------------
 
     fn ret(&mut self, instr: &terminator::Ret) -> Result<ReturnValue> {
         debug!("{}", instr);
@@ -220,44 +221,43 @@ impl<'a> VM<'a> {
 
     /// Unreachable returns an [`VMError::UnreachableInstruction`] error.
     ///
-    /// The `unreachable` instruction as it name says, should be unreachable.
-    /// If this is called, it is most likely an error in the interpreter.
+    /// The `unreachable` instruction as it name says, should be unreachable. If this is called, it
+    /// is most likely an error in the interpreter.
     fn unreachable(&mut self, instr: &terminator::Unreachable) -> Result<ReturnValue> {
         debug!("{}", instr);
         Err(VMError::UnreachableInstruction)
     }
 
-    // -------------------------------------------------------------------------
+    // ---------------------------------------------------------------------------------------------
     // Unary Operations
-    // -------------------------------------------------------------------------
+    // ---------------------------------------------------------------------------------------------
 
+    /// Negates the value of the operand.
+    ///
+    /// The value must be a floating point type, or a vector of floating points.
+    ///
+    /// Floating point is currently unsupported. Always returns [VMError::UnsupportedInstruction].
     fn fneg(&mut self, instr: &instruction::FNeg) -> Result<()> {
         debug!("{}", instr);
-        todo!()
+        Err(VMError::UnsupportedInstruction)
     }
 
-    // -------------------------------------------------------------------------
+    // ---------------------------------------------------------------------------------------------
     // Binary Operations
-    // -------------------------------------------------------------------------
+    //
+    // Some binary operations support `nuw` (no unsigned wrap) or `nsw` (no signed wrap). If one is
+    // present, the result is a poison value on unsigned/signed overflow.
+    //
+    // Division supports `exact` which gives a poison value if the first operand is not a multiple
+    // of the second one.
+    //
+    // However, these are not exposed in `llvm_ir` so I cannot access these.
+    // ---------------------------------------------------------------------------------------------
 
-    // fn binop(
-    //     &mut self,
-    //     dst: &impl HasResult,
-    //     lhs: &Operand,
-    //     rhs: &Operand,
-    //     op: BinaryOperation,
-    // ) -> Result<()> {
-    //     // TODO: Could check that types match?
-    //     // let lhs_ty = self.state.type_of(lhs);
-    //     // let rhs_ty = self.state.type_of(rhs);
-
-    //     let lhs_bv = self.state.get_bv(lhs).unwrap();
-    //     let rhs_bv = self.state.get_bv(rhs).unwrap();
-    //     let result_bv = lhs_bv.binary_op(rhs_bv, op);
-
-    //     self.assign(dst, result_bv)
-    // }
-
+    /// Calculate the sum of two integers or two vectors of integers.
+    ///
+    /// Both arguments must have the same types and must be integers or vectors of integers. On
+    /// unsigned overflow the result is mod 2^n, where n is the size in bits.
     fn add(&mut self, instr: &instruction::Add) -> Result<()> {
         debug!("{}", instr);
         let result = binop(
@@ -269,11 +269,18 @@ impl<'a> VM<'a> {
         self.assign(instr, result)
     }
 
+    /// Calculate the sum of two floating points or two vectors of floating points.
+    ///
+    /// Floating point is currently unsupported. Always returns [VMError::UnsupportedInstruction].
     fn fadd(&mut self, instr: &instruction::FAdd) -> Result<()> {
         debug!("{}", instr);
-        todo!()
+        Err(VMError::UnsupportedInstruction)
     }
 
+    /// Calculate the difference of two integers or two vectors of integers.
+    ///
+    /// Both arguments must have the same types and must be integers or vectors of integers. On
+    /// unsigned overflow the result is mod 2^n, where n is the size in bits.
     fn sub(&mut self, instr: &instruction::Sub) -> Result<()> {
         debug!("{}", instr);
         let result = binop(
@@ -285,11 +292,18 @@ impl<'a> VM<'a> {
         self.assign(instr, result)
     }
 
+    /// Calculate the difference of two floating points or two vectors of floating points.
+    ///
+    /// Floating point is currently unsupported. Always returns [VMError::UnsupportedInstruction].
     fn fsub(&mut self, instr: &instruction::FSub) -> Result<()> {
         debug!("{}", instr);
-        todo!()
+        Err(VMError::UnsupportedInstruction)
     }
 
+    /// Calculates the product of two integers or two vectors of integers.
+    ///
+    /// Both arguments must have the same types and must be integers or vectors of integers. On
+    /// unsigned overflow the result is mod 2^n, where n is the size in bits.
     fn mul(&mut self, instr: &instruction::Mul) -> Result<()> {
         debug!("{}", instr);
         let result = binop(
@@ -301,13 +315,23 @@ impl<'a> VM<'a> {
         self.assign(instr, result)
     }
 
+    /// Calculates the product of two floating points or two vectors of floating points.
+    ///
+    /// Floating point is currently unsupported. Always returns [VMError::UnsupportedInstruction].
     fn fmul(&mut self, instr: &instruction::FMul) -> Result<()> {
         debug!("{}", instr);
-        todo!()
+        Err(VMError::UnsupportedInstruction)
     }
 
+    /// Calculate the quotient of two integers or two vectors of integers.
+    ///
+    /// Returns the unsigned quotient of the operands. The denominator cannot be zero.
     fn udiv(&mut self, instr: &instruction::UDiv) -> Result<()> {
         debug!("{}", instr);
+        // TODO: We cannot divide by zero here, we may want to provide an analysis for checking that.
+        // However, vectors are supported so this should not be done here. Instead it should be
+        // done elsewhere I think? Or we could change it to provide a map, and then we can check
+        // it ourselves.
         let result = binop(
             &mut self.state,
             instr.get_operand0(),
@@ -317,8 +341,15 @@ impl<'a> VM<'a> {
         self.assign(instr, result)
     }
 
+    /// Calculate the quotient of two integers or two vectors of integers.
+    ///
+    /// Returns the signed quotient of the operands. The denominator cannot be zero. Overflow here
+    /// also leads to undefined behaviour.
     fn sdiv(&mut self, instr: &instruction::SDiv) -> Result<()> {
         debug!("{}", instr);
+        // TODO: Apart from div by zero (see above). The overflow could also be checked I guess,
+        // example in docs is 32-bit div with -2147483648 by -1, this may be the only case. i.e.
+        // INTx::MIN / -1
         let result = binop(
             &mut self.state,
             instr.get_operand0(),
@@ -328,13 +359,20 @@ impl<'a> VM<'a> {
         self.assign(instr, result)
     }
 
+    /// Calculate the quotient of two floating points or two vectors of floating points.
+    ///
+    /// Floating point is currently unsupported. Always returns [VMError::UnsupportedInstruction].
     fn fdiv(&mut self, instr: &instruction::FDiv) -> Result<()> {
         debug!("{}", instr);
-        todo!()
+        Err(VMError::UnsupportedInstruction)
     }
 
+    /// Calculate the remainder from unsigned division of two integers or a vector of integers.
+    ///
+    /// The operation performs a division so the denominator cannot be zero.
     fn urem(&mut self, instr: &instruction::URem) -> Result<()> {
         debug!("{}", instr);
+        // TODO: Check div by zero.
         let result = binop(
             &mut self.state,
             instr.get_operand0(),
@@ -344,8 +382,12 @@ impl<'a> VM<'a> {
         self.assign(instr, result)
     }
 
+    /// Calculate the remainder from signed division of two integers or two vector of integers.
+    ///
+    /// The operation performs a division so the denominator cannot be zero.
     fn srem(&mut self, instr: &instruction::SRem) -> Result<()> {
         debug!("{}", instr);
+        // TODO: Check div by zero.
         let result = binop(
             &mut self.state,
             instr.get_operand0(),
@@ -355,48 +397,100 @@ impl<'a> VM<'a> {
         self.assign(instr, result)
     }
 
+    /// Calculate the remainder from division of two floating points or two vectors of floating
+    /// points.
+    ///
+    /// Floating point is currently unsupported. Always returns [VMError::UnsupportedInstruction].
     fn frem(&mut self, instr: &instruction::FRem) -> Result<()> {
         debug!("{}", instr);
-        todo!()
+        Err(VMError::UnsupportedInstruction)
     }
 
-    // -------------------------------------------------------------------------
+    // ---------------------------------------------------------------------------------------------
     // Bitwise Binary Operations
-    // -------------------------------------------------------------------------
+    // ---------------------------------------------------------------------------------------------
 
+    /// Logical shift the first operand left by the number of bits specified by the second operand.
+    ///
+    /// Both parameters must be two integers or two vectors of integers. The second operand is
+    /// treated as having unsigned ints.
     fn shl(&mut self, instr: &instruction::Shl) -> Result<()> {
+        // TODO: There are a couple ways to get poison values. Read more about those.
         debug!("{}", instr);
-        todo!()
+        let result = binop(
+            &mut self.state,
+            instr.get_operand0(),
+            instr.get_operand1(),
+            BinaryOperation::Sll,
+        )?;
+        self.assign(instr, result)
     }
 
+    /// Logical shift left.
     fn lshr(&mut self, instr: &instruction::LShr) -> Result<()> {
+        // TODO: There are a couple ways to get poison values. Read more about those.
         debug!("{}", instr);
-        todo!()
+        let result = binop(
+            &mut self.state,
+            instr.get_operand0(),
+            instr.get_operand1(),
+            BinaryOperation::Srl,
+        )?;
+        self.assign(instr, result)
     }
 
+    /// Arithmetic shift right.
     fn ashr(&mut self, instr: &instruction::AShr) -> Result<()> {
+        // TODO: There are a couple ways to get poison values. Read more about those.
         debug!("{}", instr);
-        todo!()
+        let result = binop(
+            &mut self.state,
+            instr.get_operand0(),
+            instr.get_operand1(),
+            BinaryOperation::Sra,
+        )?;
+        self.assign(instr, result)
     }
 
+    /// Bitwise logical and.
     fn and(&mut self, instr: &instruction::And) -> Result<()> {
         debug!("{}", instr);
-        todo!()
+        let result = binop(
+            &mut self.state,
+            instr.get_operand0(),
+            instr.get_operand1(),
+            BinaryOperation::And,
+        )?;
+        self.assign(instr, result)
     }
 
+    /// Bitwise logical or.
     fn or(&mut self, instr: &instruction::Or) -> Result<()> {
         debug!("{}", instr);
-        todo!()
+        let result = binop(
+            &mut self.state,
+            instr.get_operand0(),
+            instr.get_operand1(),
+            BinaryOperation::Or,
+        )?;
+        self.assign(instr, result)
     }
 
+    /// Bitwise logical xor.
     fn xor(&mut self, instr: &instruction::Xor) -> Result<()> {
         debug!("{}", instr);
-        todo!()
+        let result = binop(
+            &mut self.state,
+            instr.get_operand0(),
+            instr.get_operand1(),
+            BinaryOperation::Xor,
+        )?;
+        self.assign(instr, result)
     }
 
-    // -------------------------------------------------------------------------
+    // ---------------------------------------------------------------------------------------------
     // Vector Operations
-    // -------------------------------------------------------------------------
+    // ---------------------------------------------------------------------------------------------
 
     fn extractelement(&mut self, instr: &instruction::ExtractElement) -> Result<()> {
         debug!("{}", instr);
@@ -413,9 +507,9 @@ impl<'a> VM<'a> {
         todo!()
     }
 
-    // -------------------------------------------------------------------------
+    // ---------------------------------------------------------------------------------------------
     // Aggregate Operations
-    // -------------------------------------------------------------------------
+    // ---------------------------------------------------------------------------------------------
 
     fn extractvalue(&mut self, instr: &instruction::ExtractValue) -> Result<()> {
         debug!("{}", instr);
@@ -428,14 +522,12 @@ impl<'a> VM<'a> {
         todo!()
     }
 
-    // -------------------------------------------------------------------------
+    // ---------------------------------------------------------------------------------------------
     // Memory access and Addressing Operations
-    // -------------------------------------------------------------------------
+    // ---------------------------------------------------------------------------------------------
 
-    /// Allocate memory on the stack frame of the currently executing function.
-    /// The memory is automatically cleaned up when the function returns.
-    ///
-    /// Reference: https://llvm.org/docs/LangRef.html#alloca-instruction
+    /// Allocate memory on the stack frame of the currently executing function. The memory is
+    /// automatically cleaned up when the function returns.
     fn alloca(&mut self, instr: &instruction::Alloca) -> Result<()> {
         debug!("{}", instr);
         let num_elements = instr.num_elements.to_value()?;
@@ -455,8 +547,6 @@ impl<'a> VM<'a> {
     }
 
     /// Load reads a value from memory.
-    ///
-    /// Reference: https://llvm.org/docs/LangRef.html#load-instruction
     fn load(&mut self, instr: &instruction::Load) -> Result<()> {
         debug!("{}", instr);
         let addr = self.state.get_var(&instr.address)?;
@@ -464,22 +554,18 @@ impl<'a> VM<'a> {
         let target_ty = self.state.type_of(instr);
         let target_size = self.project.bit_size(&target_ty)?;
         let value = self.state.mem.read(&addr, target_size)?;
-
         self.assign(instr, value)
     }
 
     /// Store writes to a value to memory.
     ///
     /// Accepts a value which will be written to the passed pointer address.
-    ///
-    /// Reference: https://llvm.org/docs/LangRef.html#store-instruction
     fn store(&mut self, instr: &instruction::Store) -> Result<()> {
         debug!("{}", instr);
 
         let value = self.state.get_var(&instr.value).unwrap();
         let addr = self.state.get_var(&instr.address).unwrap();
-        self.state.mem.write(&addr, value).unwrap();
-
+        self.state.mem.write(&addr, value)?;
         Ok(())
     }
 
@@ -498,10 +584,7 @@ impl<'a> VM<'a> {
         todo!()
     }
 
-    /// GetElementPtr calculates the offset into an array or struct from a base
-    /// pointer.
-    ///
-    /// Reference: https://llvm.org/docs/LangRef.html#getelementptr-instruction
+    /// GetElementPtr calculates the offset into an array or struct from a base pointer.
     fn getelementptr(&mut self, instr: &instruction::GetElementPtr) -> Result<()> {
         debug!("{}", instr);
         let target_address = gep(
@@ -514,9 +597,9 @@ impl<'a> VM<'a> {
         self.assign(instr, target_address)
     }
 
-    // -------------------------------------------------------------------------
+    // ---------------------------------------------------------------------------------------------
     // Conversion Operations
-    // -------------------------------------------------------------------------
+    // ---------------------------------------------------------------------------------------------
 
     /// Truncate a value to the destination type size.
     ///
@@ -530,47 +613,6 @@ impl<'a> VM<'a> {
             &instr.operand,
             |symbol, target_size| symbol.slice(0, target_size - 1),
         )?;
-
-        // let symbol = self.state.get_var(&instr.operand)?;
-        // let source_ty = self.state.type_of(&instr.operand);
-        // let target_ty = instr.to_type.as_ref();
-
-        // use Type::*;
-        // let symbol = match (source_ty.as_ref(), target_ty) {
-        //     (IntegerType { bits: n }, IntegerType { bits: m }) => {
-        //         assert!(*n < *m && symbol.len() == *n);
-        //         symbol.slice(0, *m - 1)
-        //     }
-        //     #[rustfmt::skip]
-        //     (
-        //         VectorType { element_type: e0, num_elements: n, scalable: false },
-        //         VectorType { element_type: e1, num_elements: m, scalable: false },
-        //     ) => {
-        //         let source_bits = self.project.bit_size(e0)?;
-        //         let target_bits = self.project.bit_size(e1)?;
-        //         let num_elements = *n as u32;
-        //         assert!(source_bits < target_bits && source_bits == symbol.len() && *n == *m);
-
-        //         // Process each element one by one and concatenate the result.
-        //         (0..num_elements)
-        //             .map(|i| {
-        //                 let low = i * source_bits;
-        //                 let high = (i + 1) * source_bits - 1;
-        //                 symbol.slice(low, high).zero_ext(target_bits)
-        //             })
-        //             .reduce(|acc, v| v.concat(&acc))
-        //             .ok_or_else(|| VMError::MalformedInstruction)?
-        //     }
-
-        //     // TODO: Check scalable vectors.
-        //     (VectorType { scalable: true, .. }, VectorType { scalable: true, .. }) => {
-        //         return Err(VMError::UnsupportedInstruction)
-        //     }
-
-        //     // Types not supported by instruction.
-        //     _ => return Err(VMError::MalformedInstruction),
-        // };
-
         self.assign(instr, symbol)
     }
 
@@ -691,9 +733,9 @@ impl<'a> VM<'a> {
         self.assign(instr, bv)
     }
 
-    // -------------------------------------------------------------------------
+    // ---------------------------------------------------------------------------------------------
     // Other Operations
-    // -------------------------------------------------------------------------
+    // ---------------------------------------------------------------------------------------------
 
     fn icmp(&mut self, instr: &instruction::ICmp) -> Result<()> {
         debug!("{}", instr);

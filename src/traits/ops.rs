@@ -1,6 +1,5 @@
-use std::cmp::Ordering;
-
 use llvm_ir::{IntPredicate, Operand, Type};
+use std::cmp::Ordering;
 
 use super::{get_bit_offset_concrete, Op, ToValue};
 use crate::{
@@ -49,18 +48,16 @@ where
     T: Into<Op<'p>>,
     I: Iterator<Item = Op<'p>>,
 {
-    // The `in_bounds` field is pretty useless for figuring out if the address
-    // is actually within the type. We cannot use any type information here
-    // (https://llvm.org/docs/GetElementPtr.html)
+    // The `in_bounds` field is pretty useless for figuring out if the address is actually within
+    // the type. We cannot use any type information here (https://llvm.org/docs/GetElementPtr.html)
     //
-    // So we have to get the actual underlying allocation for this, but as the
-    // address is symbolic that poses a problem.
+    // So we have to get the actual underlying allocation for this, but as the address is symbolic
+    // that poses a problem.
     let address = address.into();
     let mut addr = state.get_var(address).unwrap();
     let ptr_size = addr.len();
 
-    // The offsets modifies the address ptr, and this is the type of what
-    // is currently pointed to.
+    // The offsets modifies the address ptr, and this is the type of what is currently pointed to.
     let mut curr_ty = state.type_of(&address);
     for index in indices {
         let (offset, ty) = if index.is_constant() {
@@ -81,38 +78,89 @@ where
     Ok(addr)
 }
 
-pub(crate) fn binop<'p, T>(state: &mut State<'_>, lhs: T, rhs: T, op: BinaryOperation) -> Result<BV>
-where
-    T: Into<Op<'p>>,
-{
-    // TODO: Could check that types match?
-    // let lhs_ty = self.state.type_of(lhs);
-    // let rhs_ty = self.state.type_of(rhs);
-
-    let lhs = lhs.into();
-    let rhs = rhs.into();
-    assert_eq!(state.type_of(&lhs), state.type_of(&rhs));
-
+/// Perform a binary operation on two operands, returning the result.
+///
+/// The input types must be either integers or a vector of integers. Vector operations are performed
+/// on a per element basis.
+///
+/// TODO: No operations currently care about overflows and such.
+pub(crate) fn binop(
+    state: &mut State<'_>,
+    lhs: &Operand,
+    rhs: &Operand,
+    op: BinaryOperation,
+) -> Result<BV> {
+    let lhs_ty = state.type_of(lhs);
+    let rhs_ty = state.type_of(rhs);
     let lhs = state.get_var(lhs)?;
     let rhs = state.get_var(rhs)?;
-    assert_eq!(lhs.len(), rhs.len());
 
-    let result = match op {
-        BinaryOperation::Add => lhs.add(&rhs),
-        BinaryOperation::Sub => lhs.sub(&rhs),
-        BinaryOperation::Mul => lhs.mul(&rhs),
-        BinaryOperation::UDiv => lhs.udiv(&rhs),
-        BinaryOperation::SDiv => lhs.sdiv(&rhs),
-        BinaryOperation::URem => lhs.urem(&rhs),
-        BinaryOperation::SRem => lhs.srem(&rhs),
-        BinaryOperation::And => lhs.and(&rhs),
-        BinaryOperation::Or => lhs.or(&rhs),
-        BinaryOperation::Xor => lhs.xor(&rhs),
-        BinaryOperation::Sll => lhs.sll(&rhs),
-        BinaryOperation::Srl => lhs.srl(&rhs),
-        BinaryOperation::Sra => lhs.sra(&rhs),
+    let operation = match op {
+        BinaryOperation::Add => BV::add,
+        BinaryOperation::Sub => BV::sub,
+        BinaryOperation::Mul => BV::mul,
+        BinaryOperation::UDiv => BV::udiv,
+        BinaryOperation::SDiv => BV::sdiv,
+        BinaryOperation::URem => BV::urem,
+        BinaryOperation::SRem => BV::srem,
+        BinaryOperation::And => BV::and,
+        BinaryOperation::Or => BV::or,
+        BinaryOperation::Xor => BV::xor,
+        BinaryOperation::Sll => BV::sll,
+        BinaryOperation::Srl => BV::srl,
+        BinaryOperation::Sra => BV::sra,
     };
-    Ok(result)
+
+    use Type::*;
+    match (lhs_ty.as_ref(), rhs_ty.as_ref()) {
+        // For simple integer types the result is trivial to do, just perform the operation.
+        (IntegerType { .. }, IntegerType { .. }) => Ok(operation(&lhs, &rhs)),
+
+        // The docs do not really specify how the vector operations should work. But I'll assume it
+        // is the operation on a per element basis.
+        (
+            VectorType {
+                element_type: lhs_inner_ty,
+                num_elements: n,
+                scalable: false,
+            },
+            VectorType {
+                element_type: rhs_inner_ty,
+                num_elements: m,
+                scalable: false,
+            },
+        ) => {
+            assert_eq!(lhs_inner_ty, rhs_inner_ty);
+            assert_eq!(
+                state.project.bit_size(&lhs_inner_ty),
+                state.project.bit_size(&rhs_inner_ty)
+            );
+            assert_eq!(*n, *m);
+
+            let bits = state.project.bit_size(&lhs_inner_ty)?;
+            let num_elements = *n as u32;
+
+            // Perform the operation per element and concatenate the result.
+            (0..num_elements)
+                .map(|i| {
+                    let low = i * bits;
+                    let high = (i + 1) * bits - 1;
+                    let lhs = lhs.slice(low, high);
+                    let rhs = rhs.slice(low, high);
+                    operation(&lhs, &rhs)
+                })
+                .reduce(|acc, v| v.concat(&acc))
+                .ok_or_else(|| VMError::MalformedInstruction)
+        }
+
+        // TODO: Check out scalable vectors.
+        (VectorType { .. }, VectorType { .. }) => {
+            todo!()
+        }
+
+        // These types should not appear in a binary operation.
+        _ => Err(VMError::MalformedInstruction),
+    }
 }
 
 /// Converts integers, pointers, or vectors.
@@ -133,8 +181,6 @@ where
 {
     let symbol = state.get_var(op)?;
     let source_ty = state.type_of(op);
-    // For ptr->int or int->ptr the functionality is pretty simple. Just truncate, zero extend,
-    // or cast depending on the target size.
 
     use Type::*;
     match (source_ty.as_ref(), ty) {
@@ -200,57 +246,6 @@ pub(crate) fn convert_to(state: &mut State<'_>, ty: &Type, op: &Operand) -> Resu
         }
     }
     convert_to_map(state, ty, op, convert_symbol)
-
-    // let op = op.into();
-    // let symbol = state.get_var(op)?;
-
-    // let source_ty = state.type_of(&op);
-
-    // use Type::*;
-    // match (source_ty.as_ref(), ty) {
-    //     // For ptr->int or int->ptr the functionality is pretty simple. Just truncate, zero extend,
-    //     // or cast depending on the target size.
-    //     (IntegerType { .. }, PointerType { .. }) | (PointerType { .. }, IntegerType { .. }) => {
-    //         let target_bits = state.project.bit_size(ty)?;
-    //         Ok(convert_symbol(symbol, target_bits))
-    //     }
-
-    //     // For vectors they have to be processed one by one, and the elements may be truncatated
-    //     // or zero extended.
-    //     (
-    //         VectorType {
-    //             element_type: source_element_ty,
-    //             num_elements,
-    //             scalable: false,
-    //             ..
-    //         },
-    //         VectorType {
-    //             element_type,
-    //             scalable: false,
-    //             ..
-    //         },
-    //     ) => {
-    //         let source_bits = state.project.bit_size(source_element_ty)?;
-    //         let target_bits = state.project.bit_size(element_type)?;
-    //         let num_elements = *num_elements as u32;
-
-    //         // Process each element one by one and concatenate the result.
-    //         (0..num_elements)
-    //             .map(|i| {
-    //                 let low = i * source_bits;
-    //                 let high = (i + 1) * source_bits - 1;
-    //                 convert_symbol(symbol.slice(low, high), target_bits)
-    //             })
-    //             .reduce(|acc, v| v.concat(&acc))
-    //             .ok_or_else(|| VMError::MalformedInstruction)
-    //     }
-
-    //     // TODO: Check if scalable vectors are similar
-    //     (VectorType { .. }, VectorType { .. }) => Err(VMError::UnsupportedInstruction),
-
-    //     // The other types should not appear for this instruction.
-    //     _ => Err(VMError::MalformedInstruction),
-    // }
 }
 
 /// Cast operand to type `ty`.
