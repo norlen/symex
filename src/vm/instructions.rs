@@ -518,120 +518,157 @@ impl<'a> VM<'a> {
     // Conversion Operations
     // -------------------------------------------------------------------------
 
+    /// Truncate a value to the destination type size.
+    ///
+    /// *Requires* the source type to be *larger* than the destination type. Both types must be
+    /// integers, or vectors of integers of the same length.
     fn trunc(&mut self, instr: &instruction::Trunc) -> Result<()> {
         debug!("{}", instr);
-        todo!()
+        let symbol = convert_to_map(
+            &mut self.state,
+            &instr.to_type,
+            &instr.operand,
+            |symbol, target_size| symbol.slice(0, target_size - 1),
+        )?;
+
+        // let symbol = self.state.get_var(&instr.operand)?;
+        // let source_ty = self.state.type_of(&instr.operand);
+        // let target_ty = instr.to_type.as_ref();
+
+        // use Type::*;
+        // let symbol = match (source_ty.as_ref(), target_ty) {
+        //     (IntegerType { bits: n }, IntegerType { bits: m }) => {
+        //         assert!(*n < *m && symbol.len() == *n);
+        //         symbol.slice(0, *m - 1)
+        //     }
+        //     #[rustfmt::skip]
+        //     (
+        //         VectorType { element_type: e0, num_elements: n, scalable: false },
+        //         VectorType { element_type: e1, num_elements: m, scalable: false },
+        //     ) => {
+        //         let source_bits = self.project.bit_size(e0)?;
+        //         let target_bits = self.project.bit_size(e1)?;
+        //         let num_elements = *n as u32;
+        //         assert!(source_bits < target_bits && source_bits == symbol.len() && *n == *m);
+
+        //         // Process each element one by one and concatenate the result.
+        //         (0..num_elements)
+        //             .map(|i| {
+        //                 let low = i * source_bits;
+        //                 let high = (i + 1) * source_bits - 1;
+        //                 symbol.slice(low, high).zero_ext(target_bits)
+        //             })
+        //             .reduce(|acc, v| v.concat(&acc))
+        //             .ok_or_else(|| VMError::MalformedInstruction)?
+        //     }
+
+        //     // TODO: Check scalable vectors.
+        //     (VectorType { scalable: true, .. }, VectorType { scalable: true, .. }) => {
+        //         return Err(VMError::UnsupportedInstruction)
+        //     }
+
+        //     // Types not supported by instruction.
+        //     _ => return Err(VMError::MalformedInstruction),
+        // };
+
+        self.assign(instr, symbol)
     }
 
-    /// Zero extends a value to the destination type width.
+    /// Zero extends a value to the destination type size.
     ///
-    /// Requires the destination type to be non-decreasing compared to the
-    /// source type.
-    ///
-    /// Reference: https://llvm.org/docs/LangRef.html#zext-to-instruction
+    /// *Requires* the source type to be *smaller* than the destination type. Both types must be
+    /// integers, or vectors of integers of the same length.
     fn zext(&mut self, instr: &instruction::ZExt) -> Result<()> {
         debug!("{}", instr);
-
-        // Required that both type be integers, or vector with the same number
-        // of integers.
-        let ty0 = self.state.type_of(&instr.operand);
-        match (ty0.as_ref(), instr.to_type.as_ref()) {
-            (Type::IntegerType { bits: n }, Type::IntegerType { bits: m }) => {
-                assert!(n < m);
-                let value = self.state.get_var(&instr.operand).unwrap();
-                assert_eq!(*n, value.len());
-
-                let value = value.zero_ext(*m);
-                self.state
-                    .assign_bv(instr.get_result().clone(), value)
-                    .unwrap();
-            }
-            (
-                Type::VectorType {
-                    num_elements: n, ..
-                },
-                Type::VectorType {
-                    num_elements: m, ..
-                },
-            ) if n == m => {
-                // TODO: Check that ty0 size < ty1 size.
-                todo!()
-            }
-            _ => panic!("invalid instruction"),
-        }
-        Ok(())
+        let symbol = convert_to_map(
+            &mut self.state,
+            &instr.to_type,
+            &instr.operand,
+            |symbol, target_size| symbol.zero_ext(target_size),
+        )?;
+        self.assign(instr, symbol)
     }
 
+    /// Sign extend a value to the destionation type size.
+    ///
+    /// *Requires* the source type to be *smaller* than the destination type. Both types must be
+    /// integers, or vectors of integers of the same length.
     fn sext(&mut self, instr: &instruction::SExt) -> Result<()> {
         debug!("{}", instr);
-
-        let ty0 = self.state.type_of(&instr.operand);
-        match (ty0.as_ref(), instr.to_type.as_ref()) {
-            (Type::IntegerType { bits: n }, Type::IntegerType { bits: m }) => {
-                assert!(n < m);
-                let value = self.state.get_var(&instr.operand).unwrap();
-                assert_eq!(*n, value.len());
-
-                let value = value.sign_ext(*m);
-                self.state
-                    .assign_bv(instr.get_result().clone(), value)
-                    .unwrap();
-            }
-            (
-                Type::VectorType {
-                    num_elements: n, ..
-                },
-                Type::VectorType {
-                    num_elements: m, ..
-                },
-            ) if n == m => {
-                // TODO: Check that ty0 size < ty1 size.
-                todo!()
-            }
-            _ => panic!("invalid instruction"),
-        }
-        Ok(())
+        let symbol = convert_to_map(
+            &mut self.state,
+            &instr.to_type,
+            &instr.operand,
+            |symbol, target_size| symbol.sign_ext(target_size),
+        )?;
+        self.assign(instr, symbol)
     }
 
+    /// Convert a floating point value from a larger type to a smaller type.
+    ///
+    /// Floating point is currently unsupported. Always returns [VMError::UnsupportedInstruction].
     fn fptrunc(&mut self, instr: &instruction::FPTrunc) -> Result<()> {
         debug!("{}", instr);
-        todo!()
+        Err(VMError::UnsupportedInstruction)
     }
 
+    /// Convert a floating point value from a smaller type to a larger type.
+    ///
+    /// Floating point is currently unsupported. Always returns [VMError::UnsupportedInstruction].
     fn fpext(&mut self, instr: &instruction::FPExt) -> Result<()> {
         debug!("{}", instr);
-        todo!()
+        Err(VMError::UnsupportedInstruction)
     }
 
+    /// Convert a floating point to unsigned integer.
+    ///
+    /// Floating point is currently unsupported. Always returns [VMError::UnsupportedInstruction].
     fn fptoui(&mut self, instr: &instruction::FPToUI) -> Result<()> {
         debug!("{}", instr);
-        todo!()
+        Err(VMError::UnsupportedInstruction)
     }
 
+    /// Convert floating point to signed integer.
+    ///
+    /// Floating point is currently unsupported. Always returns [VMError::UnsupportedInstruction].
     fn fptosi(&mut self, instr: &instruction::FPToSI) -> Result<()> {
         debug!("{}", instr);
-        todo!()
+        Err(VMError::UnsupportedInstruction)
     }
 
+    /// Convert unsigned integer to floating point.
+    ///
+    /// Floating point is currently unsupported. Always returns [VMError::UnsupportedInstruction].
     fn uitofp(&mut self, instr: &instruction::UIToFP) -> Result<()> {
         debug!("{}", instr);
-        todo!()
+        Err(VMError::UnsupportedInstruction)
     }
 
+    /// Convert signed integer to floating point.
+    ///
+    /// Floating point is currently unsupported. Always returns [VMError::UnsupportedInstruction].
     fn sitofp(&mut self, instr: &instruction::SIToFP) -> Result<()> {
         debug!("{}", instr);
-        todo!()
+        Err(VMError::UnsupportedInstruction)
     }
 
+    /// Takes a pointer or a vector of pointers and converts to an integer or a vector of integers.
+    ///
+    /// The pointer is either truncated or zero extended if the sizes do not match. For vectors this
+    /// happens element by element.
     fn ptrtoint(&mut self, instr: &instruction::PtrToInt) -> Result<()> {
         debug!("{}", instr);
-        let bv = cast_to(&mut self.state, &instr.to_type, &instr.operand)?;
+        let bv = convert_to(&mut self.state, &instr.to_type, &instr.operand)?;
         self.assign(instr, bv)
     }
 
+    /// Takes an integer or a vector of integers and converts to a pointer or a vector of pointers.
+    ///
+    /// The integer is either truncated or zero extended if the sizes do not match. For vectors this
+    /// happens element by element.
     fn inttoptr(&mut self, instr: &instruction::IntToPtr) -> Result<()> {
         debug!("{}", instr);
-        let bv = cast_to(&mut self.state, &instr.to_type, &instr.operand)?;
+        let bv = convert_to(&mut self.state, &instr.to_type, &instr.operand)?;
         self.assign(instr, bv)
     }
 
@@ -669,9 +706,12 @@ impl<'a> VM<'a> {
         self.assign(instr, result)
     }
 
+    /// Compare floating point values.
+    ///
+    /// Floating point is currently unsupported. Always returns [VMError::UnsupportedInstruction].
     fn fcmp(&mut self, instr: &instruction::FCmp) -> Result<()> {
         debug!("{}", instr);
-        todo!()
+        Err(VMError::UnsupportedInstruction)
     }
 
     fn phi(&mut self, instr: &instruction::Phi) -> Result<()> {

@@ -339,7 +339,7 @@ pub fn const_to_symbol_zero_size(state: &mut State<'_>, constant: &Constant) -> 
         .map(|v| Some(v)),
 
         // Select one operand or the other without branches.
-        Constant::Select(op) => {
+        Select(op) => {
             // Assume the condition is constant, if this does not hold then the regular instruction
             // operation should be used.
             let condition = op.condition.to_value()?;
@@ -357,9 +357,9 @@ pub fn const_to_symbol_zero_size(state: &mut State<'_>, constant: &Constant) -> 
         }
 
         // TODO
-        Constant::Poison(_) => todo!(),
-        Constant::BlockAddress => todo!(),
-        Constant::TokenNone => todo!(),
+        Poison(_) => todo!(),
+        BlockAddress => todo!(),
+        TokenNone => todo!(),
     }
 }
 

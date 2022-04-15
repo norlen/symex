@@ -1,13 +1,19 @@
-use llvm_ir::{IntPredicate, Type};
+use std::cmp::Ordering;
+
+use llvm_ir::{IntPredicate, Operand, Type};
 
 use super::{get_bit_offset_concrete, Op, ToValue};
 use crate::{
     solver::{BinaryOperation, BV},
     traits::{get_byte_offset_concrete, get_byte_offset_symbol},
-    vm::{Result, State},
+    vm::{Result, State, VMError},
 };
 
-pub fn extract_value<'p, T>(state: &mut State<'_>, aggregate: T, indices: &[u32]) -> Result<BV>
+pub(crate) fn extract_value<'p, T>(
+    state: &mut State<'_>,
+    aggregate: T,
+    indices: &[u32],
+) -> Result<BV>
 where
     T: Into<Op<'p>>,
 {
@@ -33,7 +39,12 @@ where
     Ok(value)
 }
 
-pub fn gep<'p, T, I>(state: &mut State<'_>, address: T, indices: I, _in_bounds: bool) -> Result<BV>
+pub(crate) fn gep<'p, T, I>(
+    state: &mut State<'_>,
+    address: T,
+    indices: I,
+    _in_bounds: bool,
+) -> Result<BV>
 where
     T: Into<Op<'p>>,
     I: Iterator<Item = Op<'p>>,
@@ -70,7 +81,7 @@ where
     Ok(addr)
 }
 
-pub fn binop<'p, T>(state: &mut State<'_>, lhs: T, rhs: T, op: BinaryOperation) -> Result<BV>
+pub(crate) fn binop<'p, T>(state: &mut State<'_>, lhs: T, rhs: T, op: BinaryOperation) -> Result<BV>
 where
     T: Into<Op<'p>>,
 {
@@ -104,7 +115,149 @@ where
     Ok(result)
 }
 
-pub fn cast_to<'p, T>(state: &mut State<'_>, ty: &Type, op: T) -> Result<BV>
+/// Converts integers, pointers, or vectors.
+///
+/// Performs a conversion on either (int,int), (ptr,int), (int,ptr), or (vector,vector) with the
+/// passed mapping function.
+///
+/// No type checking is done, if this is of interest they have to be checked before calling this
+/// function.
+pub(crate) fn convert_to_map<F>(
+    state: &mut State<'_>,
+    ty: &Type,
+    op: &Operand,
+    map: F,
+) -> Result<BV>
+where
+    F: Fn(BV, u32) -> BV,
+{
+    let symbol = state.get_var(op)?;
+    let source_ty = state.type_of(op);
+    // For ptr->int or int->ptr the functionality is pretty simple. Just truncate, zero extend,
+    // or cast depending on the target size.
+
+    use Type::*;
+    match (source_ty.as_ref(), ty) {
+        // Integer to integer conversion are done by trunc, zext, and sext. While the ptr->int,
+        // int->ptr are done by ptrtoint and inttoptr. All these should be supported.
+        (IntegerType { .. }, IntegerType { .. })
+        | (IntegerType { .. }, PointerType { .. })
+        | (PointerType { .. }, IntegerType { .. }) => {
+            let target_bits = state.project.bit_size(ty)?;
+            Ok(map(symbol, target_bits))
+        }
+
+        // Vectors are a bit more annoying, in that the elements have to be processed one by one.
+        (
+            VectorType {
+                element_type: source_element_ty,
+                num_elements,
+                scalable: false,
+                ..
+            },
+            VectorType {
+                element_type,
+                scalable: false,
+                ..
+            },
+        ) => {
+            let source_bits = state.project.bit_size(source_element_ty)?;
+            let target_bits = state.project.bit_size(element_type)?;
+            let num_elements = *num_elements as u32;
+            assert!(source_bits == symbol.len());
+
+            // Process each element one by one and concatenate the result.
+            (0..num_elements)
+                .map(|i| {
+                    let low = i * source_bits;
+                    let high = (i + 1) * source_bits - 1;
+                    let symbol = symbol.slice(low, high);
+                    map(symbol, target_bits)
+                })
+                .reduce(|acc, v| v.concat(&acc))
+                .ok_or_else(|| VMError::MalformedInstruction)
+        }
+
+        // TODO: Check if scalable vectors are similar
+        (VectorType { .. }, VectorType { .. }) => Err(VMError::UnsupportedInstruction),
+
+        // The other types should not appear for this instruction.
+        _ => Err(VMError::MalformedInstruction),
+    }
+}
+
+/// Convert operand to type `ty`.
+///
+/// Converting works for different bit widths, if the target is larger it is zero extended. If the
+/// target is smaller the operand is truncated. Finally, if the are the same this is the same as
+/// a cast.
+pub(crate) fn convert_to(state: &mut State<'_>, ty: &Type, op: &Operand) -> Result<BV> {
+    fn convert_symbol(symbol: BV, target_bits: u32) -> BV {
+        match symbol.len().cmp(&target_bits) {
+            Ordering::Equal => symbol,
+            Ordering::Less => symbol.slice(0, target_bits - 1),
+            Ordering::Greater => symbol.zero_ext(target_bits),
+        }
+    }
+    convert_to_map(state, ty, op, convert_symbol)
+
+    // let op = op.into();
+    // let symbol = state.get_var(op)?;
+
+    // let source_ty = state.type_of(&op);
+
+    // use Type::*;
+    // match (source_ty.as_ref(), ty) {
+    //     // For ptr->int or int->ptr the functionality is pretty simple. Just truncate, zero extend,
+    //     // or cast depending on the target size.
+    //     (IntegerType { .. }, PointerType { .. }) | (PointerType { .. }, IntegerType { .. }) => {
+    //         let target_bits = state.project.bit_size(ty)?;
+    //         Ok(convert_symbol(symbol, target_bits))
+    //     }
+
+    //     // For vectors they have to be processed one by one, and the elements may be truncatated
+    //     // or zero extended.
+    //     (
+    //         VectorType {
+    //             element_type: source_element_ty,
+    //             num_elements,
+    //             scalable: false,
+    //             ..
+    //         },
+    //         VectorType {
+    //             element_type,
+    //             scalable: false,
+    //             ..
+    //         },
+    //     ) => {
+    //         let source_bits = state.project.bit_size(source_element_ty)?;
+    //         let target_bits = state.project.bit_size(element_type)?;
+    //         let num_elements = *num_elements as u32;
+
+    //         // Process each element one by one and concatenate the result.
+    //         (0..num_elements)
+    //             .map(|i| {
+    //                 let low = i * source_bits;
+    //                 let high = (i + 1) * source_bits - 1;
+    //                 convert_symbol(symbol.slice(low, high), target_bits)
+    //             })
+    //             .reduce(|acc, v| v.concat(&acc))
+    //             .ok_or_else(|| VMError::MalformedInstruction)
+    //     }
+
+    //     // TODO: Check if scalable vectors are similar
+    //     (VectorType { .. }, VectorType { .. }) => Err(VMError::UnsupportedInstruction),
+
+    //     // The other types should not appear for this instruction.
+    //     _ => Err(VMError::MalformedInstruction),
+    // }
+}
+
+/// Cast operand to type `ty`.
+///
+/// Casting simply reinterprets the bits as a different type. As the system does not return types,
+/// this just returns the underlying symbol. The bitwidths must match.
+pub(crate) fn cast_to<'p, T>(state: &mut State<'_>, ty: &Type, op: T) -> Result<BV>
 where
     T: Into<Op<'p>>,
 {
@@ -113,7 +266,12 @@ where
     Ok(bv)
 }
 
-pub fn icmp<'p, T>(state: &mut State<'_>, lhs: T, rhs: T, predicate: IntPredicate) -> Result<BV>
+pub(crate) fn icmp<'p, T>(
+    state: &mut State<'_>,
+    lhs: T,
+    rhs: T,
+    predicate: IntPredicate,
+) -> Result<BV>
 where
     T: Into<Op<'p>>,
 {
