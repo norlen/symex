@@ -247,17 +247,17 @@ impl BV {
 
     /// Shift left logical
     pub fn sll(&self, other: &BV) -> BV {
-        BV(self.0.and(&other.0))
+        BV(self.0.sll(&other.0))
     }
 
     /// Shift right logical
     pub fn srl(&self, other: &BV) -> BV {
-        BV(self.0.or(&other.0))
+        BV(self.0.srl(&other.0))
     }
 
     /// Shift right arithmetic
     pub fn sra(&self, other: &BV) -> BV {
-        BV(self.0.xor(&other.0))
+        BV(self.0.sra(&other.0))
     }
 
     // ---------------------------------------------------------------------------------------------

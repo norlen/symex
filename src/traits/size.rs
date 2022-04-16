@@ -26,12 +26,6 @@ pub fn size_in_bits(ty: &Type, project: &Project) -> Option<u64> {
             element_type,
             num_elements,
         } => size_in_bits(element_type, project).map(|size| {
-            println!(
-                "ARRAY TYPE: element_size: {}, num_elements: {}, total: {}",
-                size,
-                *num_elements,
-                size * *num_elements as u64
-            );
             *num_elements as u64 * size
         }),
         StructType { element_types, .. } => element_types

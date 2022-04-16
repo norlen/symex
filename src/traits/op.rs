@@ -49,8 +49,8 @@ impl<'a> Op<'a> {
     pub fn is_constant(&self) -> bool {
         match self {
             Op::Operand(op) => match op {
-                Operand::LocalOperand { .. } => false,
                 Operand::ConstantOperand(_) => true,
+                Operand::LocalOperand { .. } => false,
                 Operand::MetadataOperand => false,
             },
             Op::Constant(_) => true,

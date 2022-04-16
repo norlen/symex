@@ -1,13 +1,82 @@
 //! LLVM support a large number of [intrinsic functions][1] these are not implemented in bitcode.
 //! Thus, these all have to be hooks that are implmented in the system.
 //!
+//! # Status of supported intrinsics
+//!
+//! ## Standard C/C++ instrinsics
+//!
+//! - [ ] `llvm.abs.*`
+//! - [ ] `llvm.smax.*`
+//! - [ ] `llvm.smin.*`
+//! - [ ] `llvm.umax.*`
+//! - [ ] `llvm.umin.*`
+//! - [x] `llvm.memcpy`
+//! - [ ] `llvm.memcpy.inline`
+//! - [ ] `llvm.memmove`
+//! - [ ] `llvm.memset`
+//! - [ ] `llvm.sqrt.*`
+//! - [ ] `llvm.powi.*`
+//! - [ ] `llvm.sin.*`
+//! - [ ] `llvm.cos.*`
+//! - [ ] `llvm.pow.*`
+//! - [ ] `llvm.exp.*`
+//! - [ ] `llvm.exp2.*`
+//! - [ ] `llvm.log.*`
+//! - [ ] `llvm.log10.*`
+//! - [ ] `llvm.log2.*`
+//! - [ ] `llvm.fma.*`
+//! - [ ] `llvm.fabs.*`
+//! - [ ] `llvm.minnum.*`
+//! - [ ] `llvm.maxnum.*`
+//! - [ ] `llvm.minimum.*`
+//! - [ ] `llvm.maximum.*`
+//! - [ ] `llvm.copysign.*`
+//! - [ ] `llvm.floor.*`
+//! - [ ] `llvm.ceil.*`
+//! - [ ] `llvm.trunc.*`
+//! - [ ] `llvm.rint.*`
+//! - [ ] `llvm.nearbyint.*`
+//! - [ ] `llvm.round.*`
+//! - [ ] `llvm.roundeven.*`
+//! - [ ] `llvm.lround.*`
+//! - [ ] `llvm.llround.*`
+//! - [ ] `llvm.lrint.*`
+//! - [ ] `llvm.llrint.*`
+//!
+//! ## Arithmetic with overflow intrinsics
+//!
+//! - [x] `llvm.sadd.with.overflow.*`
+//! - [x] `llvm.uadd.with.overflow.*`
+//! - [x] `llvm.ssub.with.overflow.*`
+//! - [x] `llvm.usub.with.overflow.*`
+//! - [x] `llvm.smul.with.overflow.*`
+//! - [x] `llvm.umul.with.overflow.*`
+//!
+//! ## Saturation arithmetic intrinsics
+//!
+//! - [x] `llvm.sadd.sat.*`
+//! - [x] `llvm.uadd.sat.*`
+//! - [ ] `llvm.ssub.sat.*`
+//! - [ ] `llvm.usub.sat.*`
+//! - [ ] `llvm.sshl.sat.*`
+//! - [ ] `llvm.ushl.sat.*`
+//!
+//! ## General intrinsincs (non-exhaustive)
+//!
+//! - [ ] `llvm.expect`
+//! - [ ] `llvm.expect.with.probability`
+//! - [ ] `llvm.assume`
+//!
 //! [1]: https://llvm.org/docs/LangRef.html#intrinsic-functions
+use llvm_ir::Operand;
 use radix_trie::Trie;
 use std::collections::HashMap;
 
 use crate::{
     hooks::{FnInfo, Hook},
-    vm::{Result, ReturnValue, VM},
+    memory::BITS_IN_BYTE,
+    traits::ToValue,
+    vm::{Result, ReturnValue, VMError, VM},
 };
 
 /// Check if the given name is an LLVM intrinsic.
@@ -47,7 +116,8 @@ impl Intrinsics {
         // Add fixed intrinsics.
 
         // Add variable intrinsics.
-        s.add_variable("llvm.expect.", llvm_expect);
+        s.add_variable("llvm.memcpy.", llvm_memcpy);
+
         s.add_variable("llvm.sadd.with.overflow.", llvm_sadd_with_overflow);
         s.add_variable("llvm.uadd.with.overflow.", llvm_uadd_with_overflow);
         s.add_variable("llvm.ssub.with.overflow.", llvm_ssub_with_overflow);
@@ -55,8 +125,10 @@ impl Intrinsics {
         s.add_variable("llvm.smul.with.overflow.", llvm_smul_with_overflow);
         s.add_variable("llvm.umul.with.overflow.", llvm_umul_with_overflow);
 
-        s.add_variable("llvm.uadd.sat.", llvm_uadd_sat);
         s.add_variable("llvm.sadd.sat.", llvm_sadd_sat);
+        s.add_variable("llvm.uadd.sat.", llvm_uadd_sat);
+
+        s.add_variable("llvm.expect.", llvm_expect);
 
         s
     }
@@ -86,6 +158,53 @@ impl Intrinsics {
             .or_else(|| self.variable.get_ancestor_value(name))
     }
 }
+
+// -------------------------------------------------------------------------------------------------
+// Standard C/C++ instrinsics
+// -------------------------------------------------------------------------------------------------
+
+/// Copy a block of memory from the source to the destination.
+pub fn llvm_memcpy(vm: &mut VM<'_>, f: FnInfo) -> Result<ReturnValue> {
+    // Arguments:
+    // 1. Pointer to destination.
+    // 2. Pointer to source.
+    // 3. Integer, number of bytes to copy.
+    // 4. Bool, indicates volatile access.
+    // The first two arguments can have an optional alignment.
+    //
+    // The source and destination must either be equal or nonoverlapping. If the length is not a
+    // well-defined value the behavior is undefined. Pointers to source and destination should be
+    // well-defined is the length is not zero.
+    //
+    // TODO: What is a `well-defined` value?
+    // TODO: Check the isvolatile and the details of volatile operations.
+    assert_eq!(f.arguments.len(), 4);
+
+    let (dst, _) = &f.arguments[0];
+    let (src, _) = &f.arguments[1];
+    let (size, _) = &f.arguments[2];
+
+    let dst = vm.state.get_var(dst)?;
+    let src = vm.state.get_var(src)?;
+    match size {
+        Operand::LocalOperand { name: _, ty: _ } => {
+            todo!("Symbolic operand in memcpy not supported yet")
+        }
+        Operand::ConstantOperand(constant) => {
+            let size = constant.to_value()? as u32 * BITS_IN_BYTE;
+            println!("memcpy size={}", size);
+            let value = vm.state.mem.read(&src, size)?;
+            vm.state.mem.write(&dst, value)?;
+
+            Ok(ReturnValue::Void)
+        }
+        Operand::MetadataOperand => Err(VMError::MalformedInstruction),
+    }
+}
+
+// -------------------------------------------------------------------------------------------------
+// Arithmetic with overflow intrinsics
+// -------------------------------------------------------------------------------------------------
 
 /// All the binary operations that check for overflow.
 enum BinaryOpOverflow {
@@ -150,6 +269,10 @@ pub fn llvm_umul_with_overflow(vm: &mut VM<'_>, f: FnInfo) -> Result<ReturnValue
     binary_op_overflow(vm, f, BinaryOpOverflow::UMul)
 }
 
+// -------------------------------------------------------------------------------------------------
+// Saturation arithmetic intrinsics
+// -------------------------------------------------------------------------------------------------
+
 enum BinaryOpSaturate {
     SAdd,
     UAdd,
@@ -177,6 +300,10 @@ pub fn llvm_uadd_sat(vm: &mut VM<'_>, f: FnInfo) -> Result<ReturnValue> {
 pub fn llvm_sadd_sat(vm: &mut VM<'_>, f: FnInfo) -> Result<ReturnValue> {
     binary_op_saturate(vm, f, BinaryOpSaturate::SAdd)
 }
+
+// -------------------------------------------------------------------------------------------------
+// General intrinsincs
+// -------------------------------------------------------------------------------------------------
 
 pub fn llvm_expect(vm: &mut VM<'_>, f: FnInfo) -> Result<ReturnValue> {
     assert_eq!(f.arguments.len(), 2);
