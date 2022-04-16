@@ -1,8 +1,7 @@
-use anyhow::Result;
 use llvm_ir::Name;
 use std::collections::HashMap;
 
-use crate::BV;
+use crate::{vm::VMError, BV};
 
 /// Scope for each function.
 #[derive(Debug, Clone)]
@@ -42,8 +41,10 @@ impl VarMap {
         self.scopes.pop();
     }
 
-    pub fn insert(&mut self, name: Name, val: BV) -> Result<()> {
-        let current = self.scopes.last_mut().unwrap();
+    pub fn insert(&mut self, name: Name, val: BV) -> Result<(), VMError> {
+        let current = self.scopes.last_mut().ok_or_else(|| {
+            VMError::InternalError("Tried to add variable, but no scope has been added")
+        })?;
 
         current.vars.insert(name, val);
         Ok(())

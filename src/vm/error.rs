@@ -21,9 +21,6 @@ pub enum VMError {
     #[error("Unsat")]
     Unsat,
 
-    // #[error("Out of bounds")]
-    // OutOfBounds,
-
     // -------------------------------------------------------------------------
     // Errors in IR
     // -------------------------------------------------------------------------
@@ -51,6 +48,9 @@ pub enum VMError {
 
     #[error("Expected type to be non-zero sized")]
     UnexpectedZeroSize,
+
+    #[error("Unexpected error: {0}")]
+    InternalError(&'static str),
 
     #[error(transparent)]
     MemoryError(#[from] MemoryError),

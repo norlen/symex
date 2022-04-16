@@ -3,12 +3,11 @@ use llvm_ir::instruction::{HasResult, InlineAssembly};
 use llvm_ir::{Constant, Function, Name, Operand};
 use log::{debug, trace};
 
-use crate::project::Project;
-use crate::solver::{Solver, BV};
-use crate::vm::Result;
-use crate::vm::{AllocationType, Location};
-use crate::vm::{Call, Path, State};
-use crate::Solutions;
+use crate::{
+    project::Project,
+    solver::{Solutions, Solver, BV},
+    vm::{AllocationType, Call, Location, Path, Result, State},
+};
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum ReturnValue {
@@ -75,7 +74,7 @@ impl<'a> VM<'a> {
             assert_ne!(size, 0);
 
             let bv = self.solver.bv(size as u32);
-            self.state.vars.insert(param.name.clone(), bv).unwrap();
+            self.state.vars.insert(param.name.clone(), bv)?;
         }
 
         Ok(())
@@ -135,7 +134,7 @@ impl<'a> VM<'a> {
 
                     // Set our destination value, if it has a name.
                     if let Some(name) = dst_name {
-                        self.state.assign_bv(name, ret_val).unwrap();
+                        self.state.assign_bv(name, ret_val)?;
                     }
                 }
                 ReturnValue::Void => {}
@@ -187,10 +186,7 @@ impl<'a> VM<'a> {
         self.state.current_loc.set_terminator(terminator);
 
         // Handle terminator.
-        let r = self.process_terminator(terminator)?;
-        //println!("a Returning {:?}", r);
-
-        Ok(r)
+        self.process_terminator(terminator)
     }
 
     pub fn save_backtracking_path(
@@ -266,7 +262,7 @@ impl<'a> VM<'a> {
 
         // Map arguments to parameters.
         for (param, arg) in f.parameters.iter().zip(arguments) {
-            self.state.vars.insert(param.name.clone(), arg).unwrap();
+            self.state.vars.insert(param.name.clone(), arg)?;
         }
 
         // Update our current location and start executing the the new
@@ -281,7 +277,7 @@ impl<'a> VM<'a> {
         let target_size = self.project.bit_size(&target_ty)?;
         assert_eq!(target_size, src_bv.len());
 
-        self.state.assign_bv(dst.get_result().clone(), src_bv)
+        self.state.vars.insert(dst.get_result().clone(), src_bv)
     }
 
     // ---------------------------------------------------------------------------------------------

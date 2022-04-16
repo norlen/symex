@@ -1,4 +1,3 @@
-//! TODO
 use anyhow::{anyhow, Result};
 use llvm_ir::{BasicBlock, DebugLoc, Function, HasDebugLoc, Module, Name};
 

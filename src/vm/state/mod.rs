@@ -11,10 +11,7 @@ use crate::{
     memory::bump_allocator::BumpAllocator,
     memory::simple_memory::Memory,
     project::Project,
-    traits::{
-        const_to_symbol, const_to_symbol_zero_size, operand_to_symbol, operand_to_symbol_zero_size,
-        Op,
-    },
+    traits::{const_to_symbol, operand_to_symbol, Op},
     {Solver, BV},
 };
 
@@ -52,12 +49,11 @@ impl<'a> Callsite<'a> {
     }
 }
 
-/// A `Path` represents a single path of execution through a program. The path
-/// is composed by the current execution state (`State`) and an optional
-/// constraint that will be asserted when this path begins exectuting.
+/// A `Path` represents a single path of execution through a program. The path is composed by the
+/// current execution state (`State`) and an optional constraint that will be asserted when this
+/// path begins exectuting.
 ///
-/// A single path may produce multiple other paths when encountering branching
-/// paths of execution.
+/// A single path may produce multiple other paths when encountering branching paths of execution.
 #[derive(Debug, Clone)]
 pub struct Path<'a> {
     /// The state to use when resuming execution.
@@ -70,12 +66,11 @@ pub struct Path<'a> {
 }
 
 impl<'a> Path<'a> {
-    /// Creates a new `Path` that resumes execution from the current `State`
-    /// with no additional constraints.
+    /// Creates a new `Path` that resumes execution from the current `State` with no additional
+    /// constraints.
     ///
-    /// This should be used for the initial path in the program. When no
-    /// constraints have been added to the initial function. And that it should
-    /// start executing at the state's current location.
+    /// This should be used for the initial path in the program. When no constraints have been added
+    /// to the initial function. And that it should start executing at the state's current location.
     pub fn new(state: State<'a>) -> Self {
         Self {
             state,
@@ -85,8 +80,8 @@ impl<'a> Path<'a> {
 
     /// Creates a new `Location` from a given state.
     ///
-    /// The passed `Location` will replace the one in the state, so execution
-    /// resumes at that location.
+    /// The passed `Location` will replace the one in the state, so execution resumes at that
+    /// location.
     ///
     /// The constraint will be added before resuming excution.
     pub fn new_with_constraint(
@@ -119,8 +114,7 @@ pub struct State<'a> {
     /// Current location where we are exucting at.
     pub current_loc: Location<'a>,
 
-    /// All defined variables. These can be pointers to memory or a register
-    /// variable.
+    /// All defined variables. These can be pointers to memory or a register variable.
     pub vars: VarMap,
 
     /// The global memory. That both stack and heap allocations use.
@@ -158,16 +152,6 @@ impl<'a> State<'a> {
         match op.into() {
             Op::Operand(operand) => operand_to_symbol(self, operand),
             Op::Constant(constant) => const_to_symbol(self, constant),
-        }
-    }
-
-    pub fn get_var_maybe_zero<'b, T>(&mut self, op: T) -> Result<Option<BV>>
-    where
-        T: Into<Op<'b>>,
-    {
-        match op.into() {
-            Op::Operand(operand) => operand_to_symbol_zero_size(self, operand),
-            Op::Constant(constant) => const_to_symbol_zero_size(self, constant),
         }
     }
 
