@@ -2,7 +2,7 @@ use anyhow::anyhow;
 use llvm_ir::{module::GlobalVariable, types::NamedStructDef, Function, Module, Type, TypeRef};
 use log::info;
 use rustc_demangle::demangle;
-use std::{iter, path::Path};
+use std::{fs::read_dir, iter, path::Path};
 use thiserror::Error;
 
 use crate::{
@@ -62,6 +62,42 @@ impl std::fmt::Debug for Project {
 }
 
 impl Project {
+    pub fn from_folder(path: impl AsRef<Path>) -> anyhow::Result<Self> {
+        info!("Checking folder for bc files {}", path.as_ref().display());
+
+        let mut modules = Vec::new();
+        for entry in read_dir(path)? {
+            let entry = entry?;
+            let name = entry.file_name();
+            let name = name.to_str().unwrap();
+            if name.ends_with(".bc") {
+                let m = Module::from_bc_path(entry.path()).unwrap();
+                modules.push(m);
+            }
+        }
+
+        let ptr_size = modules[0].data_layout.alignments.ptr_alignment(0).size;
+
+        let modules: &'static [Module] = modules.leak();
+
+        let mut functions = ModulePrivateMap::new();
+        for module in modules.iter() {
+            for function in module.functions.iter() {
+                functions.insert(function.name.clone(), function, module);
+            }
+        }
+
+        let project = Self {
+            ptr_size: ptr_size as u64,
+            default_alignment: 4,
+            modules,
+            hooks: Hooks::new(),
+            config: Config::default(),
+            functions,
+        };
+        Ok(project)
+    }
+
     /// Create a new project from a LLVM BC file path.
     ///
     /// This loads a single module file.
