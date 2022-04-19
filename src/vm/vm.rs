@@ -16,6 +16,8 @@ pub enum ReturnValue {
     Void,
 }
 
+#[derive(Clone)]
+
 pub struct VM<'a> {
     /// Project that the VM executes on.
     pub project: &'a Project,
@@ -33,7 +35,11 @@ impl<'a> Iterator for VM<'a> {
 
     fn next(&mut self) -> Option<Self::Item> {
         trace!("Executing next path");
-        Some(self.backtrack_and_continue())
+        if self.backtracking_paths.is_empty() {
+            None
+        } else {
+            Some(self.backtrack_and_continue())
+        }
     }
 }
 
@@ -56,12 +62,15 @@ impl<'a> VM<'a> {
             solver,
         };
 
-        // Setup before exeuction of function can start.
+        // Setup before the execution of a function can start.
         vm.state.vars.enter_scope();
+        // Bind parameters to unknown values.
         vm.setup_parameters()?;
 
         // Create a backtracking point to the start of the function.
         let bb_label = &vm.state.current_loc.block.name;
+        debug!("bb_label {}", bb_label);
+
         vm.save_backtracking_path(bb_label, None)?;
 
         Ok(vm)

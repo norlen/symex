@@ -19,3 +19,12 @@ mod tests {
         assert_eq!(result, 4);
     }
 }
+
+pub fn assume(b: bool) {
+    // run f on current state
+    // surpress false path
+}
+
+pub fn symbolic<T>(v: &T) {
+    // erase all constraints related to `v`
+}
