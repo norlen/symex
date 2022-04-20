@@ -224,7 +224,8 @@ impl<'p> Globals<'p> {
             ExternalWeak => todo!(),
             AvailableExternally => todo!(),
             LinkOnceAny => todo!(),
-            LinkOnceODR => todo!(),
+            // TODO
+            LinkOnceODR => {}
             LinkOnceODRAutoHide => todo!(),
             WeakAny => todo!(),
             WeakODR => todo!(),

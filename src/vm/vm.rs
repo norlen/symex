@@ -16,8 +16,6 @@ pub enum ReturnValue {
     Void,
 }
 
-#[derive(Clone)]
-
 pub struct VM<'a> {
     /// Project that the VM executes on.
     pub project: &'a Project,
@@ -27,17 +25,28 @@ pub struct VM<'a> {
 
     backtracking_paths: Vec<Path<'a>>,
 
-    pub(super) solver: Solver,
+    pub solver: Solver,
+}
+
+impl<'a> Clone for VM<'a> {
+    fn clone(&self) -> Self {
+        Self {
+            project: self.project.clone(),
+            state: self.state.clone(),
+            backtracking_paths: self.backtracking_paths.clone(),
+            solver: self.solver.duplicate(),
+        }
+    }
 }
 
 impl<'a> Iterator for VM<'a> {
     type Item = Result<ReturnValue>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        trace!("Executing next path");
         if self.backtracking_paths.is_empty() {
             None
         } else {
+            trace!("Executing next path");
             Some(self.backtrack_and_continue())
         }
     }
@@ -211,7 +220,7 @@ impl<'a> VM<'a> {
 
         // Create a new context-level, this is so the backtracking point has
         // a valid solver when we resume execution (I think).
-        self.solver.push(1);
+        self.solver.push();
 
         // Location where we resume the execution at.
         let jump_location = Location::jump_bb(self.state.current_loc.clone(), bb_label).unwrap();
@@ -243,7 +252,7 @@ impl<'a> VM<'a> {
             self.state = path.state;
 
             // Return to the the solver context when the path was created.
-            self.solver.pop(1);
+            self.solver.pop();
 
             // Add the contraint.
             if let Some(constraint) = path.constraint {

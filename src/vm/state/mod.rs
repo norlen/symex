@@ -275,14 +275,22 @@ impl<'a> State<'a> {
         if let AllocationType::Variable(var) = &allocation.kind {
             let initializer = var.initializer.clone().unwrap();
             println!("var: {}", var.name);
-            let value = self.get_var(&initializer).unwrap();
-            println!("var: {}, value: {:?}", var.name, value);
 
-            let bv = self
-                .solver
-                .bv_from_u64(allocation.addr, self.project.ptr_size as u32);
+            // Extremely temporary.
+            match self.get_var(&initializer) {
+                Ok(value) => {
+                    println!("var: {}, value: {:?}", var.name, value);
 
-            self.mem.write(&bv, value).unwrap();
+                    let bv = self
+                        .solver
+                        .bv_from_u64(allocation.addr, self.project.ptr_size as u32);
+
+                    self.mem.write(&bv, value).unwrap();
+                }
+                Err(e) => {
+                    println!("err: {:?}", e);
+                }
+            }
         }
     }
 }

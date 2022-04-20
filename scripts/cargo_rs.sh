@@ -1,2 +1,2 @@
 #!/bin/sh
-cargo rustc -- --emit=llvm-ir -emit=llvm-bc -C panic=abort 
+cargo rustc $1 $2 -- --emit=llvm-ir --emit=llvm-bc -C panic=abort 

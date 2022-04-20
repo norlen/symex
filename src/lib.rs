@@ -20,11 +20,12 @@ mod tests {
     }
 }
 
-pub fn assume(b: bool) {
+pub fn assume(_b: bool) {
     // run f on current state
     // surpress false path
 }
 
-pub fn symbolic<T>(v: &T) {
+pub fn symbolic<T>(_v: &T) {
+    //let size = std::mem::size_of_val(v);
     // erase all constraints related to `v`
 }

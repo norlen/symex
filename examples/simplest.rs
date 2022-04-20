@@ -11,8 +11,8 @@ fn main() {
     let vm = VM::new("t", &project).unwrap();
 
     // this creates a problem with clone
-    // let paths: Vec<Result<ReturnValue, _>> = vm.clone().into_iter().collect();
-    // println!("result {:?}", paths);
+    let paths: Vec<Result<ReturnValue, _>> = vm.clone().into_iter().collect();
+    println!("result {:?}", paths);
 
     for path in vm {
         println!("Path result: {:?}", path);

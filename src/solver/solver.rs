@@ -2,13 +2,15 @@ use boolector::{
     option::{BtorOption, ModelGen, NumberFormat},
     Btor, SolverResult,
 };
-use std::rc::Rc;
+use std::{cell::RefCell, rc::Rc};
 
 use super::{Array, Solutions, SolverError, BV};
 
 #[derive(Debug, Clone)]
 pub struct Solver {
     pub(crate) btor: Rc<Btor>,
+
+    name_count: Rc<RefCell<usize>>,
 }
 
 impl Default for Solver {
@@ -26,6 +28,16 @@ impl Solver {
 
         Self {
             btor: Rc::new(btor),
+            name_count: Rc::new(RefCell::new(0)),
+        }
+    }
+
+    /// A regular clone will only clone the reference, a duplication will instead create a new
+    /// instace of the underlying solver.
+    pub fn duplicate(&self) -> Self {
+        Self {
+            btor: Rc::new(self.btor.duplicate()),
+            name_count: Rc::new(RefCell::new(*self.name_count.borrow())),
         }
     }
 
@@ -127,11 +139,11 @@ impl Solver {
     // Incremental stuff
     // -------------------------------------------------------------------------
 
-    pub fn push(&self, n: u32) {
-        self.btor.push(n)
+    pub fn push(&self) {
+        self.btor.push(1)
     }
-    pub fn pop(&self, n: u32) {
-        self.btor.pop(n)
+    pub fn pop(&self) {
+        self.btor.pop(1)
     }
 
     // -------------------------------------------------------------------------
@@ -148,7 +160,15 @@ impl Solver {
     }
 
     pub fn bv(&self, bits: u32) -> BV {
-        BV(boolector::BV::new(self.btor.clone(), bits, None))
+        let name_idx = {
+            let mut current = self.name_count.borrow_mut();
+            let ret = *current;
+            *current += 1;
+            ret
+        };
+        let name = Box::new(format!("__x0001e__{}", name_idx));
+        let name = Some(Box::leak(name).as_str());
+        BV(boolector::BV::new(self.btor.clone(), bits, name))
     }
 
     pub fn bv_from_bool(&self, value: bool) -> BV {

@@ -130,6 +130,9 @@ impl Intrinsics {
 
         s.add_variable("llvm.expect.", llvm_expect);
 
+        // Temporary.
+        s.add_variable("llvm.dbg", noop);
+
         s
     }
 
@@ -157,6 +160,10 @@ impl Intrinsics {
             .get(name)
             .or_else(|| self.variable.get_ancestor_value(name))
     }
+}
+
+pub fn noop(_vm: &mut VM<'_>, _f: FnInfo) -> Result<ReturnValue> {
+    Ok(ReturnValue::Void)
 }
 
 // -------------------------------------------------------------------------------------------------
