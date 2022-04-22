@@ -20,12 +20,10 @@ mod tests {
     }
 }
 
-pub fn assume(_b: bool) {
-    // run f on current state
-    // surpress false path
-}
+#[inline(never)]
+#[allow(unused_variables)]
+pub fn assume(condition: bool) {}
 
-pub fn symbolic<T>(_v: &T) {
-    //let size = std::mem::size_of_val(v);
-    // erase all constraints related to `v`
-}
+#[inline(never)]
+#[allow(unused_variables)]
+pub fn symbolic<T>(v: &mut T) {}
