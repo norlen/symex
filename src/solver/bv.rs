@@ -296,10 +296,9 @@ impl BV {
     // ---------------------------------------------------------------------------------------------
 
     pub fn get_solver(&self) -> Solver {
-        todo!()
-        // Solver {
-        //     btor: self.0.get_btor(),
-        // }
+        Solver {
+            btor: self.0.get_btor(),
+        }
     }
 }
 

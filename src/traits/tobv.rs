@@ -73,7 +73,7 @@ pub fn const_to_symbol_zero_size(state: &mut State<'_>, constant: &Constant) -> 
             let size = state.project.bit_size(&ty)?;
             Ok(match size {
                 0 => None,
-                n => Some(state.solver.bv(n as u32)),
+                n => Some(state.solver.bv_anon(n as u32)),
             })
         }
 

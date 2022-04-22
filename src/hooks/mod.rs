@@ -98,7 +98,7 @@ pub fn symbolic(vm: &mut VM<'_>, info: FnInfo) -> Result<ReturnValue> {
     } = ty.as_ref()
     {
         let size = vm.project.bit_size(inner_ty.as_ref())?;
-        let fresh_symbol = vm.solver.bv(size);
+        let fresh_symbol = vm.solver.bv(size, &op.to_string());
 
         let addr = vm.state.get_var(op)?;
         vm.state.mem.write(&addr, fresh_symbol)?;

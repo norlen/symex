@@ -6,7 +6,7 @@ use log::{debug, trace};
 use crate::{
     project::Project,
     solver::{Solutions, Solver, BV},
-    vm::{AllocationType, Call, Location, Path, Result, State},
+    vm::{AllocationType, Call, Location, Path, Result, State, VMError},
 };
 
 #[derive(Debug, PartialEq, Eq)]
@@ -91,14 +91,14 @@ impl<'a> VM<'a> {
             let size = self.project.bit_size(&param.ty)?;
             assert_ne!(size, 0);
 
-            let bv = self.solver.bv(size as u32);
+            let bv = self.solver.bv(size as u32, &param.name.to_string());
             self.state.vars.insert(param.name.clone(), bv)?;
         }
 
         Ok(())
     }
 
-    /// Starts executing the VM.
+    /// Execute a single path in the VM to completion.
     pub fn run(&mut self) -> Result<ReturnValue> {
         // let r = self.execute_to_terminator()?;
         self.backtrack_and_continue()
@@ -143,23 +143,17 @@ impl<'a> VM<'a> {
                 return Ok(result);
             };
 
-            match result {
-                ReturnValue::Value(ret_val) => {
-                    let dst_name = match callsite.instruction {
-                        super::Call::Call(instr) => instr.dest.clone(),
-                        super::Call::Invoke(instr) => Some(instr.result.clone()),
-                    };
+            if let ReturnValue::Value(result) = result {
+                // Get the callee's variable that should be set with the result of the call.
+                let callee_target = match callsite.instruction {
+                    Call::Call(instr) => instr.dest.clone(),
+                    Call::Invoke(instr) => Some(instr.result.clone()),
+                };
 
-                    // Set our destination value, if it has a name.
-                    if let Some(name) = dst_name {
-                        self.state.assign_bv(name, ret_val)?;
-                    }
+                // Set the destination variable if it exists.
+                if let Some(name) = callee_target {
+                    self.state.assign_bv(name, result)?;
                 }
-                ReturnValue::Void => {}
-                // ReturnValue::Throw(_) => panic!("Throws are not handled yet"),
-
-                // If we hit an abort, abort this as well.
-                // ReturnValue::Abort => return Ok(result),
             }
 
             // For `Call` we go to the next instruction, and for `Invoke` we enter the label that
@@ -167,17 +161,19 @@ impl<'a> VM<'a> {
             if matches!(callsite.instruction, Call::Call(_)) {
                 callsite.location.inc_pc();
             } else if matches!(callsite.instruction, Call::Invoke(_)) {
-                todo!()
+                return Err(VMError::UnsupportedInstruction);
             }
 
             self.state.current_loc = callsite.location;
         }
     }
 
+    /// Starts execution from the current instruction stored in the state, and runs until it hits
+    /// a terminator instruction at the end of the basic block.
     fn execute_to_terminator(&mut self) -> Result<ReturnValue> {
         debug!(
-            "execute_to_terminator: block {} in function {}",
-            self.state.current_loc.block.name, self.state.current_loc.func.name
+            "function {}, block: {}",
+            self.state.current_loc.func.name, self.state.current_loc.block.name
         );
 
         let offset_into_block = self.state.current_loc.get_instruction_offset();
@@ -191,19 +187,12 @@ impl<'a> VM<'a> {
             .skip(offset_into_block)
         {
             self.state.current_loc.set_location(pc);
-            let result = self.process_instruction(inst);
-
-            match result {
-                Ok(_) => {} // No errors.
-                // Check if unsats should be squashed.
-                Err(e) => return Err(e),
-            }
+            self.process_instruction(inst)?;
         }
 
-        let terminator = &self.state.current_loc.block.term;
-        self.state.current_loc.set_terminator(terminator);
-
         // Handle terminator.
+        let terminator = &self.state.current_loc.block.term;
+        self.state.current_loc.set_terminated(terminator);
         self.process_terminator(terminator)
     }
 
@@ -230,14 +219,6 @@ impl<'a> VM<'a> {
 
         Ok(())
     }
-
-    // TODO: Ideally, we want to separate the two cases:
-    // 1. When we actually backtrack and run stuff.
-    // 2. Just for convenience. In that we can add any numbers of paths, then
-    //    just execute the last one we added. Without it actually "backtracking".
-    //    So the difference lies in how we handle *our* stack. In backtracking
-    //    we can assume the callstacks does not match. However, in our regular
-    //    execution we can assume this.
 
     pub fn branch(&mut self, target: &Name) -> Result<ReturnValue> {
         self.state.current_loc.set_basic_block(target);

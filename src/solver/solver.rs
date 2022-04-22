@@ -9,8 +9,6 @@ use super::{Array, Solutions, SolverError, BV};
 #[derive(Debug, Clone)]
 pub struct Solver {
     pub(crate) btor: Rc<Btor>,
-
-    name_count: Rc<RefCell<usize>>,
 }
 
 impl Default for Solver {
@@ -28,7 +26,6 @@ impl Solver {
 
         Self {
             btor: Rc::new(btor),
-            name_count: Rc::new(RefCell::new(0)),
         }
     }
 
@@ -37,7 +34,6 @@ impl Solver {
     pub fn duplicate(&self) -> Self {
         Self {
             btor: Rc::new(self.btor.duplicate()),
-            name_count: Rc::new(RefCell::new(*self.name_count.borrow())),
         }
     }
 
@@ -159,16 +155,12 @@ impl Solver {
         ))
     }
 
-    pub fn bv(&self, bits: u32) -> BV {
-        let name_idx = {
-            let mut current = self.name_count.borrow_mut();
-            let ret = *current;
-            *current += 1;
-            ret
-        };
-        let name = Box::new(format!("__x0001e__{}", name_idx));
-        let name = Some(Box::leak(name).as_str());
-        BV(boolector::BV::new(self.btor.clone(), bits, name))
+    pub fn bv(&self, bits: u32, name: &str) -> BV {
+        BV(boolector::BV::new(self.btor.clone(), bits, Some(name)))
+    }
+
+    pub fn bv_anon(&self, bits: u32) -> BV {
+        BV(boolector::BV::new(self.btor.clone(), bits, None))
     }
 
     pub fn bv_from_bool(&self, value: bool) -> BV {

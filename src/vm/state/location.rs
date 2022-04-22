@@ -120,7 +120,7 @@ impl<'a> Location<'a> {
         self.source_loc = self.block.instrs[pc].get_debug_loc().as_ref();
     }
 
-    pub fn set_terminator(&mut self, term: &'a impl HasDebugLoc) {
+    pub fn set_terminated(&mut self, term: &'a impl HasDebugLoc) {
         self.instr = InstructionIndex::Terminated;
         self.source_loc = term.get_debug_loc().as_ref();
     }
