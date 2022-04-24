@@ -1,12 +1,14 @@
+//! Converts [llvm_ir::Operand] and [llvm_ir::Constant] to symbols.
+//!
+//!
 use anyhow::anyhow;
 use llvm_ir::{Constant, ConstantRef, IntPredicate, Operand, Type};
 
+use super::{convert_to_map, gep, ToValue};
 use crate::{
     solver::BV,
     vm::{Result, State, VMError},
 };
-
-use super::*;
 
 /// Convert an operand to a symbol.
 pub fn operand_to_symbol(state: &mut State<'_>, operand: &Operand) -> Result<BV> {

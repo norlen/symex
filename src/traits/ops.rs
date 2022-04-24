@@ -17,7 +17,7 @@ where
 {
     let aggregate = aggregate.into();
 
-    // Calculate the offset where the element is at.
+    // Calculate the offset to where the element is located.
     let mut ty = state.type_of(&aggregate);
     let mut total_offset = 0;
 

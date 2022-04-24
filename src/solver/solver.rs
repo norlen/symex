@@ -2,7 +2,7 @@ use boolector::{
     option::{BtorOption, ModelGen, NumberFormat},
     Btor, SolverResult,
 };
-use std::{cell::RefCell, rc::Rc};
+use std::rc::Rc;
 
 use super::{Array, Solutions, SolverError, BV};
 

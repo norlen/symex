@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 enum Shape {
     Square(i32),
     Rectangle(i32, i32),
@@ -14,5 +16,5 @@ impl Shape {
 
 fn main() {
     let s = Shape::Square(5);
-    let z = s.area();
+    let _z = s.area();
 }

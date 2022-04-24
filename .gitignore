@@ -3,3 +3,5 @@ Cargo.lock
 
 .z3-trace
 **/_check
+*.bc
+*.ll

@@ -563,8 +563,8 @@ impl<'a> VM<'a> {
     fn store(&mut self, instr: &instruction::Store) -> Result<()> {
         debug!("{}", instr);
 
-        let value = self.state.get_var(&instr.value).unwrap();
-        let addr = self.state.get_var(&instr.address).unwrap();
+        let value = self.state.get_var(&instr.value)?;
+        let addr = self.state.get_var(&instr.address)?;
         self.state.mem.write(&addr, value)?;
         Ok(())
     }

@@ -1,5 +1,5 @@
 trait Foo {
-    fn get_random(&mut self) -> i32;
+    fn add_five(&mut self) -> i32;
 }
 
 struct Bar {
@@ -7,23 +7,23 @@ struct Bar {
 }
 
 impl Foo for Bar {
-    fn get_random(&mut self) -> i32 {
+    fn add_five(&mut self) -> i32 {
         self.n += 5;
         self.n
     }
 }
 
-fn rand(f: &mut dyn Foo) -> i32 {
-    f.get_random()
+fn add_five(f: &mut dyn Foo) -> i32 {
+    f.add_five()
 }
 
 fn foo() -> i32 {
     let mut b = Bar { n: 5 };
-    rand(&mut b)
+    add_five(&mut b)
 }
 
 fn main() {
     let mut b = Bar { n: 5 };
-    rand(&mut b);
-    let z = foo();
+    add_five(&mut b);
+    let _z = foo();
 }
