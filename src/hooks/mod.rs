@@ -2,7 +2,7 @@
 use llvm_ir::{
     function::{FunctionAttribute, ParameterAttribute},
     instruction::Call,
-    Operand, Type,
+    Name, Operand, Type,
 };
 use log::{debug, trace};
 use std::collections::HashMap;
@@ -98,7 +98,21 @@ pub fn symbolic(vm: &mut VM<'_>, info: FnInfo) -> Result<ReturnValue> {
     } = ty.as_ref()
     {
         let size = vm.project.bit_size(inner_ty.as_ref())?;
-        let fresh_symbol = vm.solver.bv(size, &op.to_string());
+
+        // TODO: Symbolic can be called on the same variable multiple time (or just same name)
+        // thus, we should probably have different "versions" so that we can differentiate the names
+        // for all of them.
+        let var_name: String = match op {
+            Operand::LocalOperand { name, .. } => match name {
+                Name::Name(name) => String::from(name.as_str()),
+                Name::Number(_) => name.to_string(),
+            },
+            Operand::ConstantOperand(_) => todo!(),
+            Operand::MetadataOperand => todo!(),
+        };
+        let fresh_symbol = vm.solver.bv(size, &var_name);
+
+        vm.state.symbols.insert(var_name, fresh_symbol.clone());
 
         let addr = vm.state.get_var(op)?;
         vm.state.mem.write(&addr, fresh_symbol)?;

@@ -5,6 +5,7 @@ use llvm_ir::{
     Function, Module, Name, Type, TypeRef,
 };
 use log::{debug, warn};
+use std::collections::HashMap;
 
 use super::{Allocation, AllocationType, Globals, Result, VMError};
 use crate::{
@@ -121,6 +122,9 @@ pub struct State<'a> {
     pub mem: Memory,
 
     pub globals: Globals<'a>,
+
+    /// Lookup for all the variables that have been explicitly marked as `symbolic`.
+    pub symbols: HashMap<String, BV>,
 }
 
 impl<'a> State<'a> {
@@ -139,6 +143,7 @@ impl<'a> State<'a> {
             solver,
             callstack: Vec::new(),
             globals: Globals::new(),
+            symbols: HashMap::new(),
         };
 
         state.allocate_globals(project.modules).unwrap();

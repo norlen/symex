@@ -11,19 +11,23 @@ pub mod vm;
 
 pub use solver::{Solutions, Solver, BV};
 
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn it_works() {
-        let result = 2 + 2;
-        assert_eq!(result, 4);
-    }
+/// Assume the condition.
+///
+/// Adds a contraint that the passed condition must be true. If the condition can never be true,
+/// this will lead to an `Unsat` error.
+#[inline(never)]
+#[allow(unused_variables)]
+pub fn assume(condition: bool) {
+    // Implemented as hook `hooks::assume`.
 }
 
+/// Creates a new symbolic value for `value`. This removes all contraints.
+///
+/// This creates a new symbolic variable and assigns overwrites the passed `value`. This must be
+/// performed since constraints added to the solver cannot be removed, and the previous value may
+/// have constraints associated with it.
 #[inline(never)]
 #[allow(unused_variables)]
-pub fn assume(condition: bool) {}
-
-#[inline(never)]
-#[allow(unused_variables)]
-pub fn symbolic<T>(v: &mut T) {}
+pub fn symbolic<T>(value: &mut T) {
+    // Implemented as hook `hooks::symbolic`.
+}

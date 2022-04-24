@@ -26,6 +26,9 @@ pub struct VM<'a> {
     backtracking_paths: Vec<Path<'a>>,
 
     pub solver: Solver,
+
+    /// Parameters passed to the initial entry function.
+    pub parameters: Vec<BV>,
 }
 
 impl<'a> Clone for VM<'a> {
@@ -35,6 +38,7 @@ impl<'a> Clone for VM<'a> {
             state: self.state.clone(),
             backtracking_paths: self.backtracking_paths.clone(),
             solver: self.solver.duplicate(),
+            parameters: self.parameters.clone(),
         }
     }
 }
@@ -43,12 +47,8 @@ impl<'a> Iterator for VM<'a> {
     type Item = Result<ReturnValue>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.backtracking_paths.is_empty() {
-            None
-        } else {
-            trace!("Executing next path");
-            Some(self.backtrack_and_continue())
-        }
+        trace!("Executing next path");
+        self.backtrack_and_continue()
     }
 }
 
@@ -69,6 +69,7 @@ impl<'a> VM<'a> {
             project,
             backtracking_paths: Vec::new(),
             solver,
+            parameters: Vec::new(),
         };
 
         // Setup before the execution of a function can start.
@@ -92,6 +93,8 @@ impl<'a> VM<'a> {
             assert_ne!(size, 0);
 
             let bv = self.solver.bv(size as u32, &param.name.to_string());
+            self.parameters.push(bv.clone());
+
             self.state.vars.insert(param.name.clone(), bv)?;
         }
 
@@ -99,8 +102,7 @@ impl<'a> VM<'a> {
     }
 
     /// Execute a single path in the VM to completion.
-    pub fn run(&mut self) -> Result<ReturnValue> {
-        // let r = self.execute_to_terminator()?;
+    pub fn run(&mut self) -> Option<Result<ReturnValue>> {
         self.backtrack_and_continue()
     }
 
@@ -109,17 +111,9 @@ impl<'a> VM<'a> {
         let mut results = Vec::new();
 
         let mut paths_explored = 0;
-        while !self.backtracking_paths.is_empty() {
+        while let Some(path_result) = self.backtrack_and_continue() {
             paths_explored += 1;
-            trace!(
-                "---------- RUN_ALL: Paths: {}",
-                self.backtracking_paths.len()
-            );
-
-            let r = self.backtrack_and_continue();
-
-            // println!("Result: {:?}", r);
-            results.push(r);
+            results.push(path_result);
         }
         println!("Explored {} paths", paths_explored);
         results
@@ -225,7 +219,7 @@ impl<'a> VM<'a> {
         self.execute_to_terminator()
     }
 
-    fn backtrack_and_continue(&mut self) -> Result<ReturnValue> {
+    fn backtrack_and_continue(&mut self) -> Option<Result<ReturnValue>> {
         if let Some(path) = self.backtracking_paths.pop() {
             trace!("Backtrack, {} paths remain", self.backtracking_paths.len());
 
@@ -241,9 +235,9 @@ impl<'a> VM<'a> {
             }
 
             // Resume execution.
-            self.execute()
+            Some(self.execute())
         } else {
-            panic!("no more paths available");
+            None
         }
     }
 

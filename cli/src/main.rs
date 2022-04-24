@@ -2,7 +2,7 @@ use anyhow::{anyhow, Result};
 use clap::Parser;
 use log::debug;
 use std::path::Path;
-use x0001e::{project::Project, vm::VM};
+use x0001e::{project::Project, vm::VM, Solutions};
 
 const BINARY_NAME: &str = "x0001e";
 
@@ -100,9 +100,42 @@ fn settings_from_args(opts: &Args) -> Settings {
 
 fn run_analysis(path: impl AsRef<Path>, fn_name: &str) -> Result<()> {
     let project = Project::from_bc_path(path)?;
-    let vm = VM::new(fn_name, &project)?;
+    let mut vm = VM::new(fn_name, &project)?;
 
-    let results = vm.into_iter().collect::<Vec<_>>();
-    println!("Results: {:#?}", results);
+    let mut results = Vec::new();
+    let mut n = 0;
+    while let Some(path_result) = vm.run() {
+        // Find solutions for input parameters.
+        let mut input_solutions = Vec::new();
+        for param in vm.parameters.iter() {
+            let solution = vm.solver.get_solutions_for_bv(param, 1)?;
+            let solution = match solution {
+                Solutions::None => None,
+                Solutions::Exactly(n) | Solutions::AtLeast(n) => n.first().unwrap().as_u64(),
+            };
+            input_solutions.push(solution);
+        }
+
+        // Find solutions for all variables marked with `symbolic`.
+        let mut symbolic = Vec::new();
+        for (name, sym) in vm.state.symbols.iter() {
+            let solution = vm.solver.get_solutions_for_bv(sym, 1)?;
+            let solution = match solution {
+                Solutions::None => None,
+                Solutions::Exactly(n) | Solutions::AtLeast(n) => n.first().unwrap().as_u64(),
+            };
+            symbolic.push((name.clone(), solution));
+        }
+
+        println!(
+            "Path #{}: inputs={:?}, symbolic: {:?}, result={:?}",
+            n, input_solutions, symbolic, path_result
+        );
+
+        n += 1;
+        results.push(path_result);
+    }
+
+    // println!("Results: {:#?}", results);
     Ok(())
 }

@@ -10,6 +10,6 @@ fn main() {
     let project = Project::from_bc_path("./samples/simplest/main.bc").unwrap();
     let mut vm = VM::new("t", &project).unwrap();
 
-    let path: Result<ReturnValue, _> = vm.run();
+    let path: Result<ReturnValue, _> = vm.run().unwrap();
     println!("result {:?}", path);
 }
