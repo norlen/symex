@@ -19,7 +19,7 @@ use map::ModulePrivateMap;
 
 mod config;
 mod map;
-mod module;
+//mod module;
 
 pub use config::Config;
 
