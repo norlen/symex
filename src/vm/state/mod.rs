@@ -170,7 +170,7 @@ impl<'a> State<'a> {
 
         self.stack
             .get_address(allocation_size, align)
-            .map_err(|err| VMError::MemoryError(err))
+            .map_err(VMError::MemoryError)
     }
 
     /// Allocate an unitialized value `name` on the stack with size `allocation_size`.
@@ -237,7 +237,7 @@ impl<'a> State<'a> {
                     // be safe, allocate addresses for those.
                     let size = {
                         // TODO: Can the types not have a size here?
-                        let size = self.project.bit_size(&pointee_type)?;
+                        let size = self.project.bit_size(pointee_type)?;
 
                         // TODO: How to handle zero sized allocations?
                         if size == 0 {

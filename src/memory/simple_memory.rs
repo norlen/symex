@@ -46,12 +46,12 @@ impl Memory {
         trace!("{} read addr={:?}, bits={}", self.name, addr, bits);
         assert_eq!(addr.len(), self.ptr_size, "passed wrong sized address");
 
-        if self.null_detection && self.solver.can_equal(&addr, &self.nullptr)? {
+        if self.null_detection && self.solver.can_equal(addr, &self.nullptr)? {
             return Err(MemoryError::NullPointer);
         }
 
         let value = if bits < BITS_IN_BYTE {
-            self.read_u8(addr).slice(bits - 1, 0).into()
+            self.read_u8(addr).slice(bits - 1, 0)
         } else {
             // Ensure we only read full bytes now.
             assert_eq!(bits % BITS_IN_BYTE, 0, "Must read bytes, if bits >= 8");
@@ -65,8 +65,7 @@ impl Memory {
                 bytes.push(value);
             }
 
-            let value = bytes.into_iter().reduce(|acc, v| v.concat(&acc)).unwrap();
-            value
+            bytes.into_iter().reduce(|acc, v| v.concat(&acc)).unwrap()
         };
 
         Ok(value)

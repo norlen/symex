@@ -153,7 +153,7 @@ impl<'a> VM<'a> {
             let path_cond = self.state.get_var(constant).unwrap();
 
             // Build default condition.
-            default_cond = default_cond.and(&value.ne(&path_cond)).into();
+            default_cond = default_cond.and(&value.ne(&path_cond));
 
             let cond = value.eq(&path_cond);
             if self.solver.is_sat_with_constraint(&cond).unwrap() {
@@ -175,7 +175,7 @@ impl<'a> VM<'a> {
 
         // Jump the the one path that didn't get saved as a backtracking point.
         if let Some((target, cond)) = paths.first() {
-            self.solver.assert(&cond);
+            self.solver.assert(cond);
             self.branch(target)
         } else {
             // Should never happen, since if we have no paths at all, the

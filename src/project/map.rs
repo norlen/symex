@@ -30,7 +30,7 @@ impl<'m> ModulePrivateMap<'m> {
     }
 
     pub fn insert_private(&mut self, key: String, value: &'m Function, module: &'m Module) {
-        let module_name = String::from(module.name.clone());
+        let module_name = module.name.clone();
 
         let module_map = self.private.entry(module_name).or_default();
         module_map.insert(key, (value, module));

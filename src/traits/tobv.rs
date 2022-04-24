@@ -39,7 +39,7 @@ pub fn operand_to_symbol_zero_size(state: &mut State<'_>, operand: &Operand) -> 
             .vars
             .get(name)
             .cloned()
-            .map(|v| Some(v))
+            .map(Some)
             .ok_or_else(|| VMError::LocalNotFound(name.to_string())),
         MetadataOperand => Err(anyhow!("Cannot convert operand {:?} to symbol", operand).into()),
     }
@@ -51,7 +51,7 @@ pub fn operand_to_symbol_zero_size(state: &mut State<'_>, operand: &Operand) -> 
 /// are allowed in constants.
 pub fn const_to_symbol(state: &mut State<'_>, constant: &Constant) -> Result<BV> {
     let value = const_to_symbol_zero_size(state, constant)?;
-    value.ok_or_else(|| VMError::UnexpectedZeroSize)
+    value.ok_or(VMError::UnexpectedZeroSize)
 }
 
 /// Convert a constant to a symbol that allows the entire thing to be zero sized.
@@ -72,7 +72,7 @@ pub fn const_to_symbol_zero_size(state: &mut State<'_>, constant: &Constant) -> 
         // Not sure if the generated LLVM does not allow for these errors to happen, but if it does
         // those kind of errors are covered.
         Undef(ty) => {
-            let size = state.project.bit_size(&ty)?;
+            let size = state.project.bit_size(ty)?;
             Ok(match size {
                 0 => None,
                 n => Some(state.solver.bv_anon(n as u32)),
@@ -81,7 +81,7 @@ pub fn const_to_symbol_zero_size(state: &mut State<'_>, constant: &Constant) -> 
 
         // Both null pointers and the aggregate of zeroes are initialized to zero.
         Null(ty) | AggregateZero(ty) => {
-            let size = state.project.bit_size(&ty)?;
+            let size = state.project.bit_size(ty)?;
             Ok(match size {
                 0 => None,
                 n => Some(state.solver.bv_zero(n as u32)),
@@ -164,9 +164,9 @@ pub fn const_to_symbol_zero_size(state: &mut State<'_>, constant: &Constant) -> 
         // comparisons zero-sized types are not allowed.
         ICmp(op) => {
             let lhs = const_to_symbol_zero_size(state, &op.operand0)?
-                .ok_or_else(|| VMError::UnexpectedZeroSize)?;
+                .ok_or(VMError::UnexpectedZeroSize)?;
             let rhs = const_to_symbol_zero_size(state, &op.operand1)?
-                .ok_or_else(|| VMError::UnexpectedZeroSize)?;
+                .ok_or(VMError::UnexpectedZeroSize)?;
 
             use IntPredicate::*;
             let result = match op.predicate {
@@ -216,9 +216,7 @@ pub fn const_to_symbol_zero_size(state: &mut State<'_>, constant: &Constant) -> 
         ExtractElement(op) => {
             if let Vector(elements) = op.vector.as_ref() {
                 let index = op.index.to_value()? as usize;
-                let value = elements
-                    .get(index)
-                    .ok_or_else(|| VMError::MalformedInstruction)?;
+                let value = elements.get(index).ok_or(VMError::MalformedInstruction)?;
 
                 const_to_symbol_zero_size(state, value)
             } else {
@@ -262,7 +260,8 @@ pub fn const_to_symbol_zero_size(state: &mut State<'_>, constant: &Constant) -> 
                     let constant = elements
                         .get(index)
                         .cloned()
-                        .ok_or_else(|| VMError::MalformedInstruction)?;
+                        .ok_or(VMError::MalformedInstruction)?;
+
                     constants.push(constant);
                 }
 
@@ -288,7 +287,7 @@ pub fn const_to_symbol_zero_size(state: &mut State<'_>, constant: &Constant) -> 
                     | Array { elements, .. } => {
                         constant = elements
                             .get(index as usize)
-                            .ok_or_else(|| VMError::MalformedInstruction)?;
+                            .ok_or(VMError::MalformedInstruction)?;
                     }
                     _ => return Err(VMError::MalformedInstruction),
                 }
@@ -321,7 +320,8 @@ pub fn const_to_symbol_zero_size(state: &mut State<'_>, constant: &Constant) -> 
                 match current {
                     Array { elements: e, .. } | Struct { values: e, .. } => {
                         let index = indices[i] as usize;
-                        let element = e.get(index).ok_or_else(|| VMError::MalformedInstruction)?;
+                        let element = e.get(index).ok_or(VMError::MalformedInstruction)?;
+
                         replace_value(element.as_ref().clone(), replace_with, indices, i + 1)
                     }
                     _ => Err(VMError::MalformedInstruction),
@@ -344,7 +344,7 @@ pub fn const_to_symbol_zero_size(state: &mut State<'_>, constant: &Constant) -> 
             op.indices.iter().map(|c| c.into()),
             op.in_bounds,
         )
-        .map(|v| Some(v)),
+        .map(Some),
 
         // Select one operand or the other without branches.
         Select(op) => {
@@ -375,7 +375,7 @@ pub fn const_to_symbol_zero_size(state: &mut State<'_>, constant: &Constant) -> 
 /// the underlying symbol.
 fn const_cast(state: &mut State<'_>, ty: &Type, constant: &ConstantRef) -> Result<Option<BV>> {
     let result = const_to_symbol_zero_size(state, constant)?.map(|bv| {
-        assert_eq!(bv.len(), state.project.bit_size(&ty).unwrap() as u32);
+        assert_eq!(bv.len(), state.project.bit_size(ty).unwrap() as u32);
         bv
     });
     Ok(result)
@@ -424,7 +424,7 @@ where
                     lhs.and_then(|lhs| rhs.map(|rhs| lhs.add(&rhs)))
                 })
                 .reduce(|acc, v| Ok(v?.concat(&acc?)))
-                .ok_or_else(|| VMError::MalformedInstruction)??;
+                .ok_or(VMError::MalformedInstruction)??;
 
             Ok(Some(result))
         }

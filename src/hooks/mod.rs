@@ -42,6 +42,12 @@ pub struct Hooks {
     intrinsics: Intrinsics,
 }
 
+impl Default for Hooks {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Hooks {
     pub fn new() -> Self {
         let mut hooks = Self {
@@ -63,9 +69,9 @@ impl Hooks {
     pub fn get(&self, name: &str) -> Option<Hook> {
         trace!("hooks: get {}", name);
         if is_instrinsic(name) {
-            self.intrinsics.get(name).map(|h| *h)
+            self.intrinsics.get(name).copied()
         } else {
-            self.hooks.get(name).map(|h| *h)
+            self.hooks.get(name).copied()
         }
     }
 }

@@ -94,6 +94,12 @@ pub struct Globals<'p> {
     private_addr_to_fn: HashMap<String, HashMap<u64, Name>>,
 }
 
+impl<'p> Default for Globals<'p> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<'p> Globals<'p> {
     pub fn new() -> Self {
         Self {
@@ -108,8 +114,7 @@ impl<'p> Globals<'p> {
         if let Some(allocation) = self
             .private_globals
             .get(&module.name)
-            .map(|module_globals| module_globals.get(name))
-            .flatten()
+            .and_then(|module_globals| module_globals.get(name))
         {
             Some(allocation)
         } else {

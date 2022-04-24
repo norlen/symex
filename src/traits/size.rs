@@ -109,7 +109,7 @@ pub fn get_bit_offset_concrete(ty: &Type, index: u64, project: &Project) -> Resu
             let inner_ty = element_types
                 .get(index as usize)
                 .cloned()
-                .ok_or_else(|| VMError::MalformedInstruction)?;
+                .ok_or(VMError::MalformedInstruction)?;
 
             Ok((offset, inner_ty))
         }
@@ -153,7 +153,7 @@ pub fn get_byte_offset_symbol(ty: &Type, index: &BV, project: &Project) -> Resul
             
             let size = to_bytes(size)?;
             let size = index.get_solver().bv_from_u64(size, index.len());
-            Ok((size.mul(&index), inner_ty.clone()))
+            Ok((size.mul(index), inner_ty.clone()))
         },
         
         // Not supported for non-constant indexes.
@@ -190,7 +190,7 @@ pub fn get_bit_offset_symbol(ty: &Type, index: &BV, project: &Project) -> Result
                 .ok_or_else(|| VMError::Other(anyhow!("Cannot take size of type")))?;
             
             let size = index.get_solver().bv_from_u64(size, index.len());
-            Ok((size.mul(&index), inner_ty.clone()))
+            Ok((size.mul(index), inner_ty.clone()))
         },
 
         

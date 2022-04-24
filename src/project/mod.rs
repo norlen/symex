@@ -139,7 +139,7 @@ impl Project {
             return Ok(FunctionType::Hook(hook));
         }
         for name in demangled_names.iter() {
-            if let Some(hook) = self.hooks.get(&name.as_str()) {
+            if let Some(hook) = self.hooks.get(name.as_str()) {
                 return Ok(FunctionType::Hook(hook));
             }
         }
@@ -189,18 +189,16 @@ impl Project {
         ret
     }
 
-    pub fn get_all_functions<'s>(&'s self) -> impl Iterator<Item = (&'s Module, &'s Function)> {
+    pub fn get_all_functions(&self) -> impl Iterator<Item = (&Module, &Function)> {
         self.modules
             .iter()
-            .map(|module| iter::repeat(module).zip(module.functions.iter()))
-            .flatten()
+            .flat_map(|module| iter::repeat(module).zip(module.functions.iter()))
     }
 
     pub fn get_all_global_vars(&self) -> impl Iterator<Item = (&Module, &GlobalVariable)> {
         self.modules
             .iter()
-            .map(|module| iter::repeat(module).zip(module.global_vars.iter()))
-            .flatten()
+            .flat_map(|module| iter::repeat(module).zip(module.global_vars.iter()))
     }
 
     // pub fn get_all_global_aliases(&self) -> impl Iterator<Item = (&Module, &GlobalAlias)> {

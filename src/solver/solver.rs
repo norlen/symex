@@ -78,7 +78,7 @@ impl Solver {
 
     /// Check if `lhs` and `rhs` can be equal under the current constraints.
     pub fn can_equal(&self, lhs: &BV, rhs: &BV) -> Result<bool, SolverError> {
-        self.is_sat_with_constraint(&lhs.eq(&rhs))
+        self.is_sat_with_constraint(&lhs.eq(rhs))
     }
 
     pub fn get_solutions_for_bv(
@@ -120,7 +120,7 @@ impl Solver {
             solutions.push(solution);
         }
 
-        if solutions.len() == 0 {
+        if solutions.is_empty() {
             Ok(Solutions::None)
         } else {
             let exists_more_solutions = self.is_sat()?;

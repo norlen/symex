@@ -1,3 +1,4 @@
+#![allow(clippy::len_without_is_empty)]
 use boolector::{BVSolution, Btor};
 use std::{cmp::Ordering, rc::Rc};
 
@@ -217,8 +218,9 @@ impl BV {
             .concat(&boolector::BV::zero(solver.clone(), width - 1)));
 
         // Maximum value: 0111...1
-        let max = BV(boolector::BV::zero(solver.clone(), 1)
-            .concat(&boolector::BV::one(solver.clone(), width - 1)));
+        let max =
+            BV(boolector::BV::zero(solver.clone(), 1)
+                .concat(&boolector::BV::one(solver, width - 1)));
 
         overflow.ite(&is_negative.ite(&min, &max), &result)
     }

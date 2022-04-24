@@ -22,7 +22,7 @@ where
     let mut total_offset = 0;
 
     for index in indices.iter().copied() {
-        let (offset, inner_ty) = get_bit_offset_concrete(&ty, index as u64, &state.project)?;
+        let (offset, inner_ty) = get_bit_offset_concrete(&ty, index as u64, state.project)?;
         total_offset += offset;
         ty = inner_ty;
     }
@@ -61,13 +61,13 @@ where
     for index in indices {
         let (offset, ty) = if index.is_constant() {
             let index = index.to_value()?;
-            let (offset, ty) = get_byte_offset_concrete(&curr_ty, index, &state.project)?;
+            let (offset, ty) = get_byte_offset_concrete(&curr_ty, index, state.project)?;
 
             let offset = state.solver.bv_from_u64(offset, ptr_size);
             (offset, ty)
         } else {
             let index = state.get_var(index)?;
-            get_byte_offset_symbol(&curr_ty, &index, &state.project)?
+            get_byte_offset_symbol(&curr_ty, &index, state.project)?
         };
 
         addr = addr.add(&offset);
@@ -118,12 +118,12 @@ where
         ) => {
             assert_eq!(lhs_inner_ty, rhs_inner_ty);
             assert_eq!(
-                state.project.bit_size(&lhs_inner_ty),
-                state.project.bit_size(&rhs_inner_ty)
+                state.project.bit_size(lhs_inner_ty),
+                state.project.bit_size(rhs_inner_ty)
             );
             assert_eq!(*n, *m);
 
-            let bits = state.project.bit_size(&lhs_inner_ty)?;
+            let bits = state.project.bit_size(lhs_inner_ty)?;
             let num_elements = *n as u32;
 
             // Perform the operation per element and concatenate the result.
@@ -136,7 +136,7 @@ where
                     operation(&lhs, &rhs)
                 })
                 .reduce(|acc, v| v.concat(&acc))
-                .ok_or_else(|| VMError::MalformedInstruction)
+                .ok_or(VMError::MalformedInstruction)
         }
 
         // TODO: Check out scalable vectors.
@@ -209,7 +209,7 @@ where
                     map(symbol, target_bits)
                 })
                 .reduce(|acc, v| v.concat(&acc))
-                .ok_or_else(|| VMError::MalformedInstruction)
+                .ok_or(VMError::MalformedInstruction)
         }
 
         // TODO: Check if scalable vectors are similar

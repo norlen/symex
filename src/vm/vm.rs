@@ -34,7 +34,7 @@ pub struct VM<'a> {
 impl<'a> Clone for VM<'a> {
     fn clone(&self) -> Self {
         Self {
-            project: self.project.clone(),
+            project: self.project,
             state: self.state.clone(),
             backtracking_paths: self.backtracking_paths.clone(),
             solver: self.solver.duplicate(),
