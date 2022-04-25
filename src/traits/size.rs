@@ -25,9 +25,7 @@ pub fn size_in_bits(ty: &Type, project: &Project) -> Option<u64> {
         ArrayType {
             element_type,
             num_elements,
-        } => size_in_bits(element_type, project).map(|size| {
-            *num_elements as u64 * size
-        }),
+        } => size_in_bits(element_type, project).map(|size| *num_elements as u64 * size),
         StructType { element_types, .. } => element_types
             .iter()
             .map(|ty| size_in_bits(ty, project))
@@ -79,16 +77,23 @@ pub fn get_bit_offset_concrete(ty: &Type, index: u64, project: &Project) -> Resu
     use Type::*;
 
     match ty {
-        // Offsets for pointers, vector and arrays are similar in that the offset is just the size
-        // of the base type times the index.
+        // Offsets for pointers are just the pointer size times the index.
+        #[rustfmt::skip]
+        PointerType { pointee_type: inner_ty, .. } => {
+            size_in_bits(ty, project)
+                .map(|size| (size * index, inner_ty.clone()))
+                .ok_or_else(|| anyhow!("Cannot take size of type").into())
+        },
+
+        // For vector and arrays, the indexes are based on the inner type. So e.g. an array
+        // [4 x i32] with an index 3, should index into the fourth element.
         //
         // Note that in the LLVM docs for GEP vector indexing may be disallowed in the future,
         // thus it should not really happen.
         #[rustfmt::skip]
-        PointerType { pointee_type: inner_ty, .. }
-        | VectorType { element_type: inner_ty, .. }
+        VectorType { element_type: inner_ty, .. }
         | ArrayType { element_type: inner_ty, .. } => {
-            size_in_bits(ty, project)
+            size_in_bits(inner_ty, project)
                 .map(|size| (size * index, inner_ty.clone()))
                 .ok_or_else(|| anyhow!("Cannot take size of type").into())
         },
@@ -136,31 +141,43 @@ pub fn get_bit_offset_concrete(ty: &Type, index: u64, project: &Project) -> Resu
 }
 
 /// Get the byte offset with a symbol as index.
-/// 
+///
 /// This checks that each offset is byte divisible.
 pub fn get_byte_offset_symbol(ty: &Type, index: &BV, project: &Project) -> Result<(BV, TypeRef)> {
     use Type::*;
 
     match ty {
-        // Offsets for pointers, vector and arrays are similar in that the offset is just the size
-        // of the base type times the index.
+        // Offsets for pointers are just the pointer size times the index.
         #[rustfmt::skip]
-        PointerType { pointee_type: inner_ty, .. }
-        | VectorType { element_type: inner_ty, .. }
-        | ArrayType { element_type: inner_ty, .. } => {
+        PointerType { pointee_type: inner_ty, .. } => {
             let size = size_in_bits(ty, project)
                 .ok_or_else(|| VMError::Other(anyhow!("Cannot take size of type")))?;
-            
+
             let size = to_bytes(size)?;
             let size = index.get_solver().bv_from_u64(size, index.len());
             Ok((size.mul(index), inner_ty.clone()))
-        },
-        
+        }
+
+        // For vector and arrays, the indexes are based on the inner type. So e.g. an array
+        // [4 x i32] with an index 3, should index into the fourth element.
+        #[rustfmt::skip]
+        VectorType { element_type: inner_ty, .. }
+        | ArrayType { element_type: inner_ty, .. } => {
+            let size = size_in_bits(inner_ty, project)
+                .ok_or_else(|| VMError::Other(anyhow!("Cannot take size of type")))?;
+
+            let size = to_bytes(size)?;
+            let size = index.get_solver().bv_from_u64(size, index.len());
+            Ok((size.mul(index), inner_ty.clone()))
+        }
+
         // Not supported for non-constant indexes.
         //
         // With a symbol as an index we cannot index into structs, not without having to try
         // solutions and fork the state. So these are not supported.
-        StructType { .. } | NamedStructType { .. } => panic!("Symbolic struct index is not supported"),
+        StructType { .. } | NamedStructType { .. } => {
+            panic!("Symbolic struct index is not supported")
+        }
 
         // TODO
         VoidType => todo!(),
@@ -180,25 +197,35 @@ pub fn get_bit_offset_symbol(ty: &Type, index: &BV, project: &Project) -> Result
     use Type::*;
 
     match ty {
-        // Offsets for pointers, vector and arrays are similar in that the offset is just the size
-        // of the base type times the index.
+        // Offsets for pointers are just the pointer size times the index.
         #[rustfmt::skip]
-        PointerType { pointee_type: inner_ty, .. }
-        | VectorType { element_type: inner_ty, .. }
-        | ArrayType { element_type: inner_ty, .. } => {
+        PointerType { pointee_type: inner_ty, .. } => {
             let size = size_in_bits(ty, project)
                 .ok_or_else(|| VMError::Other(anyhow!("Cannot take size of type")))?;
-            
+
             let size = index.get_solver().bv_from_u64(size, index.len());
             Ok((size.mul(index), inner_ty.clone()))
-        },
+        }
 
-        
+        // For vector and arrays, the indexes are based on the inner type. So e.g. an array
+        // [4 x i32] with an index 3, should index into the fourth element.
+        #[rustfmt::skip]
+        VectorType { element_type: inner_ty, .. }
+        | ArrayType { element_type: inner_ty, .. } => {
+            let size = size_in_bits(inner_ty, project)
+                .ok_or_else(|| VMError::Other(anyhow!("Cannot take size of type")))?;
+
+            let size = index.get_solver().bv_from_u64(size, index.len());
+            Ok((size.mul(index), inner_ty.clone()))
+        }
+
         // Not supported for non-constant indexes.
         //
         // With a symbol as an index we cannot index into structs, not without having to try
         // solutions and fork the state. So these are not supported.
-        StructType { .. } | NamedStructType { .. } => panic!("Symbolic struct index is not supported"),
+        StructType { .. } | NamedStructType { .. } => {
+            panic!("Symbolic struct index is not supported")
+        }
 
         // TODO
         VoidType => todo!(),

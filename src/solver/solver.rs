@@ -66,15 +66,14 @@ impl Solver {
     // BV helpers
     // -------------------------------------------------------------------------
 
-    // /// Returns `true` if `lhs` and `rhs` must be equal under the current
-    // /// constraints.
-    // pub fn bvs_must_be_equal(&self, lhs: &BV, rhs: &BV) -> Result<bool> {
-    //     // Add the constraint lhs != rhs and invert the results. The only way
-    //     // for `lhs != rhs` to be `false` is that if they are equal.
-    //     let constraint = lhs._ne(&rhs);
-    //     let result = self.is_sat_with_constraint(&constraint)?;
-    //     Ok(!result)
-    // }
+    /// Returns `true` if `lhs` and `rhs` must be equal under the current constraints.
+    pub fn must_be_equal(&self, lhs: &BV, rhs: &BV) -> Result<bool, SolverError> {
+        // Add the constraint lhs != rhs and invert the results. The only way
+        // for `lhs != rhs` to be `false` is that if they are equal.
+        let constraint = lhs.ne(&rhs);
+        let result = self.is_sat_with_constraint(&constraint)?;
+        Ok(!result)
+    }
 
     /// Check if `lhs` and `rhs` can be equal under the current constraints.
     pub fn can_equal(&self, lhs: &BV, rhs: &BV) -> Result<bool, SolverError> {

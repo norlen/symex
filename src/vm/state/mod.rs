@@ -7,10 +7,9 @@ use llvm_ir::{
 use log::{debug, warn};
 use std::collections::HashMap;
 
-use super::{Allocation, AllocationType, Globals, Result, VMError};
+use super::{Allocation, AllocationType, Globals, Result};
 use crate::{
-    memory::bump_allocator::BumpAllocator,
-    memory::simple_memory::Memory,
+    memory::NewMemory,
     project::Project,
     traits::{const_to_symbol, operand_to_symbol, Op},
     {Solver, BV},
@@ -106,10 +105,6 @@ pub struct State<'a> {
 
     /// Reference to the solver, used in the `VM` as well.
     pub solver: Solver,
-
-    /// Stack allocations.
-    pub stack: BumpAllocator,
-
     pub callstack: Vec<Callsite<'a>>,
 
     /// Current location where we are exucting at.
@@ -118,9 +113,8 @@ pub struct State<'a> {
     /// All defined variables. These can be pointers to memory or a register variable.
     pub vars: VarMap,
 
-    /// The global memory. That both stack and heap allocations use.
-    pub mem: Memory,
-
+    /// Global memory.
+    pub mem: NewMemory,
     pub globals: Globals<'a>,
 
     /// Lookup for all the variables that have been explicitly marked as `symbolic`.
@@ -135,11 +129,10 @@ impl<'a> State<'a> {
         solver: Solver,
     ) -> Self {
         let mut state = Self {
-            stack: BumpAllocator::new(),
             project,
             current_loc: Location::new(module, function),
             vars: VarMap::new(10),
-            mem: Memory::new_uninitialized(solver.clone(), project.ptr_size as u32),
+            mem: NewMemory::new(solver.clone(), project.ptr_size as u32),
             solver,
             callstack: Vec::new(),
             globals: Globals::new(),
@@ -168,9 +161,8 @@ impl<'a> State<'a> {
             align
         };
 
-        self.stack
-            .get_address(allocation_size, align)
-            .map_err(VMError::MemoryError)
+        let addr = self.mem.allocate(allocation_size, align)?;
+        Ok(addr)
     }
 
     /// Allocate an unitialized value `name` on the stack with size `allocation_size`.
@@ -182,8 +174,8 @@ impl<'a> State<'a> {
             align
         };
 
-        let ptr = self.stack.get_address(allocation_size, align)?;
-        let bv = self.solver.bv_from_u64(ptr, self.project.ptr_size as u32);
+        let addr = self.mem.allocate(allocation_size, align)?;
+        let bv = self.solver.bv_from_u64(addr, self.project.ptr_size as u32);
         Ok(bv)
     }
 

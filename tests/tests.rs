@@ -1,6 +1,7 @@
 use anyhow::{anyhow, Result};
 use std::collections::HashMap;
 use x0001e::{
+    memory::MemoryError,
     project::Project,
     vm::{self, ReturnValue, VMError, VM},
     Solutions, Solver, BV,
@@ -89,6 +90,7 @@ fn run(path: &str, f: &str) -> Vec<Solution> {
         });
     }
 
+    println!("Results: {:?}", results);
     results
 }
 
@@ -116,7 +118,6 @@ fn ifs() {
 #[test]
 fn multiple_paths() {
     let res = run("tests/samples/multiple_paths.bc", "foo");
-    println!("{:#?}", res);
     assert_eq!(res.len(), 2, "expected 2 paths");
     assert_eq!(res[0].output, Some(1));
     assert_eq!(res[1].output, Some(2));
@@ -166,11 +167,32 @@ fn fn_refs() {
 #[test]
 fn array_index() {
     let res = run("tests/samples/array_index.bc", "array_index::get");
-    println!("{:?}", res);
     assert_eq!(res.len(), 2, "expected 2 paths");
     assert!(res[0].ret.is_ok());
     assert!(res[0].inputs[0] <= 3);
 
     assert_eq!(res[1].ret, Err(VMError::Abort(-1)));
     assert!(res[1].inputs[0] > 3);
+}
+
+// Check that array indexing works.
+#[test]
+fn array_index_works() {
+    let res = run(
+        "tests/samples/array_index.bc",
+        "array_index::indexing_works",
+    );
+    assert_eq!(res.len(), 1, "expected 1 path");
+    assert_eq!(res[0].output, Some(3));
+}
+
+// Check that array indexing works even when using the unsafe `get_unchecked`
+#[test]
+fn array_index_get_unchecked() {
+    let res = run("tests/samples/array_index.bc", "array_index::get_unchecked");
+    assert_eq!(res.len(), 1, "expected 1 path");
+    assert_eq!(
+        res[0].ret,
+        Err(VMError::MemoryError(MemoryError::OutOfBounds))
+    );
 }
