@@ -1,18 +1,18 @@
 use anyhow::{anyhow, Result};
 use clap::Parser;
 use log::debug;
-use std::path::Path;
-use x0001e::{project::Project, vm::VM, Solutions};
 
 const BINARY_NAME: &str = "x0001e";
 
 mod args;
 mod build;
+mod runner;
 
 use args::Args;
 use build::{
     generate_build_command, get_extra_filename, get_latest_bc, Features, Settings, Target,
 };
+use runner::run_analysis;
 
 fn main() -> Result<()> {
     env_logger::init();
@@ -23,7 +23,7 @@ fn main() -> Result<()> {
 
 fn run() -> Result<()> {
     let mut args = std::env::args().collect::<Vec<_>>();
-    debug!("recevied arguments: {:?}", args);
+    debug!("recevied arguments: {args:?}");
 
     // If this is run as a cargo subcommand, the second argument will be the name of this binary.
     // So remove this if this is the case.
@@ -32,10 +32,7 @@ fn run() -> Result<()> {
         .map(|s| s.as_str() == BINARY_NAME)
         .unwrap_or(false)
     {
-        debug!(
-            "used as cargo subcommand: removing {} as second argument",
-            BINARY_NAME
-        );
+        debug!("used as cargo subcommand: removing {BINARY_NAME} as second argument");
         args.remove(1);
     }
 
@@ -44,7 +41,7 @@ fn run() -> Result<()> {
 
     // Build LLVM BC file.
     let cargo_out = generate_build_command(&opts).output()?;
-    debug!("cargo output: {:?}", cargo_out);
+    debug!("cargo output: {cargo_out:?}");
 
     // Create path to .bc file.
     let output = String::from_utf8(cargo_out.stderr)?;
@@ -54,23 +51,21 @@ fn run() -> Result<()> {
     let target_name = opts.get_target_name()?;
 
     let target_path = if let Some(extra) = extra_filename {
-        let filename = format!("{}{}.bc", target_name, extra);
+        let filename = format!("{target_name}{extra}.bc");
         target_dir.join(filename)
     } else {
         let name = get_latest_bc(&target_dir, &target_name)?;
-        name.ok_or_else(|| anyhow!("Could not find .bc for {}", target_name))?
+        name.ok_or_else(|| anyhow!("Could not find .bc for {target_name}"))?
     };
-    debug!("Target .bc path: {:?}", target_path);
+    debug!("Target .bc path: {target_path:?}");
 
+    // Get function name and analyze code.
     let fn_name = match args.function {
         None => "main".to_owned(),
         Some(name) => name,
     };
-    let fn_name = format!("{}::{}", opts.get_module_name()?, fn_name);
-    debug!(
-        "Starting analysis on target: {:?}, function: {}",
-        target_path, fn_name
-    );
+    let fn_name = format!("{}::{fn_name}", opts.get_module_name()?);
+    debug!("Starting analysis on target: {target_path:?}, function: {fn_name}");
     run_analysis(&target_path, &fn_name)
 }
 
@@ -85,7 +80,7 @@ fn settings_from_args(opts: &Args) -> Settings {
 
     let features = if opts.all_features {
         Features::All
-    } else if opts.features.len() == 0 {
+    } else if opts.features.is_empty() {
         Features::None
     } else {
         Features::Some(opts.features.clone())
@@ -96,46 +91,4 @@ fn settings_from_args(opts: &Args) -> Settings {
         features,
         release: opts.release,
     }
-}
-
-fn run_analysis(path: impl AsRef<Path>, fn_name: &str) -> Result<()> {
-    let project = Project::from_bc_path(path)?;
-    let mut vm = VM::new(fn_name, &project)?;
-
-    let mut results = Vec::new();
-    let mut n = 0;
-    while let Some(path_result) = vm.run() {
-        // Find solutions for input parameters.
-        let mut input_solutions = Vec::new();
-        for param in vm.parameters.iter() {
-            let solution = vm.solver.get_solutions_for_bv(param, 1)?;
-            let solution = match solution {
-                Solutions::None => None,
-                Solutions::Exactly(n) | Solutions::AtLeast(n) => n.first().unwrap().as_u64(),
-            };
-            input_solutions.push(solution);
-        }
-
-        // Find solutions for all variables marked with `symbolic`.
-        let mut symbolic = Vec::new();
-        for (name, sym) in vm.state.symbols.iter() {
-            let solution = vm.solver.get_solutions_for_bv(sym, 1)?;
-            let solution = match solution {
-                Solutions::None => None,
-                Solutions::Exactly(n) | Solutions::AtLeast(n) => n.first().unwrap().as_u64(),
-            };
-            symbolic.push((name.clone(), solution));
-        }
-
-        println!(
-            "Path #{}: inputs={:?}, symbolic: {:?}, result={:?}",
-            n, input_solutions, symbolic, path_result
-        );
-
-        n += 1;
-        results.push(path_result);
-    }
-
-    // println!("Results: {:#?}", results);
-    Ok(())
 }

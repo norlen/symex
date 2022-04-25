@@ -41,7 +41,7 @@ impl Settings {
         let host = meta.host;
         let mut path = project
             .path(artifact, profile, None, &host)
-            .map_err(|err| anyhow::anyhow!("{}", err))?;
+            .map_err(|err| anyhow::anyhow!("{err}"))?;
         path = path.parent().expect("unreachable").to_path_buf();
 
         // Binary files --bin are in the `/deps` folder.
@@ -120,7 +120,7 @@ pub fn generate_build_command(opts: &Settings) -> Command {
 
     // Commands to pass to rustc.
     cargo.args(&["--", "--emit=llvm-bc"]);
-    debug!("Running cargo command: {:?}", cargo);
+    debug!("Running cargo command: {cargo:?}");
     cargo
 }
 

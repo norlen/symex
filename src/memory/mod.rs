@@ -108,7 +108,7 @@ impl NewMemory {
 
     pub fn check_same_alloc(&self, base_addr: &BV, addr: &BV) -> Result<(), MemoryError> {
         let base_alloc_id = self.allocations.read_u8(base_addr);
-        let end_id = self.allocations.read_u8(&addr);
+        let end_id = self.allocations.read_u8(addr);
 
         if !self.solver.must_be_equal(&base_alloc_id, &end_id)? {
             return Err(MemoryError::OutOfBounds);
