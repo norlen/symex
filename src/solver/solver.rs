@@ -30,7 +30,7 @@ impl Solver {
     }
 
     /// A regular clone will only clone the reference, a duplication will instead create a new
-    /// instace of the underlying solver.
+    /// instance of the underlying solver.
     pub fn duplicate(&self) -> Self {
         Self {
             btor: Rc::new(self.btor.duplicate()),

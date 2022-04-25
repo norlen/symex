@@ -1,15 +1,28 @@
+//! Memory provides the memory system used by the execution engine.
+//!
+//! The main struct [Memory] handles allocations for all purposes. This includes the variables
+//! allocated on the stack. And should also be used for heap allocations.
+//!
+//! Memory should first be allocated, this allocates a certain amount of bits and returns an address
+//! to an uninitialized piece of memory. Read/Write operations to those addresses can then be done.
+//!
+//! On allocations, the allocation is given a unique ID. This ID is used to ensure reads to not
+//! cross allocation boundaries, and if they do a `MemoryError::OutOfBounds` is returned.
+//!
+//! The system also provides null pointer checking, this is enabled with `null_detection` in
+//! [Memory]. This checks that the address cannot be null when both reading and writing.
+//!
+//! It does not currently check that reads are not performed from uninitialized memory.
 use log::{debug, trace};
 use thiserror::Error;
 
-use crate::{
-    solver::{Array, SolverError},
-    Solver, BV,
-};
+use crate::solver::{Array, Solver, SolverError, BV};
 
 /// Feature flag that enables checking when reading that the first byte read matches the last byte
 /// read's allocation id.
-pub const CHECK_OUT_OF_BOUNDS: bool = true;
+pub(crate) const CHECK_OUT_OF_BOUNDS: bool = true;
 
+/// Error representing an issue when performing memory operations.
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum MemoryError {
     /// Tried to allocate with a size of zero.
@@ -46,8 +59,8 @@ pub enum MemoryError {
 /// The number of bits per byte the memory system expects.
 pub const BITS_IN_BYTE: u32 = 8;
 
-/// Converts number of bits to bytes, returning an error if `bits` are not
-/// a mulitple of `[BITS_IN_BYTE]`.
+/// Converts number of bits to bytes, returning an error if `bits` are not a multiple of
+/// `[BITS_IN_BYTE]`.
 pub fn to_bytes(size: u64) -> Result<u64, MemoryError> {
     if size % BITS_IN_BYTE as u64 != 0 {
         Err(MemoryError::BitsNotMultipleOfBytes(size))
@@ -56,13 +69,20 @@ pub fn to_bytes(size: u64) -> Result<u64, MemoryError> {
     }
 }
 
+/// Allocations and backing memory store.
+///
+/// Memory keeps track of all allocations and provides the backing memory store. All allocations
+/// are tagged with an id. This allows checking for out of bounds reads.
+///
+/// With `null_detection` enabled this allows to to check for the possibility of the address being
+/// null.
 #[derive(Debug, Clone)]
-pub struct NewMemory {
+pub struct Memory {
     /// Reference to the solver so new symbols can be created.
     solver: Solver,
 
     /// Allocator is used to generate new addresses.
-    allocator: BumpAllocator2,
+    allocator: BumpAllocator,
 
     /// The actual memory. Stores all values written to memory.
     store: MemoryStore,
@@ -80,22 +100,35 @@ pub struct NewMemory {
     ///
     /// Each allocation is given a certain ID. This stores all these IDs, so we can check for out
     /// of bounds reads.
-    allocations: MemoryStore,
+    allocations: Array,
 
     /// The next allocation ID to store in `allocations`.
     next_allocation_id: usize,
 }
 
-impl NewMemory {
+impl Memory {
     /// Creates a new memory containing only uninitialized memory.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// # use x0001e::memory::Memory;
+    /// # use x0001e::solver::Solver;
+    /// #
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    ///     let solver = Solver::new();
+    ///     let ptr_size = 64;
+    ///     let mut memory = Memory::new(solver, ptr_size);
+    /// #   Ok(())
+    /// # }
     pub fn new(solver: Solver, ptr_size: u32) -> Self {
         let nullptr = solver.bv_zero(ptr_size);
         let store = MemoryStore::new_uninitialized("memory", &solver, ptr_size);
-        let allocations = MemoryStore::new_uninitialized("allocations", &solver, ptr_size);
+        let allocations = solver.array(ptr_size, 8, Some("allocations"));
 
         Self {
             solver,
-            allocator: BumpAllocator2::new(),
+            allocator: BumpAllocator::new(),
             store,
             allocations,
             ptr_size,
@@ -105,6 +138,26 @@ impl NewMemory {
         }
     }
 
+    /// Allocate a new address in memory with `bits` aligned to `align`.
+    ///
+    /// This only creates an address and makes sure no other address is generated from
+    /// `[address, address+bits)`.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// # use x0001e::memory::Memory;
+    /// # use x0001e::solver::Solver;
+    /// #
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// #   let solver = Solver::new();
+    /// #   let ptr_size = 64;
+    ///     let mut memory = Memory::new(solver, ptr_size);
+    ///
+    ///     let address = memory.allocate(32, 4)?;
+    /// #   Ok(())
+    /// # }
+    /// ```
     pub fn allocate(&mut self, bits: u64, align: u64) -> Result<u64, MemoryError> {
         let (addr, bytes) = self.allocator.get_address(bits, align)?;
 
@@ -116,51 +169,81 @@ impl NewMemory {
         let alloc_id = self.solver.bv_from_u64(self.next_allocation_id as u64, 8);
         for i in 0..bytes {
             let addr = self.solver.bv_from_u64(addr + i, self.ptr_size);
-            self.allocations.write_u8(&addr, &alloc_id);
+            self.allocations = self.allocations.write(&addr, &alloc_id);
         }
         self.next_allocation_id += 1;
 
         Ok(addr)
     }
 
-    pub fn check_same_alloc(&self, base_addr: &BV, addr: &BV) -> Result<(), MemoryError> {
-        let base_alloc_id = self.allocations.read_u8(base_addr);
-        let end_id = self.allocations.read_u8(addr);
-
-        if !self.solver.must_be_equal(&base_alloc_id, &end_id)? {
-            return Err(MemoryError::OutOfBounds);
-        }
-        Ok(())
-    }
-
+    /// Read `bits` starting from `addr`.
+    ///
+    /// # Errors
+    ///
+    /// If the address can be null and `null_detection` is enabled, if the address can be null a
+    /// `MemoryError::NullPointer` is returned.
+    ///
+    /// If the address leads to one allocation id, and `addr + bits` leads to another
+    /// `MemoryError::OutOfBounds` is returned.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// # use x0001e::memory::Memory;
+    /// # use x0001e::solver::Solver;
+    /// #
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// #   let solver = Solver::new();
+    /// #   let ptr_size = 64;
+    /// #
+    ///     let mut memory = Memory::new(solver.clone(), ptr_size);
+    ///     let address = memory.allocate(32, 4)?;
+    ///     let address = solver.bv_from_u64(address, ptr_size);
+    ///
+    ///     let value = memory.read(&address, 32)?;
+    /// #   Ok(())
+    /// # }
+    /// ```
     pub fn read(&self, addr: &BV, bits: u32) -> Result<BV, MemoryError> {
         trace!("{} read addr={:?}, bits={}", self.store.name, addr, bits);
         assert_eq!(addr.len(), self.ptr_size, "passed wrong sized address");
-
-        // Check that the address cannot be null.
-        if self.null_detection && self.solver.can_equal(addr, &self.nullptr)? {
-            return Err(MemoryError::NullPointer);
-        }
+        self.check_null_ptr(addr)?;
 
         // If we try to read more than a single byte, check that the read does not cross into
         // another allocation.
         if CHECK_OUT_OF_BOUNDS && bits > BITS_IN_BYTE {
-            let last_byte = (bits / 8) as u64 - 1;
-            let last_byte = self.solver.bv_from_u64(last_byte, self.ptr_size);
-            let end_addr = addr.add(&last_byte);
-
-            let start_alloc_id = self.allocations.read_u8(addr);
-            let end_alloc_id = self.allocations.read_u8(&end_addr);
-
-            // These must be equal, otherwise the read is across an allocation boundary.
-            if !self.solver.must_be_equal(&start_alloc_id, &end_alloc_id)? {
-                return Err(MemoryError::OutOfBounds);
-            }
+            self.check_out_of_bounds_by_size(addr, bits)?;
         }
 
         self.store.read(addr, bits, &self.solver, self.ptr_size)
     }
 
+    /// Writes `value` to the address `addr`.
+    ///
+    /// # Errors
+    ///
+    /// If the address can be null and `null_detection` is enabled, if the address can be null a
+    /// `MemoryError::NullPointer` is returned.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// # use x0001e::memory::Memory;
+    /// # use x0001e::solver::Solver;
+    /// #
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// #   let solver = Solver::new();
+    /// #   let ptr_size = 64;
+    /// #
+    ///     let mut memory = Memory::new(solver.clone(), ptr_size);
+    ///     let address = memory.allocate(32, 4)?;
+    ///     let address = solver.bv_from_u64(address, ptr_size);
+    ///     let value = solver.bv_from_u64(42, 32);
+    ///
+    ///     memory.write(&address, value)?;
+    /// #   Ok(())
+    /// # }
+    /// ```
     pub fn write(&mut self, addr: &BV, value: BV) -> Result<(), MemoryError> {
         trace!(
             "{} write addr={:?}, value={:?}",
@@ -169,106 +252,55 @@ impl NewMemory {
             value
         );
         assert_eq!(addr.len(), self.ptr_size, "passed wrong sized address");
-
-        // Check that the address cannot be null.
-        if self.null_detection && self.solver.can_equal(addr, &self.nullptr)? {
-            return Err(MemoryError::NullPointer);
-        }
-
+        self.check_null_ptr(addr)?;
         self.store.write(addr, value, &self.solver, self.ptr_size)
     }
-}
 
-#[derive(Debug, Clone)]
-pub struct MemoryStore {
-    name: &'static str,
-
-    mem: Array,
-}
-
-impl MemoryStore {
-    pub fn new_uninitialized(name: &'static str, solver: &Solver, ptr_size: u32) -> Self {
-        let mem = solver.array(ptr_size, BITS_IN_BYTE, Some(name));
-
-        Self { name, mem }
-    }
-
-    pub fn read_u8(&self, addr: &BV) -> BV {
-        self.mem.read(addr)
-    }
-
-    pub fn write_u8(&mut self, addr: &BV, val: &BV) {
-        self.mem = self.mem.write(addr, val);
-    }
-
-    pub fn read(
-        &self,
-        addr: &BV,
-        bits: u32,
-        solver: &Solver,
-        ptr_size: u32,
-    ) -> Result<BV, MemoryError> {
-        let value = if bits < BITS_IN_BYTE {
-            self.read_u8(addr).slice(bits - 1, 0)
+    /// Check that the address cannot be null. Returns `MemoryError::NullPointer` if it is possible
+    /// for the address to be zero.
+    fn check_null_ptr(&self, addr: &BV) -> Result<(), MemoryError> {
+        // Check that the address cannot be null.
+        if self.null_detection && self.solver.can_equal(addr, &self.nullptr)? {
+            Err(MemoryError::NullPointer)
         } else {
-            // Ensure we only read full bytes now.
-            assert_eq!(bits % BITS_IN_BYTE, 0, "Must read bytes, if bits >= 8");
-            let num_bytes = bits / BITS_IN_BYTE;
-
-            let mut bytes = Vec::new();
-            for byte in 0..num_bytes {
-                let offset = solver.bv_from_u64(byte as u64, ptr_size);
-                let read_addr = addr.add(&offset);
-                let value = self.read_u8(&read_addr);
-                bytes.push(value);
-            }
-
-            bytes.into_iter().reduce(|acc, v| v.concat(&acc)).unwrap()
-        };
-
-        Ok(value)
-    }
-
-    pub fn write(
-        &mut self,
-        addr: &BV,
-        value: BV,
-        solver: &Solver,
-        ptr_size: u32,
-    ) -> Result<(), MemoryError> {
-        // Check if we should zero extend the value (if it less than 8-bits).
-        let value = if value.len() < BITS_IN_BYTE {
-            value.zero_ext(BITS_IN_BYTE)
-        } else {
-            value
-        };
-
-        // Ensure the value we write is a multiple of `BITS_IN_BYTE`.
-        assert_eq!(value.len() % BITS_IN_BYTE, 0);
-
-        let num_bytes = value.len() / BITS_IN_BYTE;
-        for n in 0..num_bytes {
-            let low_bit = n * BITS_IN_BYTE;
-            let high_bit = (n + 1) * BITS_IN_BYTE - 1;
-            let byte = value.slice(low_bit, high_bit);
-
-            let offset = solver.bv_from_u64(n as u64, ptr_size);
-            let addr = addr.add(&offset);
-            self.write_u8(&addr, &byte);
+            Ok(())
         }
+    }
 
-        Ok(())
+    /// Check that `start_addr` and `start_addr + bits` are part of the same allocation. Returns
+    /// `MemoryError::OutOfBounds` if the the two addresses are not part of the same allocation.
+    fn check_out_of_bounds_by_size(&self, start_addr: &BV, bits: u32) -> Result<(), MemoryError> {
+        let last_byte = (bits / 8) as u64 - 1;
+        let last_byte = self.solver.bv_from_u64(last_byte, self.ptr_size);
+
+        let end_addr = start_addr.add(&last_byte);
+
+        self.check_out_of_bounds(start_addr, &end_addr)
+    }
+
+    /// Check that `start_addr` and `end_addr` are part of the same allocation. Returns
+    /// `MemoryError::OutOfBounds` if the two addresses are not part of the same allocation.
+    fn check_out_of_bounds(&self, start_addr: &BV, end_addr: &BV) -> Result<(), MemoryError> {
+        let start_id = self.allocations.read(start_addr);
+        let end_id = self.allocations.read(&end_addr);
+
+        // These must be equal, otherwise the read is across an allocation boundary.
+        if !self.solver.must_be_equal(&start_id, &end_id)? {
+            Err(MemoryError::OutOfBounds)
+        } else {
+            Ok(())
+        }
     }
 }
 
 /// Simple bump allocator that starts allocating addresses at [BumpAllocator::ALLOC_START]
 #[derive(Debug, Clone, Default)]
-pub struct BumpAllocator2 {
-    /// Pointer to next avaiable address to allocate at.
+struct BumpAllocator {
+    /// Pointer to next available address to allocate at.
     cursor: u64,
 }
 
-impl BumpAllocator2 {
+impl BumpAllocator {
     /// All allocations begin at this address.
     pub const ALLOC_START: u64 = 0x1000_0000;
 
@@ -315,5 +347,141 @@ impl BumpAllocator2 {
             bits, bytes, start_addr_aligned
         );
         Ok((start_addr_aligned, bytes))
+    }
+}
+
+#[derive(Debug, Clone)]
+struct MemoryStore {
+    name: &'static str,
+
+    memory: Array,
+}
+
+impl MemoryStore {
+    fn new_uninitialized(name: &'static str, solver: &Solver, ptr_size: u32) -> Self {
+        let memory = solver.array(ptr_size, BITS_IN_BYTE, Some(name));
+        Self { name, memory }
+    }
+
+    fn read_u8(&self, addr: &BV) -> BV {
+        self.memory.read(addr)
+    }
+
+    fn write_u8(&mut self, addr: &BV, val: &BV) {
+        self.memory = self.memory.write(addr, val);
+    }
+
+    fn read(
+        &self,
+        addr: &BV,
+        bits: u32,
+        solver: &Solver,
+        ptr_size: u32,
+    ) -> Result<BV, MemoryError> {
+        let value = if bits < BITS_IN_BYTE {
+            self.read_u8(addr).slice(bits - 1, 0)
+        } else {
+            // Ensure we only read full bytes now.
+            assert_eq!(bits % BITS_IN_BYTE, 0, "Must read bytes, if bits >= 8");
+            let num_bytes = bits / BITS_IN_BYTE;
+
+            let mut bytes = Vec::new();
+            for byte in 0..num_bytes {
+                let offset = solver.bv_from_u64(byte as u64, ptr_size);
+                let read_addr = addr.add(&offset);
+                let value = self.read_u8(&read_addr);
+                bytes.push(value);
+            }
+
+            bytes.into_iter().reduce(|acc, v| v.concat(&acc)).unwrap()
+        };
+
+        Ok(value)
+    }
+
+    fn write(
+        &mut self,
+        addr: &BV,
+        value: BV,
+        solver: &Solver,
+        ptr_size: u32,
+    ) -> Result<(), MemoryError> {
+        // Check if we should zero extend the value (if it less than 8-bits).
+        let value = if value.len() < BITS_IN_BYTE {
+            value.zero_ext(BITS_IN_BYTE)
+        } else {
+            value
+        };
+
+        // Ensure the value we write is a multiple of `BITS_IN_BYTE`.
+        assert_eq!(value.len() % BITS_IN_BYTE, 0);
+
+        let num_bytes = value.len() / BITS_IN_BYTE;
+        for n in 0..num_bytes {
+            let low_bit = n * BITS_IN_BYTE;
+            let high_bit = (n + 1) * BITS_IN_BYTE - 1;
+            let byte = value.slice(low_bit, high_bit);
+
+            let offset = solver.bv_from_u64(n as u64, ptr_size);
+            let addr = addr.add(&offset);
+            self.write_u8(&addr, &byte);
+        }
+
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn allocates_in_sequence() {
+        let mut alloc = BumpAllocator::new();
+        let addr = alloc.get_address(32, 1);
+        let addr2 = alloc.get_address(32, 1);
+
+        assert_eq!(addr, Ok((BumpAllocator::ALLOC_START, 4)));
+        assert_eq!(addr2, Ok((BumpAllocator::ALLOC_START + 4, 4))); // 4*8 = 32 bits
+    }
+
+    #[test]
+    fn allocate_align() {
+        let mut alloc = BumpAllocator::new();
+        let addr = alloc.get_address(16, 4);
+        let addr2 = alloc.get_address(32, 4);
+
+        assert_eq!(addr, Ok((BumpAllocator::ALLOC_START, 2)));
+        assert_eq!(addr2, Ok((BumpAllocator::ALLOC_START + 4, 4))); // 4*8 = 32 bits
+    }
+
+    #[test]
+    fn align_non_pow_two_fails() {
+        let mut alloc = BumpAllocator::new();
+        assert!(matches!(
+            alloc.get_address(32, 3),
+            Err(MemoryError::NotPowerOfTwo(_))
+        ));
+    }
+
+    #[test]
+    fn zero_sized_alloc_panics() {
+        let mut alloc = BumpAllocator::new();
+        assert_eq!(
+            alloc.get_address(0, 4),
+            Err(MemoryError::ZeroSizedAllocation)
+        );
+    }
+
+    #[test]
+    fn handles_overflow() {
+        let mut alloc = BumpAllocator::new();
+        for _ in 0..7 {
+            assert!(alloc.get_address(u64::MAX, 4).is_ok());
+        }
+        assert_eq!(
+            alloc.get_address(u64::MAX, 4),
+            Err(MemoryError::AddressSpaceExhausted(u64::MAX))
+        );
     }
 }

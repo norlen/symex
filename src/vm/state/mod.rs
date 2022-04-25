@@ -8,7 +8,7 @@ use log::{debug, warn};
 
 use super::{Allocation, AllocationType, Globals, Result};
 use crate::{
-    memory::NewMemory,
+    memory::Memory,
     project::Project,
     traits::{const_to_symbol, operand_to_symbol, Op},
     {Solver, BV},
@@ -50,7 +50,7 @@ impl<'a> Callsite<'a> {
 
 /// A `Path` represents a single path of execution through a program. The path is composed by the
 /// current execution state (`State`) and an optional constraint that will be asserted when this
-/// path begins exectuting.
+/// path begins executing.
 ///
 /// A single path may produce multiple other paths when encountering branching paths of execution.
 #[derive(Debug, Clone)]
@@ -82,7 +82,7 @@ impl<'a> Path<'a> {
     /// The passed `Location` will replace the one in the state, so execution resumes at that
     /// location.
     ///
-    /// The constraint will be added before resuming excution.
+    /// The constraint will be added before resuming execution.
     pub fn new_with_constraint(
         state: State<'a>,
         location: Location<'a>,
@@ -106,14 +106,15 @@ pub struct State<'a> {
     pub solver: Solver,
     pub callstack: Vec<Callsite<'a>>,
 
-    /// Current location where we are exucting at.
+    /// Current location where we are executing at.
     pub current_loc: Location<'a>,
 
     /// All defined variables. These can be pointers to memory or a register variable.
     pub vars: VarMap,
 
     /// Global memory.
-    pub mem: NewMemory,
+    pub mem: Memory,
+
     pub globals: Globals<'a>,
 
     /// Lookup for all the variables that have been explicitly marked as `symbolic`.
@@ -131,7 +132,7 @@ impl<'a> State<'a> {
             project,
             current_loc: Location::new(module, function),
             vars: VarMap::new(10),
-            mem: NewMemory::new(solver.clone(), project.ptr_size as u32),
+            mem: Memory::new(solver.clone(), project.ptr_size as u32),
             solver,
             callstack: Vec::new(),
             globals: Globals::new(),
@@ -164,7 +165,7 @@ impl<'a> State<'a> {
         Ok(addr)
     }
 
-    /// Allocate an unitialized value `name` on the stack with size `allocation_size`.
+    /// Allocate an uninitialized value `name` on the stack with size `allocation_size`.
     pub fn stack_alloc(&mut self, allocation_size: u64, align: u64) -> Result<BV> {
         let align = if align == 0 {
             warn!("Alignment of 0");
@@ -213,7 +214,7 @@ impl<'a> State<'a> {
     fn allocate_globals(&mut self, modules: &'static [Module]) -> Result<()> {
         for module in modules {
             for var in &module.global_vars {
-                // All declaration have initiaizers, so skip over definitions.
+                // All declaration have initializers, so skip over definitions.
                 if var.initializer.is_none() {
                     continue;
                 }
@@ -253,21 +254,21 @@ impl<'a> State<'a> {
             }
         }
 
-        let current_globals = self.globals.clone();
         // Initialize all the global variables.
+        let current_globals = self.globals.clone();
         for private_globals in current_globals.private_globals.values() {
             for allocation in private_globals.values() {
-                self.initalize_global_variable(allocation);
+                self.initialize_global_variable(allocation);
             }
         }
         for allocation in current_globals.globals.values() {
-            self.initalize_global_variable(allocation);
+            self.initialize_global_variable(allocation);
         }
 
         Ok(())
     }
 
-    fn initalize_global_variable(&mut self, allocation: &Allocation<'_>) {
+    fn initialize_global_variable(&mut self, allocation: &Allocation<'_>) {
         if let AllocationType::Variable(var) = &allocation.kind {
             let initializer = var.initializer.clone().unwrap();
             //println!("var: {}", var.name);

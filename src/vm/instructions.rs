@@ -344,7 +344,7 @@ impl<'a> VM<'a> {
     /// Calculate the quotient of two integers or two vectors of integers.
     ///
     /// Returns the signed quotient of the operands. The denominator cannot be zero. Overflow here
-    /// also leads to undefined behaviour.
+    /// also leads to undefined behavior.
     fn sdiv(&mut self, instr: &instruction::SDiv) -> Result<()> {
         debug!("{}", instr);
         // TODO: Apart from div by zero (see above). The overflow could also be checked I guess,
@@ -631,7 +631,7 @@ impl<'a> VM<'a> {
         self.assign(instr, symbol)
     }
 
-    /// Sign extend a value to the destionation type size.
+    /// Sign extend a value to the destination type size.
     ///
     /// *Requires* the source type to be *smaller* than the destination type. Both types must be
     /// integers, or vectors of integers of the same length.

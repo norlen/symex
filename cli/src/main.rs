@@ -28,7 +28,7 @@ fn main() -> Result<()> {
 
 fn run() -> Result<()> {
     let mut args = std::env::args().collect::<Vec<_>>();
-    debug!("recevied arguments: {args:?}");
+    debug!("received arguments: {args:?}");
 
     // If this is run as a cargo subcommand, the second argument will be the name of this binary.
     // So remove this if this is the case.

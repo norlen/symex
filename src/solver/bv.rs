@@ -8,12 +8,12 @@ use crate::Solver;
 pub struct BV(pub(crate) boolector::BV<Rc<Btor>>);
 
 impl BV {
-    /// Returns the bidwidth of the [BV].
+    /// Returns the bit width of the [BV].
     pub fn len(&self) -> u32 {
         self.0.get_width()
     }
 
-    /// Zero-extend the current [BV] to the passed bitwidth and return the resulting [BV].
+    /// Zero-extend the current [BV] to the passed bit width and return the resulting [BV].
     pub fn zero_ext(&self, width: u32) -> BV {
         match self.len().cmp(&width) {
             Ordering::Less => BV(self.0.uext(width - self.len())),
@@ -22,7 +22,7 @@ impl BV {
         }
     }
 
-    /// Sign-extend the current [BV] to the passed bidwidth and return the resulting [BV].
+    /// Sign-extend the current [BV] to the passed bit width and return the resulting [BV].
     pub fn sign_ext(&self, width: u32) -> BV {
         match self.len().cmp(&width) {
             Ordering::Less => BV(self.0.sext(width - self.len())),
@@ -31,11 +31,11 @@ impl BV {
         }
     }
 
-    /// Resize the current [BV] to the passed bitwidth and return the resulting [BV].
+    /// Resize the current [BV] to the passed bit width and return the resulting [BV].
     ///
     /// If `self.len()` is compared to `target_size`
     /// - Same: the symbol is returned.
-    /// - Smaller: the symbol is zero extened to the the target size.
+    /// - Smaller: the symbol is zero extended to the the target size.
     /// - Larger: the symbol is truncated to the target size.
     pub fn resize_unsigned(self, width: u32) -> BV {
         match self.len().cmp(&width) {
@@ -49,7 +49,7 @@ impl BV {
     // Operations
     // ---------------------------------------------------------------------------------------------
 
-    /// [BV] equality check. Both [BV]s must have the same bidwidth, the result is returned as a
+    /// [BV] equality check. Both [BV]s must have the same bit width, the result is returned as a
     /// [BV] of width 1.
     pub fn eq(&self, other: &BV) -> BV {
         assert_eq!(self.len(), other.len());
@@ -179,7 +179,7 @@ impl BV {
     // ---------------------------------------------------------------------------------------------
 
     /// Saturated unsigned addition. Adds `self` with `other` and if the result overflows the
-    /// maxmium value is returned.
+    /// maximum value is returned.
     ///
     /// Requires that `self` and `other` have the same width.
     ///
@@ -196,7 +196,7 @@ impl BV {
     }
 
     /// Saturated signed addition. Adds `self` with `other` and if the result overflows either the
-    /// maximum or mimimum value is returned, depending on the sign bit of `self`.
+    /// maximum or minimum value is returned, depending on the sign bit of `self`.
     ///
     /// Requires that `self` and `other` have the same width.
     ///

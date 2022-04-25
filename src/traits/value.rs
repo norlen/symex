@@ -5,7 +5,7 @@ use crate::vm::{Result, VMError};
 
 /// Trait to get a value from [llvm_ir::Operand] or [llvm_ir::Constant].
 ///
-/// The conversions are simple and retreives an underlying value, they do not try to handle more
+/// The conversions are simple and retrieves an underlying value, they do not try to handle more
 /// advanced expressions.
 pub trait ToValue<T> {
     /// Tries to get the concrete value.

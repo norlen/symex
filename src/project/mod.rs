@@ -36,7 +36,7 @@ pub enum FunctionType<'a> {
 
 /// A project is mostly a collection of `llvm_ir::Module`s.
 ///
-/// The `VM` takes `Project` and the entry function and exectues over that.
+/// The `VM` takes `Project` and the entry function and executes over that.
 pub struct Project {
     /// The modules the project consists of.
     pub(crate) modules: &'static [Module],

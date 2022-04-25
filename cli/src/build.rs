@@ -124,7 +124,7 @@ pub fn generate_build_command(opts: &Settings) -> Command {
     cargo
 }
 
-/// Retreives the hash appended to the build output from the compilation step.
+/// Retrieves the hash appended to the build output from the compilation step.
 pub fn get_extra_filename(output: &str) -> Result<Option<String>> {
     fn get_filename(re: Regex, output: &str) -> Option<String> {
         let captures = re.captures_iter(output).last()?;

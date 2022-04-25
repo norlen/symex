@@ -1,9 +1,9 @@
 //! LLVM support a large number of [intrinsic functions][1] these are not implemented in bitcode.
-//! Thus, these all have to be hooks that are implmented in the system.
+//! Thus, these all have to be hooks that are implemented in the system.
 //!
 //! # Status of supported intrinsics
 //!
-//! ## Standard C/C++ instrinsics
+//! ## Standard C/C++ intrinsics
 //!
 //! - [ ] `llvm.abs.*`
 //! - [ ] `llvm.smax.*`
@@ -61,7 +61,7 @@
 //! - [ ] `llvm.sshl.sat.*`
 //! - [ ] `llvm.ushl.sat.*`
 //!
-//! ## General intrinsincs (non-exhaustive)
+//! ## General intrinsics (non-exhaustive)
 //!
 //! - [ ] `llvm.expect`
 //! - [ ] `llvm.expect.with.probability`
@@ -82,7 +82,7 @@ use crate::{
 /// Check if the given name is an LLVM intrinsic.
 ///
 /// Currently it checks that the name starts with `llvm.` which seems like a good approximation.
-pub(super) fn is_instrinsic(name: &str) -> bool {
+pub(super) fn is_intrinsic(name: &str) -> bool {
     name.starts_with("llvm.")
 }
 
@@ -91,7 +91,7 @@ pub(super) fn is_instrinsic(name: &str) -> bool {
 /// Keeps track of intrinsics that have only one version such as `llvm.va_start` and those with
 /// multiple versions such as `llvm.abs.*` which is valid for multiple bit lengths.
 ///
-/// Internally fixed length name intrinsincs use a `[std::collections::HashMap]` so all lookups are
+/// Internally fixed length name intrinsics use a `[std::collections::HashMap]` so all lookups are
 /// constant time. Variable intrinsic names use a `[radix_trie::Trie]` so lookups are linear time of
 /// the retrieved name.
 pub(super) struct Intrinsics {
@@ -141,7 +141,7 @@ impl Intrinsics {
     //     self.fixed.insert(name.into(), hook);
     // }
 
-    /// Add a variable length intrinsic, e.g. if they support any kind of bidwidth such as
+    /// Add a variable length intrinsic, e.g. if they support any kind of bit width such as
     /// `llvm.abs.*`.
     ///
     /// Note that it matches for the entire prefix, so to add `llvm.abs.*` the name should only be
@@ -167,7 +167,7 @@ pub fn noop(_vm: &mut VM<'_>, _f: FnInfo) -> Result<ReturnValue> {
 }
 
 // -------------------------------------------------------------------------------------------------
-// Standard C/C++ instrinsics
+// Standard C/C++ intrinsics
 // -------------------------------------------------------------------------------------------------
 
 /// Copy a block of memory from the source to the destination.
@@ -179,7 +179,7 @@ pub fn llvm_memcpy(vm: &mut VM<'_>, f: FnInfo) -> Result<ReturnValue> {
     // 4. Bool, indicates volatile access.
     // The first two arguments can have an optional alignment.
     //
-    // The source and destination must either be equal or nonoverlapping. If the length is not a
+    // The source and destination must either be equal or non-overlapping. If the length is not a
     // well-defined value the behavior is undefined. Pointers to source and destination should be
     // well-defined is the length is not zero.
     //
@@ -223,6 +223,7 @@ enum BinaryOpOverflow {
     UMul,
 }
 
+/// Binary operations that indicate whether an overflow occurred or not.
 fn binary_op_overflow(vm: &mut VM<'_>, f: FnInfo, op: BinaryOpOverflow) -> Result<ReturnValue> {
     assert_eq!(f.arguments.len(), 2);
 
@@ -246,32 +247,38 @@ fn binary_op_overflow(vm: &mut VM<'_>, f: FnInfo, op: BinaryOpOverflow) -> Resul
     Ok(ReturnValue::Value(result_with_overflow))
 }
 
-/// Signed addition on any bitwidth, performs a signed addition and indicates whether an overflow
-/// occured.
+/// Signed addition on any bit width, performs a signed addition and indicates whether an overflow
+/// occurred.
 pub fn llvm_sadd_with_overflow(vm: &mut VM<'_>, f: FnInfo) -> Result<ReturnValue> {
     binary_op_overflow(vm, f, BinaryOpOverflow::SAdd)
 }
 
+/// Unsigned addition on any bit width, performs an unsigned addition and indicates whether an
+/// overflow occurred.
 pub fn llvm_uadd_with_overflow(vm: &mut VM<'_>, f: FnInfo) -> Result<ReturnValue> {
     binary_op_overflow(vm, f, BinaryOpOverflow::UAdd)
 }
 
-/// Signed subtraction on any bitwidth, performs a signed subtraction and indicates whether an
-/// overflow occured.
+/// Signed subtraction on any bit width, performs a signed subtraction and indicates whether an
+/// overflow occurred.
 pub fn llvm_ssub_with_overflow(vm: &mut VM<'_>, f: FnInfo) -> Result<ReturnValue> {
     binary_op_overflow(vm, f, BinaryOpOverflow::SSub)
 }
 
+/// Unsigned subtraction on any bit width, performs an unsigned subtraction and indicates whether an
+/// overflow occurred.
 pub fn llvm_usub_with_overflow(vm: &mut VM<'_>, f: FnInfo) -> Result<ReturnValue> {
     binary_op_overflow(vm, f, BinaryOpOverflow::USub)
 }
 
-/// Signed multiplication on any bitwidth, performs a signed multiplication and indicates whether
-/// an overflow occured.
+/// Signed multiplication on any bit width, performs a signed multiplication and indicates whether
+/// an overflow occurred.
 pub fn llvm_smul_with_overflow(vm: &mut VM<'_>, f: FnInfo) -> Result<ReturnValue> {
     binary_op_overflow(vm, f, BinaryOpOverflow::SMul)
 }
 
+/// Unsigned multiplication on any bit width, performs an unsigned multiplication and indicates
+/// whether an overflow occurred.
 pub fn llvm_umul_with_overflow(vm: &mut VM<'_>, f: FnInfo) -> Result<ReturnValue> {
     binary_op_overflow(vm, f, BinaryOpOverflow::UMul)
 }
@@ -309,7 +316,7 @@ pub fn llvm_sadd_sat(vm: &mut VM<'_>, f: FnInfo) -> Result<ReturnValue> {
 }
 
 // -------------------------------------------------------------------------------------------------
-// General intrinsincs
+// General intrinsics
 // -------------------------------------------------------------------------------------------------
 
 pub fn llvm_expect(vm: &mut VM<'_>, f: FnInfo) -> Result<ReturnValue> {

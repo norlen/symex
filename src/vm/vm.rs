@@ -228,7 +228,7 @@ impl<'a> VM<'a> {
             // Return to the the solver context when the path was created.
             self.solver.pop();
 
-            // Add the contraint.
+            // Add the constraint.
             if let Some(constraint) = path.constraint {
                 self.solver.assert(&constraint);
             }

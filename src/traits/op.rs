@@ -5,7 +5,7 @@ use crate::vm::Result;
 
 /// Op is a helper for values that can be either an [Operand] or a [Constant].
 ///
-/// Most instructions operare on [Operand]s, but a [Constant] can contain these same instructions.
+/// Most instructions operate on [Operand]s, but a [Constant] can contain these same instructions.
 /// E.g. a [Constant] can contain the `getelementptr` functionality for calculating the offset
 /// inside a constant. This Enum allows for creating functions that can be shared for both cases.
 #[derive(Debug, Clone, Copy)]

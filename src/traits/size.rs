@@ -121,7 +121,7 @@ pub fn get_bit_offset_concrete(ty: &Type, index: u64, project: &Project) -> Resu
 
         // For named structs we just have to look these up in the project.
         //
-        // If the result in an Opaque struct it cannot proceeed.
+        // If the result in an Opaque struct it cannot proceed.
         NamedStructType { name } => match project.get_named_struct(name).unwrap() {
             NamedStructDef::Opaque => todo!(),
             NamedStructDef::Defined(ty) => get_bit_offset_concrete(ty, index, project),

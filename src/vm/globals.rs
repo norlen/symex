@@ -76,14 +76,13 @@ type GlobalMap<'p> = HashMap<Name, Allocation<'p>>;
 
 /// Globals keeps track of global variables and functions.
 ///
-/// This structure keeps track of both global variables and functions since
-/// a [ConstantRef] can refer to both. The globals are further
-/// divided up into public and module private. The [Linkage] determines their
-/// type. `External` linkage is treated as public, while `Internal` and `Private`
-/// are treated as module private. Other linkage types are currently not supported.
+/// This structure keeps track of both global variables and functions since a [llvm_ir::ConstantRef]
+/// can refer to both. The globals are further divided up into public and module private. The
+/// [Linkage] determines their type. `External` linkage is treated as public, while `Internal` and
+/// `Private` are treated as module private. Other linkage types are currently not supported.
 ///
-/// Global variables are regions in memory which are allocated at compile time.
-/// If the global variable is a definition it **must** have an initializer.
+/// Global variables are regions in memory which are allocated at compile time. If the global
+/// variable is a definition it **must** have an initializer.
 #[derive(Debug, Clone)]
 pub struct Globals<'p> {
     pub(crate) globals: GlobalMap<'p>,

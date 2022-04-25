@@ -9,7 +9,7 @@ use std::collections::HashMap;
 
 use crate::vm::{Result, ReturnValue, VMError, VM};
 
-use intrinsics::{is_instrinsic, Intrinsics};
+use intrinsics::{is_intrinsic, Intrinsics};
 
 mod intrinsics;
 
@@ -68,7 +68,7 @@ impl Hooks {
 
     pub fn get(&self, name: &str) -> Option<Hook> {
         trace!("hooks: get {}", name);
-        if is_instrinsic(name) {
+        if is_intrinsic(name) {
             self.intrinsics.get(name).copied()
         } else {
             self.hooks.get(name).copied()

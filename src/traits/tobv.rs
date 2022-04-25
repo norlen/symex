@@ -192,7 +192,7 @@ pub fn const_to_symbol_zero_size(state: &mut State<'_>, constant: &Constant) -> 
             Ok(Some(result))
         }
 
-        // Zero extend operand to target type. The current value must have a smaller bitwidth
+        // Zero extend operand to target type. The current value must have a smaller bit width
         // compared to the target type.
         ZExt(op) => {
             let result = convert_to_map(state, &op.to_type, &op.operand, |symbol, target_size| {
@@ -201,7 +201,7 @@ pub fn const_to_symbol_zero_size(state: &mut State<'_>, constant: &Constant) -> 
             Ok(Some(result))
         }
 
-        // Sign extend operand to target type. The current value must have a smaller bitwidth
+        // Sign extend operand to target type. The current value must have a smaller bit width
         // compared to the target type.
         SExt(op) => {
             let result = convert_to_map(state, &op.to_type, &op.operand, |symbol, target_size| {
@@ -337,7 +337,7 @@ pub fn const_to_symbol_zero_size(state: &mut State<'_>, constant: &Constant) -> 
             const_to_symbol_zero_size(state, &constant)
         }
 
-        // Calculate address of a subelement in an aggregrate.
+        // Calculate address of a sub element in an aggregate.
         GetElementPtr(op) => gep(
             state,
             &op.address,

@@ -223,7 +223,7 @@ where
 /// Cast operand to type `ty`.
 ///
 /// Casting simply reinterprets the bits as a different type. As the system does not return types,
-/// this just returns the underlying symbol. The bitwidths must match.
+/// this just returns the underlying symbol. The bit widths must match.
 pub(crate) fn cast_to<'p, T>(state: &mut State<'_>, ty: &Type, op: T) -> Result<BV>
 where
     T: Into<Op<'p>>,
