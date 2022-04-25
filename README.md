@@ -27,7 +27,7 @@ cargo install --path cli
 To compile and run the example `examples/rust_simple`
 
 ```sh
-cargo x0001e --example rust_simple
+cargo x0001e --example rust_simple --function rust_simple_test
 ```
 
 This will display the results of the analysis of the example, showing all the paths it took and
