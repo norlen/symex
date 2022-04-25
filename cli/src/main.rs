@@ -17,7 +17,12 @@ use runner::run_analysis;
 fn main() -> Result<()> {
     env_logger::init();
 
-    run()?;
+    match run() {
+        Ok(_) => {}
+        Err(err) => {
+            eprintln!("{err}");
+        }
+    }
     Ok(())
 }
 
@@ -42,6 +47,10 @@ fn run() -> Result<()> {
     // Build LLVM BC file.
     let cargo_out = generate_build_command(&opts).output()?;
     debug!("cargo output: {cargo_out:?}");
+    if !cargo_out.status.success() {
+        let cargo_output = String::from_utf8(cargo_out.stderr)?;
+        return Err(anyhow!(cargo_output));
+    }
 
     // Create path to .bc file.
     let output = String::from_utf8(cargo_out.stderr)?;
