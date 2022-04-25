@@ -1,5 +1,4 @@
 use anyhow::{anyhow, Result};
-use std::collections::HashMap;
 use x0001e::{
     memory::{MemoryError, CHECK_OUT_OF_BOUNDS},
     project::Project,
@@ -17,7 +16,7 @@ struct Solution {
     inputs: Vec<u64>,
 
     /// Values explictly marked as symbolic. One solution for each of them.
-    symbolic: HashMap<String, u64>,
+    symbolic: Vec<(String, u64)>,
 
     /// Output value. Will be set if the output is a u64, otherwise `None` for e.g. returning void.
     output: Option<u64>,
@@ -32,11 +31,11 @@ fn get_input_solutions(vm: &VM<'_>) -> Result<Vec<u64>> {
     Ok(solutions)
 }
 
-fn get_sym_solutions(vm: &VM<'_>) -> Result<HashMap<String, u64>> {
-    let mut solutions = HashMap::new();
+fn get_sym_solutions(vm: &VM<'_>) -> Result<Vec<(String, u64)>> {
+    let mut solutions = Vec::new();
     for (name, symbol) in vm.state.symbols.iter() {
         let solution = get_single_u64_solution(&vm.solver, symbol)?;
-        solutions.insert(name.clone(), solution);
+        solutions.push((name.clone(), solution));
     }
     Ok(solutions)
 }

@@ -118,7 +118,7 @@ pub fn symbolic(vm: &mut VM<'_>, info: FnInfo) -> Result<ReturnValue> {
         };
         let fresh_symbol = vm.solver.bv(size, &var_name);
 
-        vm.state.symbols.insert(var_name, fresh_symbol.clone());
+        vm.state.symbols.push((var_name, fresh_symbol.clone()));
 
         let addr = vm.state.get_var(op)?;
         vm.state.mem.write(&addr, fresh_symbol)?;
