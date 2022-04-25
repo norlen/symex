@@ -1,7 +1,7 @@
 use anyhow::{anyhow, Result};
 use std::collections::HashMap;
 use x0001e::{
-    memory::MemoryError,
+    memory::{MemoryError, CHECK_OUT_OF_BOUNDS},
     project::Project,
     vm::{self, ReturnValue, VMError, VM},
     Solutions, Solver, BV,
@@ -189,10 +189,12 @@ fn array_index_works() {
 // Check that array indexing works even when using the unsafe `get_unchecked`
 #[test]
 fn array_index_get_unchecked() {
-    let res = run("tests/samples/array_index.bc", "array_index::get_unchecked");
-    assert_eq!(res.len(), 1, "expected 1 path");
-    assert_eq!(
-        res[0].ret,
-        Err(VMError::MemoryError(MemoryError::OutOfBounds))
-    );
+    if CHECK_OUT_OF_BOUNDS {
+        let res = run("tests/samples/array_index.bc", "array_index::get_unchecked");
+        assert_eq!(res.len(), 1, "expected 1 path");
+        assert_eq!(
+            res[0].ret,
+            Err(VMError::MemoryError(MemoryError::OutOfBounds))
+        );
+    }
 }

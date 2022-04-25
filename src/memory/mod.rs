@@ -6,6 +6,8 @@ use crate::{
     Solver, BV,
 };
 
+pub const CHECK_OUT_OF_BOUNDS: bool = true;
+
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum MemoryError {
     /// Tried to allocate with a size of zero.
@@ -125,7 +127,7 @@ impl NewMemory {
 
         // If we try to read more than a single byte, check that the read does not cross into
         // another allocation.
-        if bits > BITS_IN_BYTE {
+        if CHECK_OUT_OF_BOUNDS && bits > BITS_IN_BYTE {
             let last_byte = (bits / 8) as u64 - 1;
             let last_byte = self.solver.bv_from_u64(last_byte, self.ptr_size);
             let end_addr = addr.add(&last_byte);
