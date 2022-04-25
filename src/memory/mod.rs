@@ -6,9 +6,6 @@ use crate::{
     Solver, BV,
 };
 
-pub mod bump_allocator;
-pub mod simple_memory;
-
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum MemoryError {
     /// Tried to allocate with a size of zero.
