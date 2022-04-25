@@ -271,12 +271,12 @@ impl<'a> State<'a> {
     fn initalize_global_variable(&mut self, allocation: &Allocation<'_>) {
         if let AllocationType::Variable(var) = &allocation.kind {
             let initializer = var.initializer.clone().unwrap();
-            println!("var: {}", var.name);
+            //println!("var: {}", var.name);
 
             // Extremely temporary.
             match self.get_var(&initializer) {
                 Ok(value) => {
-                    println!("var: {}, value: {:?}", var.name, value);
+                    //println!("var: {}, value: {:?}", var.name, value);
 
                     let bv = self
                         .solver
@@ -284,8 +284,9 @@ impl<'a> State<'a> {
 
                     self.mem.write(&bv, value).unwrap();
                 }
-                Err(e) => {
-                    println!("err: {:?}", e);
+                Err(err) => {
+                    //println!("err: {:?}", e);
+                    warn!("Initialize global err: {:?}", err);
                 }
             }
         }

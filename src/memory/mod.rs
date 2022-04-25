@@ -91,13 +91,13 @@ impl NewMemory {
     pub fn allocate(&mut self, bits: u64, align: u64) -> Result<u64, MemoryError> {
         let (addr, bytes) = self.allocator.get_address(bits, align)?;
 
-        println!(
+        debug!(
             "allocate addr: {addr:x}, bytes: {bytes}, allocation_id: {}",
             self.next_allocation_id
         );
+
         let alloc_id = self.solver.bv_from_u64(self.next_allocation_id as u64, 8);
         for i in 0..bytes {
-            println!("ALLOC ID {alloc_id:?}: ADDR {:x}", addr + i);
             let addr = self.solver.bv_from_u64(addr + i, self.ptr_size);
             self.allocations.write_u8(&addr, &alloc_id);
         }

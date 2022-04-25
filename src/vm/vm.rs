@@ -47,7 +47,6 @@ impl<'a> Iterator for VM<'a> {
     type Item = Result<ReturnValue>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        trace!("Executing next path");
         self.backtrack_and_continue()
     }
 }
@@ -279,7 +278,7 @@ impl<'a> VM<'a> {
         &mut self,
         function: &Either<InlineAssembly, Operand>,
     ) -> Result<String> {
-        trace!("\n\nresolve fn: {:?}", function);
+        //trace!("\n\nresolve fn: {:?}", function);
         match function {
             Either::Left(_) => todo!(),
             Either::Right(operand) => match operand {

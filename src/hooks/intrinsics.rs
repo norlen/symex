@@ -199,7 +199,7 @@ pub fn llvm_memcpy(vm: &mut VM<'_>, f: FnInfo) -> Result<ReturnValue> {
         }
         Operand::ConstantOperand(constant) => {
             let size = constant.to_value()? as u32 * BITS_IN_BYTE;
-            println!("memcpy size={}", size);
+            //println!("memcpy size={}", size);
             let value = vm.state.mem.read(&src, size)?;
             vm.state.mem.write(&dst, value)?;
 

@@ -1,13 +1,7 @@
-
-//
-int t(int a)
-{
-    if (a > 10)
-    {
+int t(int a) {
+    if (a > 10) {
         return 10;
-    }
-    else
-    {
+    } else {
         return 0;
     }
 }
