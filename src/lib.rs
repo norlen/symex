@@ -32,11 +32,11 @@
 //!     while let Some(path_result) = vm.run() {
 //!         // Result of running one path is contained in the path_result.
 //!         //
-//!         // The VM state is currently at the terminating instructions, and methods are available
+//!         // The VM state is as it was at the last executed instruction, and methods are available
 //!         // on the VM to inspect the state and variables.
 //!         //
-//!         // Most interesting are most likely `vm.parameters` for all input variables to the
-//!         // function, and `vm.state.symbolic` for variables marked with `symbolic()`.
+//!         // Most interesting are likely `vm.parameters` for all input variables to the function,
+//!         // and `vm.state.symbolic` for variables marked with `symbolic()`.
 //!         let output = match &path_result {
 //!             Ok(value) => match value {
 //!                 ReturnValue::Value(value) => Some(

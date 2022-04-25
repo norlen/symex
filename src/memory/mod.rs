@@ -20,7 +20,7 @@ use crate::solver::{Array, Solver, SolverError, BV};
 
 /// Feature flag that enables checking when reading that the first byte read matches the last byte
 /// read's allocation id.
-pub(crate) const CHECK_OUT_OF_BOUNDS: bool = true;
+pub const CHECK_OUT_OF_BOUNDS: bool = true;
 
 /// Error representing an issue when performing memory operations.
 #[derive(Debug, Error, PartialEq, Eq)]
@@ -293,7 +293,7 @@ impl Memory {
     }
 }
 
-/// Simple bump allocator that starts allocating addresses at [BumpAllocator::ALLOC_START]
+/// Simple bump allocator that starts allocating addresses at `BumpAllocator::ALLOC_START`
 #[derive(Debug, Clone, Default)]
 struct BumpAllocator {
     /// Pointer to next available address to allocate at.
@@ -350,27 +350,39 @@ impl BumpAllocator {
     }
 }
 
+/// Simple backing memory store.
 #[derive(Debug, Clone)]
 struct MemoryStore {
+    /// Name of the store, also used as the name of the underlying memory array.
     name: &'static str,
 
+    /// Memory as a bitvector array.
     memory: Array,
 }
 
 impl MemoryStore {
+    /// Create new uninitialized memory.
+    ///
+    /// The addresses are of `ptr_size` and they point to elements with a size of `BITS_IN_BYTE`s.
     fn new_uninitialized(name: &'static str, solver: &Solver, ptr_size: u32) -> Self {
         let memory = solver.array(ptr_size, BITS_IN_BYTE, Some(name));
         Self { name, memory }
     }
 
+    /// Reads an u8 from the given address.
     fn read_u8(&self, addr: &BV) -> BV {
         self.memory.read(addr)
     }
 
+    /// Writes an u8 value to the given address.
     fn write_u8(&mut self, addr: &BV, val: &BV) {
         self.memory = self.memory.write(addr, val);
     }
 
+    /// Reads `bits` from `addr.
+    ///
+    /// If the number of bits are less than `BITS_IN_BYTE` then individual bits can be read, but
+    /// if the number of bits exceed `BITS_IN_BYTE` then full bytes must be read.
     fn read(
         &self,
         addr: &BV,
@@ -399,6 +411,11 @@ impl MemoryStore {
         Ok(value)
     }
 
+    /// Writes `value` to the given `addr`.
+    ///
+    /// If the size of the value is less than `BITS_IN_BYTE` it will be zero-extended into a full
+    /// byte. If the size exceeds `BITS_IN_BYTE` then the size **must** be a multiple of
+    /// `BITS_IN_BYTE`.
     fn write(
         &mut self,
         addr: &BV,

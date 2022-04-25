@@ -17,11 +17,8 @@ use crate::{
 };
 use map::ModulePrivateMap;
 
-mod config;
 mod map;
 //mod module;
-
-pub use config::Config;
 
 #[derive(Debug, Error)]
 pub enum ProjectError {}
@@ -48,8 +45,6 @@ pub struct Project {
 
     hooks: Hooks,
 
-    config: Config,
-
     functions: ModulePrivateMap<'static>,
 }
 
@@ -57,7 +52,6 @@ impl std::fmt::Debug for Project {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Project")
             .field("ptr_size", &self.ptr_size)
-            .field("config", &self.config)
             .finish()
     }
 }
@@ -93,7 +87,6 @@ impl Project {
             default_alignment: 4,
             modules,
             hooks: Hooks::new(),
-            config: Config::default(),
             functions,
         };
         Ok(project)
@@ -124,7 +117,6 @@ impl Project {
             default_alignment: 4,
             modules,
             hooks: Hooks::new(),
-            config: Config::default(),
             functions,
         };
         Ok(project)

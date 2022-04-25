@@ -15,7 +15,7 @@ struct Solution {
     /// will be empty.
     inputs: Vec<u64>,
 
-    /// Values explictly marked as symbolic. One solution for each of them.
+    /// Values explicitly marked as symbolic. One solution for each of them.
     symbolic: Vec<(String, u64)>,
 
     /// Output value. Will be set if the output is a u64, otherwise `None` for e.g. returning void.
