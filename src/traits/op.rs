@@ -3,9 +3,17 @@ use llvm_ir::{types::Typed, Constant, ConstantRef, Operand};
 use super::ToValue;
 use crate::vm::Result;
 
+/// Op is a helper for values that can be either an [Operand] or a [Constant].
+///
+/// Most instructions operare on [Operand]s, but a [Constant] can contain these same instructions.
+/// E.g. a [Constant] can contain the `getelementptr` functionality for calculating the offset
+/// inside a constant. This Enum allows for creating functions that can be shared for both cases.
 #[derive(Debug, Clone, Copy)]
 pub enum Op<'a> {
+    /// Contains a reference to an [Operand].
     Operand(&'a Operand),
+
+    /// Contains a reference to a [Constant].
     Constant(&'a Constant),
 }
 
@@ -46,6 +54,7 @@ impl<'a> ToValue<u64> for Op<'a> {
 }
 
 impl<'a> Op<'a> {
+    /// Returns `true` if the [Op] is a [Constant], otherwise `false`.
     pub fn is_constant(&self) -> bool {
         match self {
             Op::Operand(op) => match op {

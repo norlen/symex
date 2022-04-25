@@ -303,17 +303,3 @@ impl BV {
         }
     }
 }
-
-// impl Deref for BV {
-//     type Target = boolector::BV<Rc<Btor>>;
-
-//     fn deref(&self) -> &Self::Target {
-//         &self.0
-//     }
-// }
-
-// impl From<boolector::BV<Rc<Btor>>> for BV {
-//     fn from(bv: boolector::BV<Rc<Btor>>) -> Self {
-//         Self(bv)
-//     }
-// }

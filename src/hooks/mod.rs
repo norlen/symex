@@ -105,9 +105,6 @@ pub fn symbolic(vm: &mut VM<'_>, info: FnInfo) -> Result<ReturnValue> {
     {
         let size = vm.project.bit_size(inner_ty.as_ref())?;
 
-        // TODO: Symbolic can be called on the same variable multiple time (or just same name)
-        // thus, we should probably have different "versions" so that we can differentiate the names
-        // for all of them.
         let var_name: String = match op {
             Operand::LocalOperand { name, .. } => match name {
                 Name::Name(name) => String::from(name.as_str()),
@@ -116,12 +113,12 @@ pub fn symbolic(vm: &mut VM<'_>, info: FnInfo) -> Result<ReturnValue> {
             Operand::ConstantOperand(_) => todo!(),
             Operand::MetadataOperand => todo!(),
         };
-        let fresh_symbol = vm.solver.bv(size, &var_name);
+        let new_symbol = vm.solver.bv(size, &var_name);
 
-        vm.state.symbols.push((var_name, fresh_symbol.clone()));
+        vm.state.symbols.push((var_name, new_symbol.clone()));
 
         let addr = vm.state.get_var(op)?;
-        vm.state.mem.write(&addr, fresh_symbol)?;
+        vm.state.mem.write(&addr, new_symbol)?;
 
         Ok(ReturnValue::Void)
     } else {

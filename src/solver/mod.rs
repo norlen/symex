@@ -15,8 +15,6 @@ pub enum SolverError {
     Unknown,
 }
 
-pub enum UnaryOperation {}
-
 #[derive(Debug)]
 pub enum Solutions {
     /// Could not find any solutions with the current constraints.

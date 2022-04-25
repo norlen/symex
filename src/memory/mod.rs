@@ -6,6 +6,8 @@ use crate::{
     Solver, BV,
 };
 
+/// Feature flag that enables checking when reading that the first byte read matches the last byte
+/// read's allocation id.
 pub const CHECK_OUT_OF_BOUNDS: bool = true;
 
 #[derive(Debug, Error, PartialEq, Eq)]
@@ -31,11 +33,14 @@ pub enum MemoryError {
     #[error("Null pointer encountered")]
     NullPointer,
 
-    #[error(transparent)]
-    Solver(#[from] SolverError),
-
+    /// Each allocation has a respective size, this is returned when a read starts inside one
+    /// allocation and ends outside of it.
     #[error("Out of bounds")]
     OutOfBounds,
+
+    /// Errors passed on from the solver.
+    #[error(transparent)]
+    Solver(#[from] SolverError),
 }
 
 /// The number of bits per byte the memory system expects.
@@ -53,24 +58,36 @@ pub fn to_bytes(size: u64) -> Result<u64, MemoryError> {
 
 #[derive(Debug, Clone)]
 pub struct NewMemory {
+    /// Reference to the solver so new symbols can be created.
     solver: Solver,
 
+    /// Allocator is used to generate new addresses.
     allocator: BumpAllocator2,
 
+    /// The actual memory. Stores all values written to memory.
     store: MemoryStore,
 
-    allocations: MemoryStore,
-
+    /// Size of a pointer.
     ptr_size: u32,
 
+    /// Enable to check if addresses passed to read or write can be null.
     null_detection: bool,
 
+    /// Symbol that is a null pointer, used for comparisons if `null_detection` is enabled.
     nullptr: BV,
 
+    /// Keep track of allocation IDs.
+    ///
+    /// Each allocation is given a certain ID. This stores all these IDs, so we can check for out
+    /// of bounds reads.
+    allocations: MemoryStore,
+
+    /// The next allocation ID to store in `allocations`.
     next_allocation_id: usize,
 }
 
 impl NewMemory {
+    /// Creates a new memory containing only uninitialized memory.
     pub fn new(solver: Solver, ptr_size: u32) -> Self {
         let nullptr = solver.bv_zero(ptr_size);
         let store = MemoryStore::new_uninitialized("memory", &solver, ptr_size);
@@ -82,7 +99,7 @@ impl NewMemory {
             store,
             allocations,
             ptr_size,
-            null_detection: false,
+            null_detection: true,
             nullptr,
             next_allocation_id: 0,
         }
