@@ -95,7 +95,6 @@
 //!
 #![warn(rust_2018_idioms, rust_2021_compatibility)]
 //#![warn(missing_docs)]
-#![allow(clippy::module_inception)] // For now.
 
 pub mod hooks;
 pub mod memory;

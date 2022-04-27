@@ -307,9 +307,8 @@ impl BV {
     // ---------------------------------------------------------------------------------------------
 
     pub fn get_solver(&self) -> Solver {
-        Solver {
-            btor: self.0.get_btor(),
-        }
+        let btor = self.0.get_btor();
+        Solver(btor)
     }
 
     pub(super) fn get_solution(&self) -> BVSolution {
