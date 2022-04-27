@@ -56,6 +56,8 @@ impl Hooks {
         };
 
         hooks.add("core::panicking::panic_bounds_check", abort);
+        hooks.add("core::panicking::panic", abort);
+        hooks.add("core::panicking::panic_fmt", abort);
         hooks.add("x0001e::assume", assume);
         hooks.add("x0001e::symbolic", symbolic);
 
