@@ -1,11 +1,11 @@
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use colored::Colorize;
 use rustc_demangle::demangle;
 use std::path::Path;
 use x0001e::{
     project::Project,
+    solver::SolutionGenerator,
     vm::{self, ReturnValue, VM},
-    Solutions, Solver, BV,
 };
 
 #[derive(Debug)]
@@ -24,39 +24,6 @@ struct Solution {
     output: Option<u64>,
 }
 
-fn get_input_solutions(vm: &VM<'_>) -> Result<Vec<u64>> {
-    let mut solutions = Vec::new();
-    for symbol in vm.parameters.iter() {
-        let solution = get_single_u64_solution(&vm.solver, symbol)?;
-        solutions.push(solution);
-    }
-    Ok(solutions)
-}
-
-fn get_sym_solutions(vm: &VM<'_>) -> Result<Vec<(String, u64)>> {
-    let mut solutions = Vec::new();
-    for (name, symbol) in vm.state.symbols.iter() {
-        let solution = get_single_u64_solution(&vm.solver, symbol)?;
-        solutions.push((name.clone(), solution));
-    }
-    Ok(solutions)
-}
-
-fn get_single_u64_solution(solver: &Solver, value: &BV) -> Result<u64> {
-    let solution = solver.get_solutions_for_bv(value, 1)?;
-
-    let solution = match solution {
-        Solutions::None => return Err(anyhow!("No input solutions found")),
-        Solutions::Exactly(n) | Solutions::AtLeast(n) => n
-            .first()
-            .unwrap()
-            .as_u64()
-            .expect("Could not convert solution to u64"),
-    };
-
-    Ok(solution)
-}
-
 pub fn run_analysis(path: impl AsRef<Path>, fn_name: &str) -> Result<()> {
     let project = Project::from_path(path)?;
     let mut vm = VM::new(fn_name, &project)?;
@@ -64,22 +31,27 @@ pub fn run_analysis(path: impl AsRef<Path>, fn_name: &str) -> Result<()> {
     let mut results = Vec::new();
     let mut path = 1;
     while let Some(path_result) = vm.run() {
-        // Get input solutions.
-        let input_solutions = get_input_solutions(&vm).expect("Could not get input solutions");
+        let mut gen = SolutionGenerator::new(vm.solver.clone());
 
-        // Get solutions to `symbolic`.
-        let sym_solutions =
-            get_sym_solutions(&vm).expect("Could not get solutions for `symbolic` calls");
+        let mut parameters = Vec::new();
+        for bv in vm.parameters.iter() {
+            let sol = gen.get_solution(bv)?;
+            parameters.push(sol.as_u64().unwrap());
+        }
 
-        // Get solution to output.
-        let output = match &path_result {
-            Ok(v) => match v {
-                ReturnValue::Value(v) => Some(
-                    get_single_u64_solution(&vm.solver, v).expect("failed to get output solution"),
-                ),
+        let mut symbolics = Vec::new();
+        for (name, bv) in vm.state.symbols.iter() {
+            let sol = gen.get_solution(bv)?;
+            symbolics.push((name.clone(), sol.as_u64().unwrap()));
+        }
+
+        let output = if let Ok(result) = &path_result {
+            match result {
+                ReturnValue::Value(v) => gen.get_solution(v)?.as_u64(),
                 ReturnValue::Void => None,
-            },
-            Err(_) => None,
+            }
+        } else {
+            None
         };
 
         if path != 1 {
@@ -96,15 +68,15 @@ pub fn run_analysis(path: impl AsRef<Path>, fn_name: &str) -> Result<()> {
                     None => "void".to_owned(),
                 };
                 println!(": returned {value}");
-                if !sym_solutions.is_empty() {
+                if !symbolics.is_empty() {
                     println!("\nSymbolic values");
-                    for (n, (name, value)) in sym_solutions.iter().enumerate() {
-                        println!("{n:4}: {name}={value}");
+                    for (name, value) in symbolics.iter() {
+                        println!("    {name}: {value}");
                     }
                 }
-                if !input_solutions.is_empty() {
+                if !parameters.is_empty() {
                     println!("\nInputs");
-                    for (n, value) in input_solutions.iter().enumerate() {
+                    for (n, value) in parameters.iter().enumerate() {
                         println!("{n:4}: {value}");
                     }
                 }
@@ -122,15 +94,15 @@ pub fn run_analysis(path: impl AsRef<Path>, fn_name: &str) -> Result<()> {
                         println!("      at {debug_loc}");
                     }
                 }
-                if !sym_solutions.is_empty() {
+                if !symbolics.is_empty() {
                     println!("\nSymbolic values");
-                    for (n, (name, value)) in sym_solutions.iter().enumerate() {
-                        println!("{n:4}: {name}={value}");
+                    for (name, value) in symbolics.iter() {
+                        println!("    {name}: {value}");
                     }
                 }
-                if !input_solutions.is_empty() {
+                if !parameters.is_empty() {
                     println!("\nInputs");
-                    for (n, value) in input_solutions.iter().enumerate() {
+                    for (n, value) in parameters.iter().enumerate() {
                         println!("{n:4}: {value}");
                     }
                 }
@@ -139,8 +111,8 @@ pub fn run_analysis(path: impl AsRef<Path>, fn_name: &str) -> Result<()> {
 
         results.push(Solution {
             ret: path_result,
-            inputs: input_solutions,
-            symbolic: sym_solutions,
+            inputs: parameters,
+            symbolic: symbolics,
             output,
         });
         path += 1;

@@ -7,6 +7,7 @@ mod solver;
 
 pub use array::Array;
 pub use bv::BV;
+pub use solver::SolutionGenerator;
 pub use solver::Solver;
 
 #[derive(Debug, Error, PartialEq, Eq)]

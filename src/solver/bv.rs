@@ -34,6 +34,7 @@ impl BV {
     /// Resize the current [BV] to the passed bit width and return the resulting [BV].
     ///
     /// If `self.len()` is compared to `target_size`
+    ///
     /// - Same: the symbol is returned.
     /// - Smaller: the symbol is zero extended to the the target size.
     /// - Larger: the symbol is truncated to the target size.
@@ -45,57 +46,71 @@ impl BV {
         }
     }
 
-    // ---------------------------------------------------------------------------------------------
-    // Operations
-    // ---------------------------------------------------------------------------------------------
-
     /// [BV] equality check. Both [BV]s must have the same bit width, the result is returned as a
-    /// [BV] of width 1.
+    /// [BV] of width `1`.
     pub fn eq(&self, other: &BV) -> BV {
         assert_eq!(self.len(), other.len());
         BV(self.0._eq(&other.0))
     }
 
+    /// [BV] inequality check. Both [BV]s must have the same bit width, the result is returned as a
+    /// [BV] of width `1`.
     pub fn ne(&self, other: &BV) -> BV {
         assert_eq!(self.len(), other.len());
         BV(self.0._ne(&other.0))
     }
 
+    /// [BV] unsigned greater than. Both [BV]s must have the same bit width, the result is returned
+    /// as a [BV] of width `1`.
     pub fn ugt(&self, other: &BV) -> BV {
         assert_eq!(self.len(), other.len());
         BV(self.0.ugt(&other.0))
     }
 
+    /// [BV] unsigned greater than or equal. Both [BV]s must have the same bit width, the result is
+    /// returned as a [BV] of width `1`.
     pub fn ugte(&self, other: &BV) -> BV {
         assert_eq!(self.len(), other.len());
         BV(self.0.ugte(&other.0))
     }
 
+    /// [BV] unsigned less than. Both [BV]s must have the same bit width, the result is returned as
+    /// a [BV] of width `1`.
     pub fn ult(&self, other: &BV) -> BV {
         assert_eq!(self.len(), other.len());
         BV(self.0.ult(&other.0))
     }
 
+    /// [BV] unsigned less than or equal. Both [BV]s must have the same bit width, the result is
+    /// returned as a [BV] of width `1`.
     pub fn ulte(&self, other: &BV) -> BV {
         assert_eq!(self.len(), other.len());
         BV(self.0.ulte(&other.0))
     }
 
+    /// [BV] signed greater than. Both [BV]s must have the same bit width, the result is returned as
+    /// a [BV] of width `1`.
     pub fn sgt(&self, other: &BV) -> BV {
         assert_eq!(self.len(), other.len());
         BV(self.0.sgt(&other.0))
     }
 
+    /// [BV] signed greater or equal than. Both [BV]s must have the same bit width, the result is
+    /// returned as a [BV] of width `1`.
     pub fn sgte(&self, other: &BV) -> BV {
         assert_eq!(self.len(), other.len());
         BV(self.0.sgte(&other.0))
     }
 
+    /// [BV] signed less than. Both [BV]s must have the same bit width, the result is returned as a
+    /// [BV] of width `1`.
     pub fn slt(&self, other: &BV) -> BV {
         assert_eq!(self.len(), other.len());
         BV(self.0.slt(&other.0))
     }
 
+    /// [BV] signed less than or equal. Both [BV]s must have the same bit width, the result is
+    /// returned as a [BV] of width `1`.
     pub fn slte(&self, other: &BV) -> BV {
         assert_eq!(self.len(), other.len());
         BV(self.0.slte(&other.0))
@@ -236,9 +251,11 @@ impl BV {
     pub fn and(&self, other: &BV) -> BV {
         BV(self.0.and(&other.0))
     }
+
     pub fn or(&self, other: &BV) -> BV {
         BV(self.0.or(&other.0))
     }
+
     pub fn xor(&self, other: &BV) -> BV {
         BV(self.0.xor(&other.0))
     }
@@ -286,20 +303,16 @@ impl BV {
     }
 
     // ---------------------------------------------------------------------------------------------
-    // Solutions
-    // ---------------------------------------------------------------------------------------------
-
-    pub fn get_solution(&self) -> BVSolution {
-        self.0.get_a_solution()
-    }
-
-    // ---------------------------------------------------------------------------------------------
-    // If we want to create a bv from basically another, we can use the same solver
+    // Misc
     // ---------------------------------------------------------------------------------------------
 
     pub fn get_solver(&self) -> Solver {
         Solver {
             btor: self.0.get_btor(),
         }
+    }
+
+    pub(super) fn get_solution(&self) -> BVSolution {
+        self.0.get_a_solution()
     }
 }
