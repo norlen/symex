@@ -99,12 +99,6 @@ impl Solver {
         // Assume the constraint, will be forgotten after the next call to `is_sat`.
         constraint.0.assume();
         self.is_sat()
-
-        // self.btor.push(1);
-        // self.assert(constraint);
-        // let is_sat = self.is_sat()?;
-        // self.btor.pop(1);
-        // Ok(is_sat)
     }
 
     /// Add the constraint to the solver.
@@ -114,10 +108,6 @@ impl Solver {
     pub fn assert(&self, bv: &BV) {
         bv.0.assert();
     }
-
-    // -------------------------------------------------------------------------
-    // BV helpers
-    // -------------------------------------------------------------------------
 
     /// Returns `true` if `lhs` and `rhs` must be equal under the current constraints.
     pub fn must_be_equal(&self, lhs: &BV, rhs: &BV) -> Result<bool, SolverError> {

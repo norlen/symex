@@ -17,23 +17,33 @@ pub fn size_in_bits(ty: &Type, project: &Project) -> Option<u64> {
         IntegerType { bits } => Some(*bits as u64),
         PointerType { .. } => Some(project.ptr_size as u64),
         FPType(fp_ty) => Some(fp_size_in_bits(fp_ty)),
+
+        // Vectors and arrays are similar, both have an element size and a number of elements.
         VectorType {
             element_type,
             num_elements,
             ..
-        } => size_in_bits(element_type, project).map(|size| *num_elements as u64 * size),
-        ArrayType {
+        }
+        | ArrayType {
             element_type,
             num_elements,
         } => size_in_bits(element_type, project).map(|size| *num_elements as u64 * size),
+
+        // Sum the size of each member.
         StructType { element_types, .. } => element_types
             .iter()
             .map(|ty| size_in_bits(ty, project))
             .sum(),
+
+        // For named structs get the underlying struct from the project.
+        //
+        // For opaque structs we cannot get a size.
         NamedStructType { name } => match project.get_named_struct(name)? {
             NamedStructDef::Opaque => None,
             NamedStructDef::Defined(ty) => size_in_bits(ty, project),
         },
+
+        // TODO
         FuncType { .. } => todo!(),
         X86_MMXType => todo!(),
         X86_AMXType => todo!(),

@@ -25,7 +25,7 @@ where
 
     let offset_upper_bound = total_offset + state.project.bit_size(&ty)? as u64;
 
-    // Get the value and check that the BV is big enough to accomodate our slice.
+    // Get the value and check that the BV is big enough to accommodate our slice.
     let value = state.get_var(aggregate)?;
     assert!(value.len() >= offset_upper_bound as u32);
 
