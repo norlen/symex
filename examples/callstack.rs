@@ -1,3 +1,4 @@
+//! Run example with `cargo run -p cli -- --example callstack --function foobar`
 use x0001e::{assume, symbolic};
 
 fn bar(x: i32, y: i32) -> i32 {

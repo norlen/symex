@@ -7,10 +7,9 @@ use x0001e::{
 fn main() {
     init();
 
-    let project = Project::from_path("./samples/simplest/main.bc").unwrap();
+    let project = Project::from_path("./examples/samples/simplest/main.bc").unwrap();
     let vm = VM::new("t", &project).unwrap();
 
-    // this creates a problem with clone
     let paths: Vec<Result<ReturnValue, _>> = vm.clone().into_iter().collect();
     println!("result {:?}", paths);
 
