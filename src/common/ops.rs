@@ -2,8 +2,8 @@ use llvm_ir::{IntPredicate, Operand, Type};
 
 use super::{get_bit_offset_concrete, Op, ToValue};
 use crate::{
+    common::{get_byte_offset_concrete, get_byte_offset_symbol},
     solver::BV,
-    traits::{get_byte_offset_concrete, get_byte_offset_symbol},
     vm::{Result, State, VMError},
 };
 

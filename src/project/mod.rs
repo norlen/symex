@@ -9,12 +9,12 @@ use rustc_demangle::demangle;
 use std::{collections::HashMap, fs, path::Path};
 
 use crate::{
-    hooks::{Hook, Hooks},
-    memory::to_bytes,
-    traits::{
+    common::{
         get_bit_offset_concrete, get_bit_offset_symbol, get_byte_offset_concrete,
         get_byte_offset_symbol, size_in_bits,
     },
+    hooks::{Hook, Hooks},
+    memory::to_bytes,
     VMError, BV,
 };
 

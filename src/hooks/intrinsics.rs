@@ -73,9 +73,9 @@ use radix_trie::Trie;
 use std::collections::HashMap;
 
 use crate::{
+    common::ToValue,
     hooks::{FnInfo, Hook},
     memory::BITS_IN_BYTE,
-    traits::ToValue,
     vm::{Result, ReturnValue, VMError, VM},
 };
 

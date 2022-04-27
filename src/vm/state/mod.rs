@@ -8,9 +8,9 @@ use log::warn;
 
 use super::{GlobalReference, GlobalReferenceKind, GlobalReferences, Result};
 use crate::{
+    common::{const_to_symbol, operand_to_symbol, Op},
     memory::Memory,
     project::{ModuleHandle, Project},
-    traits::{const_to_symbol, operand_to_symbol, Op},
     {Solver, BV},
 };
 

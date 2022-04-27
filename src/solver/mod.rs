@@ -157,38 +157,6 @@ impl Solver {
         result
     }
 
-    /// Helper to ensure we always set `ModelGen::Disabled` for all paths in this function.
-    fn internal_get_solutions_for_bv(
-        &self,
-        bv: &BV,
-        max_solutions: usize,
-    ) -> Result<Solutions, SolverError> {
-        if !self.is_sat()? {
-            return Ok(Solutions::None);
-        }
-
-        let mut solutions = Vec::new();
-        while solutions.len() < max_solutions && self.is_sat()? {
-            let solution = bv.get_solution().disambiguate();
-
-            // Constrain the next value to not be an already found solution.
-            let solution_bv = self.from_binary_string(solution.as_01x_str());
-            self.assert(&bv.ne(&solution_bv));
-
-            solutions.push(solution);
-        }
-
-        if solutions.is_empty() {
-            Ok(Solutions::None)
-        } else {
-            let exists_more_solutions = self.is_sat()?;
-            match exists_more_solutions {
-                false => Ok(Solutions::Exactly(solutions)),
-                true => Ok(Solutions::AtLeast(solutions)),
-            }
-        }
-    }
-
     /// Add a context level to the solver.
     ///
     /// Adding a context level to the solver allows for adding constraints that can be forgotten
@@ -245,5 +213,37 @@ impl Solver {
     /// Create a bitvector of size `bits` from a binary string.
     pub fn from_binary_string(&self, bits: &str) -> BV {
         BV(boolector::BV::from_binary_str(self.0.clone(), bits))
+    }
+
+    /// Helper to ensure we always set `ModelGen::Disabled` for all paths in this function.
+    fn internal_get_solutions_for_bv(
+        &self,
+        bv: &BV,
+        max_solutions: usize,
+    ) -> Result<Solutions, SolverError> {
+        if !self.is_sat()? {
+            return Ok(Solutions::None);
+        }
+
+        let mut solutions = Vec::new();
+        while solutions.len() < max_solutions && self.is_sat()? {
+            let solution = bv.get_solution().disambiguate();
+
+            // Constrain the next value to not be an already found solution.
+            let solution_bv = self.from_binary_string(solution.as_01x_str());
+            self.assert(&bv.ne(&solution_bv));
+
+            solutions.push(solution);
+        }
+
+        if solutions.is_empty() {
+            Ok(Solutions::None)
+        } else {
+            let exists_more_solutions = self.is_sat()?;
+            match exists_more_solutions {
+                false => Ok(Solutions::Exactly(solutions)),
+                true => Ok(Solutions::AtLeast(solutions)),
+            }
+        }
     }
 }

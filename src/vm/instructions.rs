@@ -5,10 +5,10 @@ use llvm_ir::{
 use log::{debug, warn};
 
 use crate::{
+    common::{binop, cast_to, convert_to_map, extract_value, gep, icmp, ToValue},
     hooks::FnInfo,
     project::FunctionType,
     solver::BV,
-    traits::{binop, cast_to, convert_to_map, extract_value, gep, icmp, ToValue},
     vm::{Callsite, Location, Result, ReturnValue, VMError, VM},
 };
 
