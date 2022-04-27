@@ -22,12 +22,12 @@
 //!
 //! Code to analyze the function can be written as
 //!
-//! ```ignore
+//! ```rust
 //! use x0001e::{Project, ReturnValue, VM};
 //!
 //! fn main() -> Result<(), Box<dyn std::error::Error>> {
-//!     let project = Project::from_path("path/to/ir.bc")?;
-//!     let mut vm = VM::new("function_to_analyze", &project)?;
+//!     let project = Project::from_path("tests/doc_tests/test.bc")?;
+//!     let mut vm = VM::new("test::function_to_analyze", &project)?;
 //!
 //!     while let Some(path_result) = vm.run() {
 //!         // Result of running one path is contained in the path_result.

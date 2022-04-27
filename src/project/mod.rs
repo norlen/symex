@@ -94,11 +94,12 @@ impl Project {
     ///
     /// # Example
     ///
-    /// ```ignore
+    /// ```rust
     /// # use x0001e::Project;
     /// #
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let project = Project::from_folder("path-to-bcs")?;
+    /// let project = Project::from_folder("tests/doc_tests/")?;
+    /// #   Ok(())
     /// # }
     /// ```
     pub fn from_folder(path: impl AsRef<Path>) -> Result<Self, std::io::Error> {
@@ -122,11 +123,12 @@ impl Project {
     ///
     /// # Example
     ///
-    /// ```ignore
+    /// ```rust
     /// # use x0001e::Project;
     /// #
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let project = Project::from_path("path-to-bc")?;
+    /// let project = Project::from_path("tests/doc_tests/test.bc")?;
+    /// #   Ok(())
     /// # }
     /// ```
     pub fn from_path(path: impl AsRef<Path>) -> Result<Self, std::io::Error> {
@@ -244,11 +246,12 @@ impl Project {
     ///
     /// # Example
     ///
-    /// ```ignore
+    /// ```rust
     /// # use x0001e::Project;
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let project = Project::from_path("path-to-bc")?;
-    /// let (module, function) = project.find_entry_point("root_crate::main")?;
+    /// let project = Project::from_path("tests/doc_tests/test.bc")?;
+    /// let (module, function) = project.find_entry_function("test::main")?;
+    /// #   Ok(())
     /// # }
     /// ```
     pub fn find_entry_function(&self, name: &str) -> Result<(ModuleHandle, &Function), VMError> {
@@ -277,14 +280,19 @@ impl Project {
     /// It will first check if `name` matches any user-defined hooks. Followed by module private
     /// definitions, and finally check against public functions.
     ///
+    /// This can be used when creating user-defined hooks. The name is the mangled name of the
+    /// function, and requires a [ModuleHandle].
+    ///
     /// # Example
     ///
-    /// ```ignore
-    /// # use x0001e::Project;
+    /// ```rust
+    /// # use x0001e::{Project, project::ModuleHandle};
     /// #
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let project = Project::from_folder("path-to-bcs")?;
-    /// let function = project.get_function("crate::my_func")?;
+    /// #   let project = Project::from_path("tests/doc_tests/test.bc")?;
+    /// #   let module_handle: ModuleHandle = unsafe { std::mem::transmute(0usize) };
+    /// let function = project.get_function("_ZN4test7my_func17hc738e17486d3eeeaE", module_handle)?;
+    /// #   Ok(())
     /// # }
     /// ```
     pub fn get_function(
