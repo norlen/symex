@@ -114,7 +114,8 @@ pub fn const_to_symbol_zero_size(state: &mut State<'_>, constant: &Constant) -> 
         // they are simply just converted to symbols.
         GlobalReference { name, .. } => {
             let global = state
-                .get_global(name)
+                .global_references
+                .get(name, state.current_loc.module)
                 .cloned()
                 .ok_or_else(|| VMError::Other(anyhow!("Global ref not found: {:?}", name)))?;
 

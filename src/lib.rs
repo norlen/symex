@@ -26,7 +26,7 @@
 //! use x0001e::{Project, ReturnValue, VM};
 //!
 //! fn main() -> Result<(), Box<dyn std::error::Error>> {
-//!     let project = Project::from_bc_path("path/to/ir.bc")?;
+//!     let project = Project::from_path("path/to/ir.bc")?;
 //!     let mut vm = VM::new("function_to_analyze", &project)?;
 //!
 //!     while let Some(path_result) = vm.run() {
@@ -84,7 +84,7 @@
 //!
 //! ## Solver
 //!
-//! The [Solver] keeps tracks of all the contraints added to it. It it also used to create new
+//! The [Solver] keeps tracks of all the constraints added to it. It it also used to create new
 //! symbols. The solver can be queried for solutions to different symbols.
 //!
 //! ## Hooks
@@ -113,7 +113,7 @@ pub use crate::{
 
 /// Assume the condition.
 ///
-/// Adds a contraint that the passed condition must be true. If the condition can never be true,
+/// Adds a constraint that the passed condition must be true. If the condition can never be true,
 /// this will lead to an `Unsat` error.
 ///
 /// # Example
@@ -121,7 +121,7 @@ pub use crate::{
 /// ```rust
 /// # use x0001e::assume;
 /// fn foo(var: i32) -> i32 {
-///     // Will add a contraint to the solver for the passed condition.
+///     // Will add a constraint to the solver for the passed condition.
 ///     assume(var >= 0);
 ///     if var < 0 {
 ///         unreachable!();
@@ -135,7 +135,7 @@ pub fn assume(condition: bool) {
     // Implemented as hook `hooks::assume`.
 }
 
-/// Creates a new symbolic value for `value`. This removes all contraints.
+/// Creates a new symbolic value for `value`. This removes all constraints.
 ///
 /// This creates a new symbolic variable and assigns overwrites the passed `value`. This must be
 /// performed since constraints added to the solver cannot be removed, and the previous value may
@@ -146,7 +146,7 @@ pub fn assume(condition: bool) {
 /// ```rust
 /// # use x0001e::symbolic;
 /// fn foo() {
-///     // This will create a symbol with the contstraint that x is 0.
+///     // This will create a symbol with the constraint that x is 0.
 ///     let mut x = 0;
 ///     // Removes all constraints from `x`, letting it be an unconstrained symbol
 ///     // that can be anything.

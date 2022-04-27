@@ -1,5 +1,7 @@
 use anyhow::{anyhow, Result};
-use llvm_ir::{BasicBlock, DebugLoc, Function, HasDebugLoc, Module, Name};
+use llvm_ir::{BasicBlock, DebugLoc, Function, HasDebugLoc, Name};
+
+use crate::project::ModuleHandle;
 
 /// Determines the index to the next instruction to execute in a Basic Block.
 #[derive(Debug, Clone)]
@@ -23,7 +25,7 @@ pub enum InstructionIndex {
 #[derive(Clone)]
 pub struct Location<'a> {
     /// The `Module` that is currently being executing in.
-    pub module: &'a Module,
+    pub module: ModuleHandle,
 
     /// The `Function` that is being executed.
     pub func: &'a Function,
@@ -51,7 +53,7 @@ impl<'a> Location<'a> {
     ///
     /// The specific location will be in the given module and function, and will
     /// pick the first basic block.
-    pub fn new(module: &'a Module, func: &'a Function) -> Self {
+    pub fn new(module: ModuleHandle, func: &'a Function) -> Self {
         let block = func.basic_blocks.get(0).expect("failed to get bb");
         Self {
             module,

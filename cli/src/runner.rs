@@ -56,7 +56,7 @@ fn get_single_u64_solution(solver: &Solver, value: &BV) -> Result<u64> {
 }
 
 pub fn run_analysis(path: impl AsRef<Path>, fn_name: &str) -> Result<()> {
-    let project = Project::from_bc_path(path)?;
+    let project = Project::from_path(path)?;
     let mut vm = VM::new(fn_name, &project)?;
 
     let mut results = Vec::new();

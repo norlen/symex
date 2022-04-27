@@ -1,245 +1,225 @@
-//! Global variables.
+//! Map of global references to their addresses.
 //!
-//! # Privacy
-//!
-//! Global variables in LLVM-IR can have different linkage types. This module
-//! divides these up into two different kinds: weak and strong.
-//!
-//! The implementation as it is right now, treats `private`, `internal` and
-//! `external` linkage as strong globals. Which overwrites weak globals.
-//!
-//! Weak globals have the linkage `available_externally`, `linkonce`,
-//! `weak`, `common`, `extern_weak`, `linkonce_odr`, and `weak_odr`.
-//!
-//! `appending` is not supported at all at the moment.
-//!
-//! Further, `private` keeps the global private to the module it is declared in
-//! while the rest allows access from the outside.
-//!
-//! # Constant
-//!
-//! If the global variable is declared as `constant` the contents will never
-//! be modified.
-//!
-//! # Address
-//!
-//! If the global variable has `unnamed_addr` an address won't be allocated.
-use llvm_ir::{
-    module::{GlobalVariable, Linkage},
-    Function, Module, Name,
+//! Keeps track of both external and internal global references ([Function]s and [GlobalVariable]s).
+use llvm_ir::{module::GlobalVariable, Function, Name, Type};
+use log::debug;
+use std::collections::HashMap;
+
+use crate::{
+    memory::Memory,
+    project::{ModuleHandle, Project},
+    VMError,
 };
-use std::{collections::HashMap, fmt};
 
-// /// Helper trait so functions can accept both [GlobalVariable] and [Function].
-// trait Global {
-//     /// Returns true if this global should be module private.
-//     fn is_private() -> bool;
-
-//     /// Returns true if an address should be allocated for the global.
-//     fn has_address() -> bool;
-
-//     /// Returns true if the global is immutable.
-//     fn is_constant() -> bool;
-// }
-
-/// A global allocation which can be either a [GlobalVariable] or a [Function].
+/// A global [Function] or [GlobalVariable].
 ///
-/// These always have concrete addresses.
-#[derive(Clone)]
-pub struct Allocation<'p> {
-    /// Address to the global.
+/// A global always have an address.
+#[derive(Debug, Clone)]
+pub struct GlobalReference<'p> {
+    /// Address where the global is allocated.
     pub addr: u64,
 
-    pub module: &'p Module,
-
-    /// If it is a [GlobalVariable] or [Function].
-    pub kind: AllocationType<'p>,
+    /// Reference to the [Function] or [GlobalVariable] of the global.
+    pub kind: GlobalReferenceKind<'p>,
 }
 
-impl<'p> fmt::Debug for Allocation<'p> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Allocation")
-            .field("addr", &self.addr)
-            .field("module", &self.module.name)
-            .field("kind", &self.kind)
-            .finish()
-    }
-}
-
+/// Can hold either a [Function] or [GlobalVariable].
 #[derive(Debug, Clone)]
-pub enum AllocationType<'p> {
-    Variable(&'p GlobalVariable),
+pub enum GlobalReferenceKind<'p> {
+    /// Holds the referenced [GlobalVariable].
+    GlobalVariable(&'p GlobalVariable),
+
+    /// Holds the referenced [Function].
     Function(&'p Function),
 }
 
-type GlobalMap<'p> = HashMap<Name, Allocation<'p>>;
-
-/// Globals keeps track of global variables and functions.
+/// GlobalReferences keeps track of all [GlobalVariable]s and [Function]s that have addresses.
 ///
-/// This structure keeps track of both global variables and functions since a [llvm_ir::ConstantRef]
-/// can refer to both. The globals are further divided up into public and module private. The
-/// [Linkage] determines their type. `External` linkage is treated as public, while `Internal` and
-/// `Private` are treated as module private. Other linkage types are currently not supported.
-///
-/// Global variables are regions in memory which are allocated at compile time. If the global
-/// variable is a definition it **must** have an initializer.
+/// Keeps a mapping between the name of a [GlobalVariable] or [Function] to its address. For
+/// functions it also keep a reverse lookup table, i.e. address to function name.
 #[derive(Debug, Clone)]
-pub struct Globals<'p> {
-    pub(crate) globals: GlobalMap<'p>,
+pub struct GlobalReferences<'p> {
+    /// Maps [Function] or [GlobalVariable] name to an address.
+    pub global_references: HashMap<Name, GlobalReference<'p>>,
 
-    pub(crate) private_globals: HashMap<String, GlobalMap<'p>>,
+    /// Maps module private [Function] or [GlobalVariable] name to an address.
+    pub private_global_references: HashMap<ModuleHandle, HashMap<Name, GlobalReference<'p>>>,
 
-    public_addr_to_fn: HashMap<u64, Name>,
-    private_addr_to_fn: HashMap<String, HashMap<u64, Name>>,
+    /// Provides lookup from an address to a function name.
+    function_name_lookup: HashMap<u64, String>,
+
+    /// Provides lookup from an address to a function name.
+    private_function_name_lookup: HashMap<ModuleHandle, HashMap<u64, String>>,
 }
 
-impl<'p> Default for Globals<'p> {
-    fn default() -> Self {
-        Self::new()
-    }
-}
+impl<'p> GlobalReferences<'p> {
+    /// Creates a global reference map from a project.
+    ///
+    /// Requires access to memory so it can allocate space for the global variables and create
+    /// function addresses.
+    pub fn from_project(project: &'p Project, memory: &mut Memory) -> Result<Self, VMError> {
+        let mut s = GlobalReferences {
+            global_references: HashMap::new(),
+            private_global_references: HashMap::new(),
+            function_name_lookup: HashMap::new(),
+            private_function_name_lookup: HashMap::new(),
+        };
 
-impl<'p> Globals<'p> {
-    pub fn new() -> Self {
-        Self {
-            globals: HashMap::new(),
-            private_globals: HashMap::new(),
-            public_addr_to_fn: HashMap::new(),
-            private_addr_to_fn: HashMap::new(),
+        // Add functions.
+        //
+        // When functions are allocated we just allocate a pointer size, this is just so we get an
+        // address. The actual bitcode instructions are never stored in symbolic memory.
+        let fn_size = project.ptr_size as u64;
+        let fn_align = 4;
+
+        let mut create_fn_global_ref =
+            |function: &'p Function| -> Result<GlobalReference<'p>, VMError> {
+                let addr = memory.allocate(fn_size, fn_align)?;
+                Ok(GlobalReference {
+                    addr,
+                    kind: GlobalReferenceKind::Function(function),
+                })
+            };
+
+        for (module_handle, function) in project.get_private_functions() {
+            let name = Name::from(&*function.name);
+            let global_ref = create_fn_global_ref(function)?;
+            debug!(
+                "Private function {name} allocated at address: {}",
+                global_ref.addr
+            );
+
+            s.add_internal_fn_addr(module_handle, global_ref.addr, function.name.clone());
+            s.add_internal(module_handle, name, global_ref);
         }
+
+        for (_, function) in project.get_public_functions() {
+            let name = Name::from(&*function.name);
+            let addr = memory.allocate(fn_size, fn_align)?;
+            debug!("Private function {name} allocated at address: {addr}");
+
+            s.function_name_lookup.insert(addr, function.name.clone());
+            let global_ref = GlobalReference {
+                addr,
+                kind: GlobalReferenceKind::Function(function),
+            };
+            s.global_references.insert(name, global_ref);
+        }
+
+        // Add global variables.
+        let mut create_var_global_ref =
+            |var: &'p GlobalVariable| -> Result<GlobalReference<'p>, VMError> {
+                // All GlobalVariable's should be pointers. Allocation size is based on the
+                // underlying type.
+                let size = match var.ty.as_ref() {
+                    Type::PointerType { pointee_type, .. } => project.bit_size(pointee_type)?,
+                    _ => panic!("Expected pointer type"),
+                };
+
+                // If no specific alignment is specified, use the project default.
+                let align = if var.alignment == 0 {
+                    project.default_alignment
+                } else {
+                    var.alignment
+                };
+
+                let addr = memory.allocate(size as u64, align as u64)?;
+                Ok(GlobalReference {
+                    addr,
+                    kind: GlobalReferenceKind::GlobalVariable(var),
+                })
+            };
+
+        for (module_handle, var) in project.get_private_global_variables() {
+            // We only care to add globals with initializers.
+            if var.initializer.is_none() {
+                continue;
+            }
+            let name = var.name.clone();
+            let global_ref = create_var_global_ref(var)?;
+            debug!(
+                "Private global variable {name} allocated at address: {}",
+                global_ref.addr
+            );
+            s.add_internal(module_handle, name, global_ref);
+        }
+
+        for (_, var) in project.get_public_global_variables() {
+            // We only care to add globals with initializers.
+            if var.initializer.is_none() {
+                continue;
+            }
+            let name = var.name.clone();
+            let global_ref = create_var_global_ref(var)?;
+            debug!(
+                "Private global variable {name} allocated at address: {}",
+                global_ref.addr
+            );
+            s.global_references.insert(name, global_ref);
+        }
+
+        Ok(s)
     }
 
-    pub fn get(&self, name: &Name, module: &Module) -> Option<&Allocation<'p>> {
-        if let Some(allocation) = self
-            .private_globals
-            .get(&module.name)
+    /// Get a global reference by [Name].
+    ///
+    /// First it checks if the reference exist as a private symbol in the current module. If it does
+    /// not it will check the module private definitions.
+    pub fn get(&self, name: &Name, module_handle: ModuleHandle) -> Option<&GlobalReference<'p>> {
+        if let Some(reference) = self
+            .private_global_references
+            .get(&module_handle)
             .and_then(|module_globals| module_globals.get(name))
         {
-            Some(allocation)
+            Some(reference)
         } else {
-            self.globals.get(name)
+            self.global_references.get(name)
         }
     }
 
-    pub fn get_func(&self, addr: u64, module: &Module) -> Option<&Allocation<'p>> {
-        let name = if let Some(name) = self
-            .private_addr_to_fn
-            .get(&module.name)
-            .and_then(|module_map| module_map.get(&addr))
+    /// Get the name of a function from an address.
+    ///
+    /// It first checks the module private functions, followed by the global functions.
+    pub fn get_function_from_address(
+        &self,
+        addr: u64,
+        module_handle: ModuleHandle,
+    ) -> Option<&str> {
+        if let Some(name) = self
+            .private_function_name_lookup
+            .get(&module_handle)
+            .and_then(|module_globals| module_globals.get(&addr))
         {
             Some(name)
         } else {
-            self.public_addr_to_fn.get(&addr)
-        }?;
-
-        self.get(name, module)
-    }
-
-    pub fn add_global_variable(&mut self, var: &'p GlobalVariable, module: &'p Module, addr: u64) {
-        let g = Allocation {
-            addr,
-            module,
-            kind: AllocationType::Variable(var),
-        };
-
-        self.add_global(g, &var.linkage, module, var.name.clone());
-    }
-
-    pub fn add_function(&mut self, f: &'p Function, module: &'p Module, addr: u64) {
-        let g = Allocation {
-            addr,
-            module,
-            kind: AllocationType::Function(f),
-        };
-
-        self.add_global(g, &f.linkage, module, Name::from(&*f.name));
-        self.add_func(&f.linkage, module, Name::from(&*f.name), addr);
-    }
-
-    fn add_func(&mut self, linkage: &Linkage, module: &Module, name: Name, addr: u64) {
-        use Linkage::*;
-        match linkage {
-            Private | Internal => {
-                let addr_map = self
-                    .private_addr_to_fn
-                    .entry(module.name.clone())
-                    .or_default();
-                if addr_map.contains_key(&addr) {
-                    panic!("global {} already allocated", addr);
-                }
-                addr_map.insert(addr, name);
-            }
-            External => {
-                if self.public_addr_to_fn.contains_key(&addr) {
-                    panic!("global {} already allocated", name);
-                }
-                self.public_addr_to_fn.insert(addr, name);
-            }
-            _ => todo!(),
+            self.function_name_lookup
+                .get(&addr)
+                .map(|name| name.as_str())
         }
     }
 
-    fn add_global(
+    /// Insert a mapping between a name and a module private [GlobalReference].
+    fn add_internal(
         &mut self,
-        global: Allocation<'p>,
-        linkage: &Linkage,
-        module: &'p Module,
+        module_handle: ModuleHandle,
         name: Name,
-    ) {
-        use Linkage::*;
+        global_ref: GlobalReference<'p>,
+    ) -> Option<GlobalReference<'p>> {
+        let entry = self
+            .private_global_references
+            .entry(module_handle)
+            .or_default();
 
-        // Linkage types:
-        //
-        // - `private` and `internal` are both only accessible to by objects in their respective modules.
-        // - `linkonce` and `weak` are merged with others of the same name when linked. However, `weak`
-        //   should not be discarded if unreferenced.
-        // - `linkonce_odr` and `weak_odr` have the one definition rule (ODR) which for our purposes are
-        //   the same I think.
-        //
-        // - `available_externally` is only valid for definitions and can be discarded at will.
-        // - `common` is similar to `weak` and have zero initializers.
-        // - `extern_weak` TODO
-        // - `appending` TODO
-        // - `external` (default) available globally.
-        //
-        // For now, let's try and only keep the definitive declarations and use those, i.e. `private`,
-        // `internal`, and `external`. Differentiating if they are private to the module or not.
-        //
-        // The others require more investigating to ensure they are handled correctly.
-        match linkage {
-            Private | Internal => {
-                // Private to the module and strong definition.
+        entry.insert(name, global_ref)
+    }
 
-                let global_map = self.private_globals.entry(module.name.clone()).or_default();
+    /// Insert a mapping between an address and a module private function.
+    fn add_internal_fn_addr(&mut self, module_handle: ModuleHandle, addr: u64, name: String) {
+        let entry = self
+            .private_function_name_lookup
+            .entry(module_handle)
+            .or_default();
 
-                if global_map.contains_key(&name) {
-                    panic!("global {} already allocated", name);
-                }
-
-                global_map.insert(name, global);
-            }
-            External => {
-                // Public and strong definition.
-                if self.globals.contains_key(&name) {
-                    panic!("global {} already allocated", name);
-                }
-                self.globals.insert(name, global);
-            }
-            ExternalWeak => todo!(),
-            AvailableExternally => todo!(),
-            LinkOnceAny => todo!(),
-            // TODO
-            LinkOnceODR => {}
-            LinkOnceODRAutoHide => todo!(),
-            WeakAny => todo!(),
-            WeakODR => todo!(),
-            Common => todo!(),
-            Appending => todo!(),
-            DLLImport => todo!(),
-            DLLExport => todo!(),
-            Ghost => todo!(),
-            LinkerPrivate => todo!(),
-            LinkerPrivateWeak => todo!(),
-        }
+        entry.insert(addr, name);
     }
 }

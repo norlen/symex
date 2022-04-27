@@ -15,7 +15,7 @@ pub fn size_in_bits(ty: &Type, project: &Project) -> Option<u64> {
     match ty {
         VoidType => Some(0),
         IntegerType { bits } => Some(*bits as u64),
-        PointerType { .. } => Some(project.ptr_size),
+        PointerType { .. } => Some(project.ptr_size as u64),
         FPType(fp_ty) => Some(fp_size_in_bits(fp_ty)),
         VectorType {
             element_type,

@@ -536,7 +536,7 @@ impl<'a> VM<'a> {
         let mut allocation_size = element_size * num_elements;
         if allocation_size == 0 {
             warn!("zero sized alloca");
-            allocation_size = self.project.ptr_size;
+            allocation_size = self.project.ptr_size as u64;
         }
 
         let addr = self

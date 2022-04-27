@@ -282,7 +282,7 @@ impl Memory {
     /// `MemoryError::OutOfBounds` if the two addresses are not part of the same allocation.
     fn check_out_of_bounds(&self, start_addr: &BV, end_addr: &BV) -> Result<(), MemoryError> {
         let start_id = self.allocations.read(start_addr);
-        let end_id = self.allocations.read(&end_addr);
+        let end_id = self.allocations.read(end_addr);
 
         // These must be equal, otherwise the read is across an allocation boundary.
         if !self.solver.must_be_equal(&start_id, &end_id)? {
@@ -320,7 +320,7 @@ impl BumpAllocator {
             return Err(MemoryError::ZeroSizedAllocation);
         }
         if !align.is_power_of_two() {
-            return Err(MemoryError::NotPowerOfTwo(bits));
+            return Err(MemoryError::NotPowerOfTwo(align));
         }
 
         // Find the next available aligned address.

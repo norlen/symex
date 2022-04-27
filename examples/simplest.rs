@@ -7,7 +7,7 @@ use x0001e::{
 fn main() {
     init();
 
-    let project = Project::from_bc_path("./samples/simplest/main.bc").unwrap();
+    let project = Project::from_path("./samples/simplest/main.bc").unwrap();
     let vm = VM::new("t", &project).unwrap();
 
     // this creates a problem with clone

@@ -1,12 +1,14 @@
 use either::Either;
-use llvm_ir::instruction::{HasResult, InlineAssembly};
-use llvm_ir::{Constant, Function, Name, Operand};
+use llvm_ir::{
+    instruction::{HasResult, InlineAssembly},
+    Constant, Function, Name, Operand,
+};
 use log::{debug, trace};
 
 use crate::{
     project::Project,
     solver::{Solutions, Solver, BV},
-    vm::{AllocationType, Call, Location, Path, Result, State, VMError},
+    vm::{Call, Location, Path, Result, State, VMError},
 };
 
 #[derive(Debug, PartialEq, Eq)]
@@ -59,7 +61,7 @@ impl<'a> VM<'a> {
     pub fn new(fn_name: &str, project: &'a Project) -> Result<Self> {
         debug!("Creating VM, starting at function {}", fn_name);
 
-        let (function, module) = project.find_entry_function(fn_name)?;
+        let (module, function) = project.find_entry_function(fn_name)?;
         let solver = Solver::new();
         let state = State::new(project, module, function, solver.clone());
 
@@ -302,13 +304,10 @@ impl<'a> VM<'a> {
                             let addr = v[0].as_u64().unwrap();
                             let f = self
                                 .state
-                                .globals
-                                .get_func(addr, self.state.current_loc.module)
+                                .global_references
+                                .get_function_from_address(addr, self.state.current_loc.module)
                                 .unwrap();
-                            match &f.kind {
-                                AllocationType::Variable(_) => todo!(),
-                                AllocationType::Function(f) => Ok(f.name.to_string()),
-                            }
+                            Ok(f.to_string())
                         }
                         Solutions::AtLeast(_) => todo!(),
                     }

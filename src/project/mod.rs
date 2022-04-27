@@ -1,9 +1,12 @@
 use anyhow::anyhow;
-use llvm_ir::{module::GlobalVariable, types::NamedStructDef, Function, Module, Type, TypeRef};
-use log::info;
+use llvm_ir::{
+    module::{GlobalVariable, Linkage},
+    types::{NamedStructDef, Typed},
+    Function, Module, Name, Type, TypeRef,
+};
+use log::warn;
 use rustc_demangle::demangle;
-use std::{fs::read_dir, iter, path::Path};
-use thiserror::Error;
+use std::{collections::HashMap, fs, path::Path};
 
 use crate::{
     hooks::{Hook, Hooks},
@@ -12,56 +15,95 @@ use crate::{
         get_bit_offset_concrete, get_bit_offset_symbol, get_byte_offset_concrete,
         get_byte_offset_symbol, size_in_bits,
     },
-    vm::{Result, VMError},
-    BV,
+    VMError, BV,
 };
-use map::ModulePrivateMap;
 
-mod map;
-//mod module;
+/// Handle that references a [Module].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct ModuleHandle(usize);
 
-#[derive(Debug, Error)]
-pub enum ProjectError {}
+/// Handle that references a [Function] in a [Module].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct FunctionHandle(usize);
 
-pub enum FunctionType<'a> {
+/// Handle that references a [GlobalVariable] in a [Module].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct GlobalVariableHandle(usize);
+
+/// A project handles both IR [Function]s and [Hook]s.
+///
+/// This enum allows a [Project] to return either of them during function lookups.
+pub enum FunctionType<'p> {
+    /// Regular LLVM [Function].
     Function {
-        function: &'a Function,
-        module: &'a Module,
+        function: &'p Function,
+        module: ModuleHandle,
     },
+
+    /// User defined [Hook].
     Hook(Hook),
 }
 
-/// A project is mostly a collection of `llvm_ir::Module`s.
-///
-/// The `VM` takes `Project` and the entry function and executes over that.
+/// Collection of multiple [Module]s.
 pub struct Project {
-    /// The modules the project consists of.
-    pub(crate) modules: &'static [Module],
+    /// All [Module]s.
+    modules: Vec<Module>,
 
-    /// Pointer size in bits used in the project.
-    pub ptr_size: u64,
+    /// Size of pointers across all module. The system does not support different pointer sizes
+    /// across different modules.
+    pub ptr_size: u32,
 
-    pub default_alignment: u64,
+    /// Default alignment if none is specified.
+    pub default_alignment: u32,
 
+    /// Functions that are visible to other modules.
+    functions: HashMap<String, (ModuleHandle, FunctionHandle)>,
+
+    /// Functions which are private to the current module.
+    private_functions: HashMap<ModuleHandle, HashMap<String, FunctionHandle>>,
+
+    /// Global variables that are visible to other modules.
+    global_variables: HashMap<Name, (ModuleHandle, GlobalVariableHandle)>,
+
+    /// Global variables that are private to this module.
+    private_global_variables: HashMap<ModuleHandle, HashMap<Name, GlobalVariableHandle>>,
+
+    /// User defined hooks.
     hooks: Hooks,
-
-    functions: ModulePrivateMap<'static>,
 }
 
 impl std::fmt::Debug for Project {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Project")
+            // .field("modules", &self.modules)
             .field("ptr_size", &self.ptr_size)
+            .field("functions", &self.functions)
+            .field("private_functions", &self.private_functions)
+            .field("global_variables", &self.global_variables)
+            .field("private_global_variables", &self.private_global_variables)
+            // .field("hooks", &self.hooks)
             .finish()
     }
 }
 
 impl Project {
-    pub fn from_folder(path: impl AsRef<Path>) -> anyhow::Result<Self> {
-        info!("Checking folder for bc files {}", path.as_ref().display());
-
+    /// Creates a project from a folder of `.bc` files.
+    ///
+    /// Sets up a new project with all LLVM bitcode files contained in the passed folder. The
+    /// modules must all have the same pointer size.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// # use x0001e::Project;
+    /// #
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let project = Project::from_folder("path-to-bcs")?;
+    /// # }
+    /// ```
+    pub fn from_folder(path: impl AsRef<Path>) -> Result<Self, std::io::Error> {
         let mut modules = Vec::new();
-        for entry in read_dir(path)? {
+        for entry in fs::read_dir(path)? {
             let entry = entry?;
             let name = entry.file_name();
             let name = name.to_str().unwrap();
@@ -71,82 +113,147 @@ impl Project {
             }
         }
 
-        let ptr_size = modules[0].data_layout.alignments.ptr_alignment(0).size;
-
-        let modules: &'static [Module] = modules.leak();
-
-        let mut functions = ModulePrivateMap::new();
-        for module in modules.iter() {
-            for function in module.functions.iter() {
-                functions.insert(function.name.clone(), function, module);
-            }
-        }
-
-        let project = Self {
-            ptr_size: ptr_size as u64,
-            default_alignment: 4,
-            modules,
-            hooks: Hooks::new(),
-            functions,
-        };
-        Ok(project)
+        Self::from_modules(modules)
     }
 
-    /// Create a new project from a LLVM BC file path.
+    /// Creates a project from a path to a `.bc` file.
     ///
-    /// This loads a single module file.
-    pub fn from_bc_path(path: impl AsRef<Path>) -> anyhow::Result<Self> {
-        info!("Parsing bitcode in file {}", path.as_ref().display());
-        let module = Module::from_bc_path(path).map_err(|e| anyhow::anyhow!(e))?;
-        let ptr_size = module.data_layout.alignments.ptr_alignment(0).size;
+    /// Sets up a new project with all LLVM bitcode module passed in the path.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// # use x0001e::Project;
+    /// #
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let project = Project::from_path("path-to-bc")?;
+    /// # }
+    /// ```
+    pub fn from_path(path: impl AsRef<Path>) -> Result<Self, std::io::Error> {
+        let module = Module::from_bc_path(path).unwrap();
+        Self::from_modules(vec![module])
+    }
 
-        let modules: &'static [Module] = {
-            let v = vec![module];
-            v.leak()
-        };
-
-        let mut functions = ModulePrivateMap::new();
-        for module in modules.iter() {
-            for function in module.functions.iter() {
-                functions.insert(function.name.clone(), function, module);
+    /// Create a new modules struct from [llvm_ir::Module]s.
+    ///
+    /// This collects all the modules and processing the public functions and public global
+    /// variables. It also ensures the pointer size is the same for all modules.
+    ///
+    /// # Panics
+    ///
+    /// - Will panic if the passed array is empty.
+    fn from_modules(modules: Vec<Module>) -> Result<Self, std::io::Error> {
+        let ptr_size = modules[0].data_layout.alignments.ptr_alignment(0).size;
+        for module in modules.iter().skip(1) {
+            if module.data_layout.alignments.ptr_alignment(0).size != ptr_size {
+                panic!("Inconsistent pointer size between modules");
             }
         }
 
-        let project = Self {
-            ptr_size: ptr_size as u64,
-            default_alignment: 4,
+        let mut functions = HashMap::new();
+        let mut private_functions: HashMap<_, HashMap<_, _>> = HashMap::new();
+
+        for (i, module) in modules.iter().enumerate() {
+            let module_handle = ModuleHandle(i);
+            let private_functions = private_functions.entry(module_handle).or_default();
+
+            for (j, function) in module.functions.iter().enumerate() {
+                let fn_handle = FunctionHandle(j);
+                let entry = (module_handle, fn_handle);
+
+                if let Some(privacy) = internal_get_privacy(&function.linkage) {
+                    let name = function.name.clone();
+                    match privacy {
+                        Privacy::Internal => {
+                            private_functions.insert(name, fn_handle);
+                        }
+                        Privacy::External => {
+                            if functions.insert(name, entry).is_some() {
+                                warn!(
+                                    "Multiple public functions with name {} exist",
+                                    function.name
+                                );
+                            }
+                        }
+                        Privacy::ExternalWeak => {
+                            functions.entry(name).or_insert(entry);
+                        }
+                        // Not valid for functions.
+                        Privacy::ExternalAppend => {
+                            unreachable!();
+                        }
+                    }
+                }
+            }
+        }
+
+        let mut global_variables = HashMap::new();
+        let mut private_global_variables: HashMap<_, HashMap<_, _>> = HashMap::new();
+
+        for (i, module) in modules.iter().enumerate() {
+            let module_handle = ModuleHandle(i);
+            let private_globals = private_global_variables.entry(module_handle).or_default();
+
+            for (j, var) in module.global_vars.iter().enumerate() {
+                let var_handle = GlobalVariableHandle(j);
+                let entry = (module_handle, var_handle);
+
+                if let Some(privacy) = internal_get_privacy(&var.linkage) {
+                    let name = var.name.clone();
+                    match privacy {
+                        Privacy::Internal => {
+                            private_globals.insert(name, var_handle);
+                        }
+                        Privacy::External => {
+                            if global_variables.insert(name, entry).is_some() {
+                                warn!(
+                                    "Multiple public global variables with name {} exist",
+                                    var.name
+                                );
+                            }
+                        }
+                        Privacy::ExternalWeak => {
+                            global_variables.entry(name).or_insert(entry);
+                        }
+                        Privacy::ExternalAppend => {
+                            warn!("Append linkage is not currently supported");
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(Project {
             modules,
-            hooks: Hooks::new(),
+            ptr_size,
+            default_alignment: 1,
             functions,
-        };
-        Ok(project)
+            global_variables,
+            private_functions,
+            private_global_variables,
+            hooks: Hooks::new(),
+        })
     }
 
-    pub fn get_function<'s>(&self, name: &str, module: &'s Module) -> Result<FunctionType<'s>> {
-        let module_name = module.name.to_string();
-        let demangled_names = [demangle(name).to_string(), format!("{:#}", demangle(name))];
-
-        // Check for hook.
-        if let Some(hook) = self.hooks.get(name) {
-            return Ok(FunctionType::Hook(hook));
-        }
-        for name in demangled_names.iter() {
-            if let Some(hook) = self.hooks.get(name.as_str()) {
-                return Ok(FunctionType::Hook(hook));
-            }
-        }
-
-        // Check for regular function.
-        if let Some((function, module)) = self.functions.get(name, &module_name) {
-            return Ok(FunctionType::Function { function, module });
-        }
-
-        Err(VMError::FunctionNotFound(name.to_string()))
-    }
-
-    pub fn find_entry_function<'s>(&'s self, name: &str) -> Result<(&'s Function, &'s Module)> {
+    /// Locate an entry point.
+    ///
+    /// Searches all functions in all modules for `name`. It will also check demangled names for all
+    /// function names both with and without hashes.
+    ///
+    /// Note that for rust functions they always have the root crate as a prefix.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// # use x0001e::Project;
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let project = Project::from_path("path-to-bc")?;
+    /// let (module, function) = project.find_entry_point("root_crate::main")?;
+    /// # }
+    /// ```
+    pub fn find_entry_function(&self, name: &str) -> Result<(ModuleHandle, &Function), VMError> {
         let mut return_function = None;
-        for module in self.modules {
+        for (handle, module) in self.modules.iter().enumerate() {
             for function in &module.functions {
                 let demangled = demangle(&function.name);
 
@@ -157,7 +264,7 @@ impl Project {
                     if return_function.is_some() {
                         panic!("Multiple functions with name {} exist", name);
                     }
-                    return_function = Some((function, module));
+                    return_function = Some((ModuleHandle(handle), function));
                 }
             }
         }
@@ -165,77 +272,230 @@ impl Project {
         return_function.ok_or_else(|| VMError::FunctionNotFound(name.to_string()))
     }
 
-    pub fn get_named_struct(&self, name: &str) -> Option<&NamedStructDef> {
-        let mut ret = None;
-        for module in self.modules.iter() {
-            if let Some(def) = module.types.named_struct_def(name) {
-                // Prefer `NamedStructDef::Defined` over `NamedStructDef::Opaque`.
-                ret = Some(def)
-                // if let NamedStructDef::Defined(_) = def {
-                //     ret = Some(def);
-                // } else if ret.is_none() {
-                //     ret = Some(def);
-                // }
+    /// Get a function by name.
+    ///
+    /// It will first check if `name` matches any user-defined hooks. Followed by module private
+    /// definitions, and finally check against public functions.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// # use x0001e::Project;
+    /// #
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let project = Project::from_folder("path-to-bcs")?;
+    /// let function = project.get_function("crate::my_func")?;
+    /// # }
+    /// ```
+    pub fn get_function(
+        &self,
+        name: &str,
+        module_handle: ModuleHandle,
+    ) -> Result<FunctionType<'_>, VMError> {
+        // Demangle name when checking against user-defined hooks. The names in the IR should all be
+        // mangled anyway.
+        let demangled = demangle(name);
+        let demangled_name = demangled.to_string();
+        let demangled_name_no_hash = format!("{demangled:#?}");
+
+        for name in [name, &demangled_name, &demangled_name_no_hash] {
+            if let Some(hook) = self.hooks.get(name) {
+                return Ok(FunctionType::Hook(hook));
             }
         }
-        ret
+
+        // Check IR functions.
+        if let Some((module, function)) = self.find_function(name, module_handle) {
+            return Ok(FunctionType::Function { function, module });
+        }
+
+        Err(VMError::FunctionNotFound(name.to_string()))
     }
 
-    pub fn get_all_functions(&self) -> impl Iterator<Item = (&Module, &Function)> {
-        self.modules
+    /// Get the definition of a named struct.
+    ///
+    /// If the same name exists for both an Opaque and a Defined struct, the defined is returned.
+    pub fn get_named_struct(&self, name: &str) -> Option<&NamedStructDef> {
+        // `NamedStructDef::Defined(_)` are preferred over `NamedStructDef::Opaque`. So if we
+        // encounter an opaque definition, save it for later in-case we find a defined.
+        let mut opaque_def = None;
+
+        // The number of modules is expected to be small, so this should be fine.
+        for module in self.modules.iter() {
+            if let Some(def) = module.types.named_struct_def(name) {
+                match def {
+                    NamedStructDef::Opaque => opaque_def = Some(def),
+                    // If we find a defined, return it straight away.
+                    NamedStructDef::Defined(_) => return Some(def),
+                }
+            }
+        }
+        opaque_def
+    }
+
+    /// Get all [Function]s that are module private.
+    pub fn get_private_functions(&self) -> impl Iterator<Item = (ModuleHandle, &Function)> {
+        self.private_functions
             .iter()
-            .flat_map(|module| iter::repeat(module).zip(module.functions.iter()))
+            .flat_map(move |(module_handle, m)| {
+                m.values().map(move |fn_handle| {
+                    let function = &self.modules[module_handle.0].functions[fn_handle.0];
+                    (*module_handle, function)
+                })
+            })
     }
 
-    pub fn get_all_global_vars(&self) -> impl Iterator<Item = (&Module, &GlobalVariable)> {
-        self.modules
+    /// Get all [Function]s that are visible to all modules.
+    pub fn get_public_functions(&self) -> impl Iterator<Item = (ModuleHandle, &Function)> {
+        self.functions.values().map(|(module_handle, fn_handle)| {
+            let function = &self.modules[module_handle.0].functions[fn_handle.0];
+            (*module_handle, function)
+        })
+    }
+
+    /// Get all [GlobalVariable]s that are module private.
+    pub fn get_private_global_variables(
+        &self,
+    ) -> impl Iterator<Item = (ModuleHandle, &GlobalVariable)> {
+        self.private_global_variables
             .iter()
-            .flat_map(|module| iter::repeat(module).zip(module.global_vars.iter()))
+            .flat_map(move |(module_handle, m)| {
+                m.values().map(move |var_handle| {
+                    let var = &self.modules[module_handle.0].global_vars[var_handle.0];
+                    (*module_handle, var)
+                })
+            })
     }
 
-    // pub fn get_all_global_aliases(&self) -> impl Iterator<Item = (&Module, &GlobalAlias)> {
-    //     self.modules
-    //         .iter()
-    //         .map(|module| iter::repeat(module).zip(module.global_aliases.iter()))
-    //         .flatten()
-    // }
+    /// Get all [GlobalVariable]s that are visible to all modules.
+    pub fn get_public_global_variables(
+        &self,
+    ) -> impl Iterator<Item = (ModuleHandle, &GlobalVariable)> {
+        self.global_variables
+            .values()
+            .map(|(module_handle, var_handle)| {
+                let var = &self.modules[module_handle.0].global_vars[var_handle.0];
+                (*module_handle, var)
+            })
+    }
 
-    // -------------------------------------------------------------------------
-    // todo later
-    // -------------------------------------------------------------------------
-
-    // fn add_hook() {}
-    // fn add_hook_to_module() {} // may be interesting to only add hooks to certain modules
-
-    // -------------------------------------------------------------------------
-    // Helpers for types and stuff
-    // -------------------------------------------------------------------------
-
-    pub fn bit_size(&self, ty: &Type) -> Result<u32> {
+    /// Get the size in bits of type `ty`.
+    pub fn bit_size(&self, ty: &Type) -> Result<u32, VMError> {
         let size = size_in_bits(ty, self)
             .ok_or_else(|| VMError::Other(anyhow!("Cannot take size of type")))?;
         Ok(size as u32)
     }
 
-    pub fn byte_size(&self, ty: &Type) -> Result<u32> {
+    /// Get the size in bytes of type `ty`.
+    pub fn byte_size(&self, ty: &Type) -> Result<u32, VMError> {
         let size = self.bit_size(ty)?;
         let size = to_bytes(size as u64)? as u32;
         Ok(size)
     }
 
-    pub fn bit_offset_concrete(&self, ty: &Type, index: u64) -> Result<(u64, TypeRef)> {
+    /// Get the offset to the index in bits for type `ty`.
+    pub fn bit_offset_concrete(&self, ty: &Type, index: u64) -> Result<(u64, TypeRef), VMError> {
         get_bit_offset_concrete(ty, index, self)
     }
 
-    pub fn byte_offset_concrete(&self, ty: &Type, index: u64) -> Result<(u64, TypeRef)> {
+    /// Get the offset to the index in bytes for type `ty`.
+    pub fn byte_offset_concrete(&self, ty: &Type, index: u64) -> Result<(u64, TypeRef), VMError> {
         get_byte_offset_concrete(ty, index, self)
     }
 
-    pub fn bit_offset_symbol(&self, ty: &Type, index: &BV) -> Result<(BV, TypeRef)> {
+    /// Get the offset to the symbolic index in bits for type `ty`.
+    pub fn bit_offset_symbol(&self, ty: &Type, index: &BV) -> Result<(BV, TypeRef), VMError> {
         get_bit_offset_symbol(ty, index, self)
     }
 
-    pub fn byte_offset_symbol(&self, ty: &Type, index: &BV) -> Result<(BV, TypeRef)> {
+    /// Get the offset to the symbolic index in bytes for type `ty`.
+    pub fn byte_offset_symbol(&self, ty: &Type, index: &BV) -> Result<(BV, TypeRef), VMError> {
         get_byte_offset_symbol(ty, index, self)
+    }
+
+    /// Returns the type of a [Typed], e.g. [llvm_ir::Operand]s, in the given `module`.
+    pub fn type_of<T: Typed>(&self, ty: &T, module: ModuleHandle) -> TypeRef {
+        self.modules[module.0].type_of(ty)
+    }
+
+    /// Check `name` against public and module private functions.
+    fn find_function(
+        &self,
+        name: &str,
+        module_handle: ModuleHandle,
+    ) -> Option<(ModuleHandle, &Function)> {
+        if let Some(fn_handle) = self
+            .private_functions
+            .get(&module_handle)
+            .and_then(|fns| fns.get(name))
+        {
+            let module = &self.modules[module_handle.0];
+            let function = &module.functions[fn_handle.0];
+            Some((module_handle, function))
+        } else if let Some((module_handle, fn_handle)) = self.functions.get(name) {
+            let module = &self.modules[module_handle.0];
+            let function = &module.functions[fn_handle.0];
+            Some((*module_handle, function))
+        } else {
+            None
+        }
+    }
+}
+
+enum Privacy {
+    // Internal privacy means that the item is only available in the module it is defined.
+    Internal,
+
+    // External lets the item be accessed from other modules.
+    External,
+
+    // External weak let the item be accessed from other modules, but can be replaced with an
+    // `External` item.
+    ExternalWeak,
+
+    // ExternalAppend is for arrays, multiple items with the same name are appended to each other.
+    ExternalAppend,
+}
+
+fn internal_get_privacy(linkage: &Linkage) -> Option<Privacy> {
+    // Reference: https://llvm.org/doxygen/group__LLVMCCoreTypes.html#ga0e85efb9820f572c69cf98d8c8d237de
+    match linkage {
+        // Private and internal should be the same for our use case. They are only accessible to
+        // the current module.
+        Linkage::Private | Linkage::Internal => Some(Privacy::Internal),
+
+        // Globally visible.
+        Linkage::External => Some(Privacy::External),
+
+        // These definitions are external, but weak.
+        //
+        // Most should be merged. ODR version should be merged with something equivalent.
+        // However, this just merges anyway and does not check that.
+        //
+        // Common is similar to how `Weak` works.
+        Linkage::LinkOnceAny | Linkage::LinkOnceODR => todo!(),
+        Linkage::WeakAny | Linkage::WeakODR | Linkage::ExternalWeak | Linkage::Common => {
+            Some(Privacy::ExternalWeak)
+        }
+
+        // For a linker this is the same as being available externally, thus we do not have to
+        // add these to our maps. They should be available elsewhere.
+        Linkage::AvailableExternally => None,
+
+        // Can only be applied to array types. The two global arrays are appended together, t
+        // support this the allocation would have to be the size of all of them combined.
+        Linkage::Appending => Some(Privacy::ExternalAppend),
+
+        // These should be the same as private. However, the linker should remove these.
+        // Are they required then?
+        Linkage::LinkerPrivate | Linkage::LinkerPrivateWeak => {
+            todo!("Not supported: Got linkage: {linkage:?}")
+        }
+
+        // Obsolete types.
+        Linkage::LinkOnceODRAutoHide | Linkage::DLLImport | Linkage::DLLExport | Linkage::Ghost => {
+            warn!("Encountered obsolete linkage {linkage:?}");
+            None
+        }
     }
 }

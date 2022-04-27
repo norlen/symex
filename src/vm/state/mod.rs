@@ -2,14 +2,14 @@ use llvm_ir::{
     instruction::{self, HasResult},
     terminator,
     types::Typed,
-    Function, Module, Name, Type, TypeRef,
+    Function, Name, TypeRef,
 };
-use log::{debug, warn};
+use log::warn;
 
-use super::{Allocation, AllocationType, Globals, Result};
+use super::{GlobalReference, GlobalReferenceKind, GlobalReferences, Result};
 use crate::{
     memory::Memory,
-    project::Project,
+    project::{ModuleHandle, Project},
     traits::{const_to_symbol, operand_to_symbol, Op},
     {Solver, BV},
 };
@@ -114,32 +114,37 @@ pub struct State<'a> {
 
     /// Global memory.
     pub mem: Memory,
-
-    pub globals: Globals<'a>,
-
     /// Lookup for all the variables that have been explicitly marked as `symbolic`.
     pub symbols: Vec<(String, BV)>,
+
+    /// Global references, these can be either a [Function] or a [GlobalVariable].
+    ///
+    /// This holds the mapping between the name of the global reference and its address.
+    pub global_references: GlobalReferences<'a>,
 }
 
 impl<'a> State<'a> {
     pub fn new(
         project: &'a Project,
-        module: &'a Module,
+        module: ModuleHandle,
         function: &'a Function,
         solver: Solver,
     ) -> Self {
+        let mut memory = Memory::new(solver.clone(), project.ptr_size);
+        let global_references = GlobalReferences::from_project(project, &mut memory).unwrap();
+
         let mut state = Self {
             project,
             current_loc: Location::new(module, function),
             vars: VarMap::new(10),
-            mem: Memory::new(solver.clone(), project.ptr_size as u32),
+            mem: memory,
             solver,
             callstack: Vec::new(),
-            globals: Globals::new(),
             symbols: Vec::new(),
+            global_references,
         };
 
-        state.allocate_globals(project.modules).unwrap();
+        state.initialize_global_references().unwrap();
         state
     }
 
@@ -156,7 +161,7 @@ impl<'a> State<'a> {
     pub fn allocate(&mut self, allocation_size: u64, align: u64) -> Result<u64> {
         let align = if align == 0 {
             warn!("Alignment of 0");
-            self.project.default_alignment
+            self.project.default_alignment as u64
         } else {
             align
         };
@@ -169,7 +174,7 @@ impl<'a> State<'a> {
     pub fn stack_alloc(&mut self, allocation_size: u64, align: u64) -> Result<BV> {
         let align = if align == 0 {
             warn!("Alignment of 0");
-            self.project.default_alignment
+            self.project.default_alignment as u64
         } else {
             align
         };
@@ -192,8 +197,8 @@ impl<'a> State<'a> {
     // Globals
     // -------------------------------------------------------------------------
 
-    pub fn get_global(&self, name: &Name) -> Option<&Allocation<'a>> {
-        self.globals.get(name, self.current_loc.module)
+    pub fn get_global_reference(&self, name: &Name) -> Option<&GlobalReference<'a>> {
+        self.global_references.get(name, self.current_loc.module)
     }
 
     // -------------------------------------------------------------------------
@@ -208,87 +213,37 @@ impl<'a> State<'a> {
     }
 
     pub fn type_of<T: Typed>(&self, t: &T) -> TypeRef {
-        self.current_loc.module.type_of(t)
+        self.project.type_of(t, self.current_loc.module)
     }
 
-    fn allocate_globals(&mut self, modules: &'static [Module]) -> Result<()> {
-        for module in modules {
-            for var in &module.global_vars {
-                // All declaration have initializers, so skip over definitions.
-                if var.initializer.is_none() {
-                    continue;
+    fn initialize_global_references(&mut self) -> Result<()> {
+        for global in self.global_references.global_references.clone().values() {
+            if let GlobalReferenceKind::GlobalVariable(var) = global.kind {
+                if let Some(initializer) = &var.initializer {
+                    let value = self.get_var(initializer)?;
+                    let addr = self.solver.bv_from_u64(global.addr, self.project.ptr_size);
+                    self.mem.write(&addr, value)?;
                 }
-
-                // All global variable should be a pointer.
-                if let Type::PointerType { pointee_type, .. } = var.ty.as_ref() {
-                    // TODO:
-                    // If a variable has `unnamed_addr` the address is not significant, so we can
-                    // skip allocating an address for those.
-                    //
-                    // For `local_unnamed_addr` the address is not significant in *that* module. To
-                    // be safe, allocate addresses for those.
-                    let size = {
-                        // TODO: Can the types not have a size here?
-                        let size = self.project.bit_size(pointee_type)?;
-
-                        // TODO: How to handle zero sized allocations?
-                        if size == 0 {
-                            8
-                        } else {
-                            size
-                        }
-                    };
-
-                    let addr = self.allocate(size as u64, var.alignment as u64)?;
-
-                    debug!("Add GLOBAL_VARIABLE: {}", var.name);
-                    self.globals.add_global_variable(var, module, addr);
-                }
-            }
-
-            for function in &module.functions {
-                let addr = self.allocate(self.project.ptr_size, 4)?;
-
-                debug!("Add FUNCTION: {}", function.name);
-                self.globals.add_function(function, module, addr);
             }
         }
 
-        // Initialize all the global variables.
-        let current_globals = self.globals.clone();
-        for private_globals in current_globals.private_globals.values() {
-            for allocation in private_globals.values() {
-                self.initialize_global_variable(allocation);
+        for globals in self
+            .global_references
+            .private_global_references
+            .clone()
+            .values()
+        {
+            for global in globals.values() {
+                if let GlobalReferenceKind::GlobalVariable(var) = global.kind {
+                    if let Some(initializer) = &var.initializer {
+                        let value = self.get_var(initializer)?;
+                        let addr = self.solver.bv_from_u64(global.addr, self.project.ptr_size);
+                        self.mem.write(&addr, value)?;
+                    }
+                }
             }
-        }
-        for allocation in current_globals.globals.values() {
-            self.initialize_global_variable(allocation);
         }
 
         Ok(())
-    }
-
-    fn initialize_global_variable(&mut self, allocation: &Allocation<'_>) {
-        if let AllocationType::Variable(var) = &allocation.kind {
-            let initializer = var.initializer.clone().unwrap();
-            //println!("var: {}", var.name);
-
-            // Extremely temporary.
-            match self.get_var(&initializer) {
-                Ok(value) => {
-                    //println!("var: {}, value: {:?}", var.name, value);
-
-                    let bv = self
-                        .solver
-                        .bv_from_u64(allocation.addr, self.project.ptr_size as u32);
-
-                    self.mem.write(&bv, value).unwrap();
-                }
-                Err(err) => {
-                    //println!("err: {:?}", e);
-                    warn!("Initialize global err: {:?}", err);
-                }
-            }
-        }
     }
 }

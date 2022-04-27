@@ -58,7 +58,7 @@ fn get_single_u64_solution(solver: &Solver, value: &BV) -> Result<u64> {
 fn run(path: &str, f: &str) -> Vec<Solution> {
     let _ = env_logger::builder().is_test(true).try_init();
 
-    let project = Project::from_bc_path(path).expect("Failed to create project");
+    let project = Project::from_path(path).expect("Failed to create project");
     let mut vm = VM::new(f, &project).expect("Failed to create VM");
 
     let mut results = Vec::new();
