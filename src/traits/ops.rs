@@ -7,11 +7,7 @@ use crate::{
     vm::{Result, State, VMError},
 };
 
-pub(crate) fn extract_value<'p, T>(
-    state: &mut State<'_>,
-    aggregate: T,
-    indices: &[u32],
-) -> Result<BV>
+pub(crate) fn extract_value<'p, T>(state: &State<'_>, aggregate: T, indices: &[u32]) -> Result<BV>
 where
     T: Into<Op<'p>>,
 {
@@ -38,7 +34,7 @@ where
 }
 
 pub(crate) fn gep<'p, T, I>(
-    state: &mut State<'_>,
+    state: &State<'_>,
     address: T,
     indices: I,
     _in_bounds: bool,
@@ -83,12 +79,7 @@ where
 /// on a per element basis.
 ///
 /// TODO: No operations currently care about overflows and such.
-pub(crate) fn binop<F>(
-    state: &mut State<'_>,
-    lhs: &Operand,
-    rhs: &Operand,
-    operation: F,
-) -> Result<BV>
+pub(crate) fn binop<F>(state: &State<'_>, lhs: &Operand, rhs: &Operand, operation: F) -> Result<BV>
 where
     F: Fn(&BV, &BV) -> BV,
 {
@@ -156,12 +147,7 @@ where
 ///
 /// No type checking is done, if this is of interest they have to be checked before calling this
 /// function.
-pub(crate) fn convert_to_map<'p, T, F>(
-    state: &mut State<'_>,
-    ty: &Type,
-    op: T,
-    map: F,
-) -> Result<BV>
+pub(crate) fn convert_to_map<'p, T, F>(state: &State<'_>, ty: &Type, op: T, map: F) -> Result<BV>
 where
     T: Into<Op<'p>>,
     F: Fn(BV, u32) -> BV,
@@ -224,7 +210,7 @@ where
 ///
 /// Casting simply reinterprets the bits as a different type. As the system does not return types,
 /// this just returns the underlying symbol. The bit widths must match.
-pub(crate) fn cast_to<'p, T>(state: &mut State<'_>, ty: &Type, op: T) -> Result<BV>
+pub(crate) fn cast_to<'p, T>(state: &State<'_>, ty: &Type, op: T) -> Result<BV>
 where
     T: Into<Op<'p>>,
 {
@@ -233,12 +219,7 @@ where
     Ok(bv)
 }
 
-pub(crate) fn icmp<'p, T>(
-    state: &mut State<'_>,
-    lhs: T,
-    rhs: T,
-    predicate: IntPredicate,
-) -> Result<BV>
+pub(crate) fn icmp<'p, T>(state: &State<'_>, lhs: T, rhs: T, predicate: IntPredicate) -> Result<BV>
 where
     T: Into<Op<'p>>,
 {

@@ -11,7 +11,7 @@ use crate::{
 };
 
 /// Convert an operand to a symbol.
-pub fn operand_to_symbol(state: &mut State<'_>, operand: &Operand) -> Result<BV> {
+pub fn operand_to_symbol(state: &State<'_>, operand: &Operand) -> Result<BV> {
     use Operand::*;
 
     match operand {
@@ -29,7 +29,7 @@ pub fn operand_to_symbol(state: &mut State<'_>, operand: &Operand) -> Result<BV>
 ///
 /// The operand may either reference a variable in which case it cannot be zero sized, since those
 /// are not stored (maybe they should?). Otherwise, it's a constant in which case it can be.
-pub fn operand_to_symbol_zero_size(state: &mut State<'_>, operand: &Operand) -> Result<Option<BV>> {
+pub fn operand_to_symbol_zero_size(state: &State<'_>, operand: &Operand) -> Result<Option<BV>> {
     // Don't think I'll use this? Otherwise the non zero sized can just call this.
     use Operand::*;
 
@@ -49,7 +49,7 @@ pub fn operand_to_symbol_zero_size(state: &mut State<'_>, operand: &Operand) -> 
 ///
 /// Requires the final size to not be zero sized. State is required since global references
 /// are allowed in constants.
-pub fn const_to_symbol(state: &mut State<'_>, constant: &Constant) -> Result<BV> {
+pub fn const_to_symbol(state: &State<'_>, constant: &Constant) -> Result<BV> {
     let value = const_to_symbol_zero_size(state, constant)?;
     value.ok_or(VMError::UnexpectedZeroSize)
 }
@@ -57,7 +57,7 @@ pub fn const_to_symbol(state: &mut State<'_>, constant: &Constant) -> Result<BV>
 /// Convert a constant to a symbol that allows the entire thing to be zero sized.
 ///
 /// State is required since global references are allowed in constants.
-pub fn const_to_symbol_zero_size(state: &mut State<'_>, constant: &Constant) -> Result<Option<BV>> {
+pub fn const_to_symbol_zero_size(state: &State<'_>, constant: &Constant) -> Result<Option<BV>> {
     use Constant::*;
     match constant {
         // Standard integers of a certain bit width that have a well defined value.
@@ -374,7 +374,7 @@ pub fn const_to_symbol_zero_size(state: &mut State<'_>, constant: &Constant) -> 
 
 /// Just reinterpret the underlying bytes as a different type. In this case it just means returning
 /// the underlying symbol.
-fn const_cast(state: &mut State<'_>, ty: &Type, constant: &ConstantRef) -> Result<Option<BV>> {
+fn const_cast(state: &State<'_>, ty: &Type, constant: &ConstantRef) -> Result<Option<BV>> {
     let result = const_to_symbol_zero_size(state, constant)?.map(|bv| {
         assert_eq!(bv.len(), state.project.bit_size(ty).unwrap() as u32);
         bv
@@ -389,7 +389,7 @@ fn const_cast(state: &mut State<'_>, ty: &Type, constant: &ConstantRef) -> Resul
 ///
 /// Requires that `lhs` and `rhs` are not be zero sized.
 fn bin<F>(
-    state: &mut State<'_>,
+    state: &State<'_>,
     lhs: &ConstantRef,
     rhs: &ConstantRef,
     operation: F,

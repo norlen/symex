@@ -148,7 +148,7 @@ impl<'a> State<'a> {
         state
     }
 
-    pub fn get_var<'b, T>(&mut self, op: T) -> Result<BV>
+    pub fn get_var<'b, T>(&self, op: T) -> Result<BV>
     where
         T: Into<Op<'b>>,
     {
@@ -217,29 +217,19 @@ impl<'a> State<'a> {
     }
 
     fn initialize_global_references(&mut self) -> Result<()> {
-        for global in self.global_references.global_references.clone().values() {
+        let public_globals = self.global_references.global_references.values();
+        let private_globals = self
+            .global_references
+            .private_global_references
+            .values()
+            .flat_map(|m| m.values());
+
+        for global in public_globals.chain(private_globals) {
             if let GlobalReferenceKind::GlobalVariable(var) = global.kind {
                 if let Some(initializer) = &var.initializer {
                     let value = self.get_var(initializer)?;
                     let addr = self.solver.bv_from_u64(global.addr, self.project.ptr_size);
                     self.mem.write(&addr, value)?;
-                }
-            }
-        }
-
-        for globals in self
-            .global_references
-            .private_global_references
-            .clone()
-            .values()
-        {
-            for global in globals.values() {
-                if let GlobalReferenceKind::GlobalVariable(var) = global.kind {
-                    if let Some(initializer) = &var.initializer {
-                        let value = self.get_var(initializer)?;
-                        let addr = self.solver.bv_from_u64(global.addr, self.project.ptr_size);
-                        self.mem.write(&addr, value)?;
-                    }
                 }
             }
         }

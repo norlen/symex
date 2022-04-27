@@ -261,7 +261,7 @@ impl<'a> VM<'a> {
     fn add(&mut self, instr: &instruction::Add) -> Result<()> {
         debug!("{}", instr);
         let result = binop(
-            &mut self.state,
+            &self.state,
             instr.get_operand0(),
             instr.get_operand1(),
             BV::add,
@@ -284,7 +284,7 @@ impl<'a> VM<'a> {
     fn sub(&mut self, instr: &instruction::Sub) -> Result<()> {
         debug!("{}", instr);
         let result = binop(
-            &mut self.state,
+            &self.state,
             instr.get_operand0(),
             instr.get_operand1(),
             BV::sub,
@@ -307,7 +307,7 @@ impl<'a> VM<'a> {
     fn mul(&mut self, instr: &instruction::Mul) -> Result<()> {
         debug!("{}", instr);
         let result = binop(
-            &mut self.state,
+            &self.state,
             instr.get_operand0(),
             instr.get_operand1(),
             BV::mul,
@@ -333,7 +333,7 @@ impl<'a> VM<'a> {
         // done elsewhere I think? Or we could change it to provide a map, and then we can check
         // it ourselves.
         let result = binop(
-            &mut self.state,
+            &self.state,
             instr.get_operand0(),
             instr.get_operand1(),
             BV::udiv,
@@ -351,7 +351,7 @@ impl<'a> VM<'a> {
         // example in docs is 32-bit div with -2147483648 by -1, this may be the only case. i.e.
         // INTx::MIN / -1
         let result = binop(
-            &mut self.state,
+            &self.state,
             instr.get_operand0(),
             instr.get_operand1(),
             BV::sdiv,
@@ -374,7 +374,7 @@ impl<'a> VM<'a> {
         debug!("{}", instr);
         // TODO: Check div by zero.
         let result = binop(
-            &mut self.state,
+            &self.state,
             instr.get_operand0(),
             instr.get_operand1(),
             BV::urem,
@@ -389,7 +389,7 @@ impl<'a> VM<'a> {
         debug!("{}", instr);
         // TODO: Check div by zero.
         let result = binop(
-            &mut self.state,
+            &self.state,
             instr.get_operand0(),
             instr.get_operand1(),
             BV::srem,
@@ -418,7 +418,7 @@ impl<'a> VM<'a> {
         // TODO: There are a couple ways to get poison values. Read more about those.
         debug!("{}", instr);
         let result = binop(
-            &mut self.state,
+            &self.state,
             instr.get_operand0(),
             instr.get_operand1(),
             BV::sll,
@@ -431,7 +431,7 @@ impl<'a> VM<'a> {
         // TODO: There are a couple ways to get poison values. Read more about those.
         debug!("{}", instr);
         let result = binop(
-            &mut self.state,
+            &self.state,
             instr.get_operand0(),
             instr.get_operand1(),
             BV::srl,
@@ -444,7 +444,7 @@ impl<'a> VM<'a> {
         // TODO: There are a couple ways to get poison values. Read more about those.
         debug!("{}", instr);
         let result = binop(
-            &mut self.state,
+            &self.state,
             instr.get_operand0(),
             instr.get_operand1(),
             BV::sra,
@@ -456,7 +456,7 @@ impl<'a> VM<'a> {
     fn and(&mut self, instr: &instruction::And) -> Result<()> {
         debug!("{}", instr);
         let result = binop(
-            &mut self.state,
+            &self.state,
             instr.get_operand0(),
             instr.get_operand1(),
             BV::and,
@@ -468,7 +468,7 @@ impl<'a> VM<'a> {
     fn or(&mut self, instr: &instruction::Or) -> Result<()> {
         debug!("{}", instr);
         let result = binop(
-            &mut self.state,
+            &self.state,
             instr.get_operand0(),
             instr.get_operand1(),
             BV::or,
@@ -480,7 +480,7 @@ impl<'a> VM<'a> {
     fn xor(&mut self, instr: &instruction::Xor) -> Result<()> {
         debug!("{}", instr);
         let result = binop(
-            &mut self.state,
+            &self.state,
             instr.get_operand0(),
             instr.get_operand1(),
             BV::xor,
@@ -513,7 +513,7 @@ impl<'a> VM<'a> {
 
     fn extractvalue(&mut self, instr: &instruction::ExtractValue) -> Result<()> {
         debug!("{}", instr);
-        let value = extract_value(&mut self.state, &instr.aggregate, &instr.indices)?;
+        let value = extract_value(&self.state, &instr.aggregate, &instr.indices)?;
         self.assign(instr, value)
     }
 
@@ -588,7 +588,7 @@ impl<'a> VM<'a> {
     fn getelementptr(&mut self, instr: &instruction::GetElementPtr) -> Result<()> {
         debug!("{}", instr);
         let target_address = gep(
-            &mut self.state,
+            &self.state,
             &instr.address,
             instr.indices.iter().map(|op| op.into()),
             instr.in_bounds,
@@ -608,7 +608,7 @@ impl<'a> VM<'a> {
     fn trunc(&mut self, instr: &instruction::Trunc) -> Result<()> {
         debug!("{}", instr);
         let symbol = convert_to_map(
-            &mut self.state,
+            &self.state,
             &instr.to_type,
             &instr.operand,
             |symbol, target_size| symbol.slice(0, target_size - 1),
@@ -623,7 +623,7 @@ impl<'a> VM<'a> {
     fn zext(&mut self, instr: &instruction::ZExt) -> Result<()> {
         debug!("{}", instr);
         let symbol = convert_to_map(
-            &mut self.state,
+            &self.state,
             &instr.to_type,
             &instr.operand,
             |symbol, target_size| symbol.zero_ext(target_size),
@@ -638,7 +638,7 @@ impl<'a> VM<'a> {
     fn sext(&mut self, instr: &instruction::SExt) -> Result<()> {
         debug!("{}", instr);
         let symbol = convert_to_map(
-            &mut self.state,
+            &self.state,
             &instr.to_type,
             &instr.operand,
             |symbol, target_size| symbol.sign_ext(target_size),
@@ -701,7 +701,7 @@ impl<'a> VM<'a> {
     fn ptrtoint(&mut self, instr: &instruction::PtrToInt) -> Result<()> {
         debug!("{}", instr);
         let bv = convert_to_map(
-            &mut self.state,
+            &self.state,
             &instr.to_type,
             &instr.operand,
             |symbol, target_size| symbol.resize_unsigned(target_size),
@@ -716,7 +716,7 @@ impl<'a> VM<'a> {
     fn inttoptr(&mut self, instr: &instruction::IntToPtr) -> Result<()> {
         debug!("{}", instr);
         let bv = convert_to_map(
-            &mut self.state,
+            &self.state,
             &instr.to_type,
             &instr.operand,
             |symbol, target_size| symbol.resize_unsigned(target_size),
@@ -733,13 +733,13 @@ impl<'a> VM<'a> {
     /// Reference: https://llvm.org/docs/LangRef.html#bitcast-to-instruction
     fn bitcast(&mut self, instr: &instruction::BitCast) -> Result<()> {
         debug!("{}", instr);
-        let bv = cast_to(&mut self.state, &instr.to_type, &instr.operand)?;
+        let bv = cast_to(&self.state, &instr.to_type, &instr.operand)?;
         self.assign(instr, bv)
     }
 
     fn addrspacecast(&mut self, instr: &instruction::AddrSpaceCast) -> Result<()> {
         debug!("{}", instr);
-        let bv = cast_to(&mut self.state, &instr.to_type, &instr.operand)?;
+        let bv = cast_to(&self.state, &instr.to_type, &instr.operand)?;
         self.assign(instr, bv)
     }
 
@@ -750,7 +750,7 @@ impl<'a> VM<'a> {
     fn icmp(&mut self, instr: &instruction::ICmp) -> Result<()> {
         debug!("{}", instr);
         let result = icmp(
-            &mut self.state,
+            &self.state,
             &instr.operand0,
             &instr.operand1,
             instr.predicate,

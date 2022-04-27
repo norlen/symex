@@ -14,7 +14,6 @@ impl Scope {
     fn new() -> Self {
         Self {
             vars: HashMap::new(),
-            //versions: HashMap::new(),
         }
     }
 }
