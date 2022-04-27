@@ -1,6 +1,6 @@
 use thiserror::Error;
 
-use crate::memory::MemoryError;
+use crate::{memory::MemoryError, solver::SolverError};
 
 pub type Result<T> = std::result::Result<T, VMError>;
 
@@ -57,6 +57,9 @@ pub enum VMError {
 
     #[error(transparent)]
     Other(#[from] anyhow::Error),
+
+    #[error(transparent)]
+    Solver(#[from] SolverError),
 }
 
 impl PartialEq for VMError {

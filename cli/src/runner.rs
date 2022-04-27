@@ -1,4 +1,6 @@
 use anyhow::{anyhow, Result};
+use colored::Colorize;
+use rustc_demangle::demangle;
 use std::path::Path;
 use x0001e::{
     project::Project,
@@ -60,6 +62,7 @@ pub fn run_analysis(path: impl AsRef<Path>, fn_name: &str) -> Result<()> {
     let mut vm = VM::new(fn_name, &project)?;
 
     let mut results = Vec::new();
+    let mut path = 1;
     while let Some(path_result) = vm.run() {
         // Get input solutions.
         let input_solutions = get_input_solutions(&vm).expect("Could not get input solutions");
@@ -79,14 +82,70 @@ pub fn run_analysis(path: impl AsRef<Path>, fn_name: &str) -> Result<()> {
             Err(_) => None,
         };
 
+        if path != 1 {
+            println!("\n");
+        }
+        println!(
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ PATH {path} ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        );
+        match &path_result {
+            Ok(_) => {
+                print!("{}", "Success".green());
+                let value = match output {
+                    Some(value) => format!("{value}"),
+                    None => "void".to_owned(),
+                };
+                println!(": returned {value}");
+                if !sym_solutions.is_empty() {
+                    println!("\nSymbolic values");
+                    for (n, (name, value)) in sym_solutions.iter().enumerate() {
+                        println!("{n:4}: {name}={value}");
+                    }
+                }
+                if !input_solutions.is_empty() {
+                    println!("\nInputs");
+                    for (n, value) in input_solutions.iter().enumerate() {
+                        println!("{n:4}: {value}");
+                    }
+                }
+            }
+            Err(error) => {
+                println!("{}", format!("Error: {error}").red());
+                if let Some(source_loc) = vm.state.current_loc.source_loc {
+                    println!("    at {source_loc}\n");
+                }
+                println!("Callstack:");
+                for (n, callsite) in vm.state.callstack.iter().rev().enumerate() {
+                    let fn_name = demangle(callsite.location.func.name.as_str());
+                    println!("{n:4}: {fn_name:#}");
+                    if let Some(debug_loc) = callsite.location.source_loc {
+                        println!("      at {debug_loc}");
+                    }
+                }
+                if !sym_solutions.is_empty() {
+                    println!("\nSymbolic values");
+                    for (n, (name, value)) in sym_solutions.iter().enumerate() {
+                        println!("{n:4}: {name}={value}");
+                    }
+                }
+                if !input_solutions.is_empty() {
+                    println!("\nInputs");
+                    for (n, value) in input_solutions.iter().enumerate() {
+                        println!("{n:4}: {value}");
+                    }
+                }
+            }
+        }
+
         results.push(Solution {
             ret: path_result,
             inputs: input_solutions,
             symbolic: sym_solutions,
             output,
         });
+        path += 1;
     }
 
-    println!("Results: {results:#?}");
+    //println!("Results: {results:#?}");
     Ok(())
 }

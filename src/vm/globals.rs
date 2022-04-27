@@ -116,6 +116,9 @@ impl<'p> GlobalReferences<'p> {
                     _ => panic!("Expected pointer type"),
                 };
 
+                // If the global is zero sized, just allocate a small amount for it.
+                let size = if size == 0 { 4 } else { size };
+
                 // If no specific alignment is specified, use the project default.
                 let align = if var.alignment == 0 {
                     project.default_alignment
@@ -131,10 +134,11 @@ impl<'p> GlobalReferences<'p> {
             };
 
         for (module_handle, var) in project.get_private_global_variables() {
-            // We only care to add globals with initializers.
+            // All declaration have initializers, so skip over definitions.
             if var.initializer.is_none() {
                 continue;
             }
+
             let name = var.name.clone();
             let global_ref = create_var_global_ref(var)?;
             debug!(
@@ -145,10 +149,11 @@ impl<'p> GlobalReferences<'p> {
         }
 
         for (_, var) in project.get_public_global_variables() {
-            // We only care to add globals with initializers.
+            // All declaration have initializers, so skip over definitions.
             if var.initializer.is_none() {
                 continue;
             }
+
             let name = var.name.clone();
             let global_ref = create_var_global_ref(var)?;
             debug!(

@@ -302,10 +302,10 @@ struct BumpAllocator {
 
 impl BumpAllocator {
     /// All allocations begin at this address.
-    pub const ALLOC_START: u64 = 0x1000_0000;
+    const ALLOC_START: u64 = 0x1000_0000;
 
     /// Create a new `BumpAllocator` that starts allocating at `ALLOC_START`.
-    pub fn new() -> Self {
+    fn new() -> Self {
         Self {
             cursor: Self::ALLOC_START,
         }
@@ -315,7 +315,7 @@ impl BumpAllocator {
     ///
     /// `bits` must be the correct size, if it is too small subsequent
     /// allocations will be in the same address space.
-    pub fn get_address(&mut self, bits: u64, align: u64) -> Result<(u64, u64), MemoryError> {
+    fn get_address(&mut self, bits: u64, align: u64) -> Result<(u64, u64), MemoryError> {
         if bits == 0 {
             return Err(MemoryError::ZeroSizedAllocation);
         }

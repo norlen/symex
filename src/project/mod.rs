@@ -473,10 +473,12 @@ fn internal_get_privacy(linkage: &Linkage) -> Option<Privacy> {
         // However, this just merges anyway and does not check that.
         //
         // Common is similar to how `Weak` works.
-        Linkage::LinkOnceAny | Linkage::LinkOnceODR => todo!(),
-        Linkage::WeakAny | Linkage::WeakODR | Linkage::ExternalWeak | Linkage::Common => {
-            Some(Privacy::ExternalWeak)
-        }
+        Linkage::LinkOnceAny
+        | Linkage::LinkOnceODR
+        | Linkage::WeakAny
+        | Linkage::WeakODR
+        | Linkage::ExternalWeak
+        | Linkage::Common => Some(Privacy::ExternalWeak),
 
         // For a linker this is the same as being available externally, thus we do not have to
         // add these to our maps. They should be available elsewhere.

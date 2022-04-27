@@ -107,7 +107,7 @@ impl<'a> VM<'a> {
         self.backtrack_and_continue()
     }
 
-    // Helper to run all the paths the VM finds.
+    /// Helper to run all the paths the VM finds.
     pub fn run_all(&mut self) -> Vec<Result<ReturnValue>> {
         let mut results = Vec::new();
 

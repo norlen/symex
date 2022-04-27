@@ -227,9 +227,15 @@ impl<'a> State<'a> {
         for global in public_globals.chain(private_globals) {
             if let GlobalReferenceKind::GlobalVariable(var) = global.kind {
                 if let Some(initializer) = &var.initializer {
-                    let value = self.get_var(initializer)?;
-                    let addr = self.solver.bv_from_u64(global.addr, self.project.ptr_size);
-                    self.mem.write(&addr, value)?;
+                    match self.get_var(initializer) {
+                        Ok(value) => {
+                            let addr = self.solver.bv_from_u64(global.addr, self.project.ptr_size);
+                            self.mem.write(&addr, value)?;
+                        }
+                        Err(err) => {
+                            warn!("Error initializing global: {:?}", err);
+                        }
+                    }
                 }
             }
         }

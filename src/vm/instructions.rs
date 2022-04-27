@@ -13,7 +13,8 @@ use crate::{
 };
 
 impl<'a> VM<'a> {
-    pub fn process_instruction(&mut self, instr: &'a Instruction) -> Result<()> {
+    /// Process a single LLVM IR instruction.
+    pub(super) fn process_instruction(&mut self, instr: &'a Instruction) -> Result<()> {
         match &instr {
             Instruction::Load(i) => self.load(i),
             Instruction::Store(i) => self.store(i),
@@ -72,7 +73,8 @@ impl<'a> VM<'a> {
         }
     }
 
-    pub fn process_terminator(&mut self, terminator: &Terminator) -> Result<ReturnValue> {
+    /// Process a single LLVM IR terminator instruction.
+    pub(super) fn process_terminator(&mut self, terminator: &Terminator) -> Result<ReturnValue> {
         match terminator {
             Terminator::Ret(i) => self.ret(i),
             Terminator::Br(i) => self.br(i),
@@ -93,38 +95,47 @@ impl<'a> VM<'a> {
     // Terminator Instructions
     // ---------------------------------------------------------------------------------------------
 
+    /// Returns control back to the caller, and optionally a return value.
     fn ret(&mut self, instr: &terminator::Ret) -> Result<ReturnValue> {
         debug!("{}", instr);
         let ret_val = if let Some(op) = &instr.return_operand {
-            let value = self.state.get_var(op).unwrap();
+            let value = self.state.get_var(op)?;
             ReturnValue::Value(value)
         } else {
             ReturnValue::Void
         };
 
-        // On `ret` the variable scope that was entered when calling/invoking must be destroyed.
-
-        // Note that this works even in error cases, if we encounter an error this path is dead.
-        // Execution is never resumed of a path that encountered an error.
+        // When returning the variable scope has to be destroyed.
+        //
+        // However, we may not reach this in the case of errors earlier, but that does not matter
+        // since if an error is encountered the path is considered dead, and cannot be resumed.
         self.state.vars.leave_scope();
         Ok(ret_val)
     }
 
+    /// Unconditionally jumps to a basic block inside the current function.
     fn br(&mut self, instr: &terminator::Br) -> Result<ReturnValue> {
         debug!("{}", instr);
         self.branch(&instr.dest)
     }
 
+    /// Jumps to another basic block inside the current function.
+    ///
+    /// This is the conditional version, so it can pick between two basic blocks. It will evaluate
+    /// the condition and check if the condition can be `true`, `false`, or both. If more than one
+    /// path can be selected a save point is created.
+    ///
+    /// If the condition cannot be either `true` or `false` [VMError::Unsat] is returned.
     fn condbr(&mut self, instr: &terminator::CondBr) -> Result<ReturnValue> {
         debug!("{}", instr);
 
-        let cond = self.state.get_var(&instr.condition).unwrap();
-        let true_possible = self.solver.is_sat_with_constraint(&cond).unwrap();
-        let false_possible = self.solver.is_sat_with_constraint(&cond.not()).unwrap();
+        let cond = self.state.get_var(&instr.condition)?;
+        let true_possible = self.solver.is_sat_with_constraint(&cond)?;
+        let false_possible = self.solver.is_sat_with_constraint(&cond.not())?;
 
         let target = match (true_possible, false_possible) {
             (true, true) => {
-                // Explore true first, then backtrack to false.
+                // Explore `true` path, and save `false` path for later.
                 self.save_backtracking_path(&instr.false_dest, Some(cond.not()))?;
                 self.solver.assert(&cond);
                 Ok(&instr.true_dest)
@@ -137,6 +148,13 @@ impl<'a> VM<'a> {
         self.branch(target)
     }
 
+    /// Jump to any number of basic blocks inside the current function.
+    ///
+    /// A more general version compared to `condbr`. Multiple conditions with jump targets can be
+    /// specified, with a default that is taken if none of the conditions apply.
+    ///
+    /// It will check which conditions are satisfiable, and create save points for these. It will
+    /// then branch to the first `true` condition it found.
     fn switch(&mut self, instr: &terminator::Switch) -> Result<ReturnValue> {
         debug!("{}", instr);
         let value = self.state.get_var(&instr.operand).unwrap();
@@ -184,14 +202,22 @@ impl<'a> VM<'a> {
         }
     }
 
+    /// Indirect branch to a label in the current function. The target is an address derived from
+    /// a `BlockAddress`.
+    ///
+    /// This type is not supported in llvm-ir yet. Thus this instruction is unsupported.
     fn indirectbr(&mut self, instr: &terminator::IndirectBr) -> Result<ReturnValue> {
         debug!("{}", instr);
-        todo!()
+        Err(VMError::UnsupportedInstruction)
     }
 
+    /// Call the specified function with support for resuming at an exception label.
+    ///
+    /// If the function returns normally it resumes execution at the `normal` label, if not
+    /// execution is resumed at the `exception` label.
     fn invoke(&mut self, instr: &terminator::Invoke) -> Result<ReturnValue> {
         debug!("{}", instr);
-        todo!()
+        Err(VMError::UnsupportedInstruction)
     }
 
     fn callbr(&mut self, instr: &terminator::CallBr) -> Result<ReturnValue> {
