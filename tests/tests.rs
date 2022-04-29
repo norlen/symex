@@ -197,3 +197,11 @@ fn array_index_get_unchecked() {
         );
     }
 }
+
+// Check that basic loops work
+#[test]
+fn loops_work() {
+    let res = run("tests/samples/loop.bc", "loop::simple_loop_works");
+    assert_eq!(res.len(), 1, "expected 1 path");
+    assert_eq!(res[0].output, Some(0xbc));
+}

@@ -164,7 +164,7 @@ impl<'a> VM<'a> {
             if matches!(callsite.instruction, Call::Call(_)) {
                 callsite.location.inc_pc();
             } else if matches!(callsite.instruction, Call::Invoke(_)) {
-                return Err(VMError::UnsupportedInstruction);
+                return Err(VMError::UnsupportedInstruction("invoke".to_owned()));
             }
 
             self.state.current_loc = callsite.location;

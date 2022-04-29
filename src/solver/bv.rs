@@ -293,6 +293,32 @@ impl BV {
         BV(self.0.slice(high, low))
     }
 
+    /// Replaces part of the BV starting at `start_idx` with `replace_with`
+    ///
+    /// So for example to replace the BV `10101010` with `1111` starting at index 4, it would result
+    /// in `11111010`. Requires that the final length of the BV will stay the same.
+    pub fn replace_part(&self, start_idx: u32, replace_with: BV) -> BV {
+        let end_idx = start_idx + replace_with.len();
+        assert!(end_idx <= self.len());
+
+        let value = if start_idx == 0 {
+            replace_with
+        } else {
+            let prefix = self.slice(0, start_idx - 1);
+            replace_with.concat(&prefix)
+        };
+
+        let value = if end_idx == self.len() {
+            value
+        } else {
+            let suffix = self.slice(end_idx, self.len() - 1);
+            suffix.concat(&value)
+        };
+        assert_eq!(value.len(), self.len());
+
+        value
+    }
+
     // ---------------------------------------------------------------------------------------------
     // Conditionals
     // ---------------------------------------------------------------------------------------------

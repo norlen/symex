@@ -191,7 +191,7 @@ impl Solver {
     }
 
     /// Create a new unnamed uninitialized bitvector of size `bits`.
-    pub fn bv_anon(&self, bits: u32) -> BV {
+    pub fn bv_unnamed(&self, bits: u32) -> BV {
         BV(boolector::BV::new(self.0.clone(), bits, None))
     }
 

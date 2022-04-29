@@ -1,29 +1,37 @@
 use llvm_ir::{IntPredicate, Operand, Type};
 
-use super::{get_bit_offset_concrete, Op, ToValue};
+use super::{Op, ToValue};
 use crate::{
     common::{get_byte_offset_concrete, get_byte_offset_symbol},
     solver::BV,
     vm::{Result, State, VMError},
 };
 
-pub(crate) fn extract_value<'p, T>(state: &State<'_>, aggregate: T, indices: &[u32]) -> Result<BV>
-where
-    T: Into<Op<'p>>,
-{
-    let aggregate = aggregate.into();
-
-    // Calculate the offset to where the element is located.
-    let mut ty = state.type_of(&aggregate);
+/// Calculate start and end offset into the aggregate.
+///
+///
+pub(crate) fn get_element_offset(
+    state: &State<'_>,
+    aggregate: &Operand,
+    indices: &[u32],
+) -> Result<(u64, u64)> {
+    let mut ty = state.type_of(aggregate);
     let mut total_offset = 0;
-
     for index in indices.iter().copied() {
-        let (offset, inner_ty) = get_bit_offset_concrete(&ty, index as u64, state.project)?;
+        let (offset, inner_ty) = state.project.bit_offset_concrete(&ty, index as u64)?;
+
         total_offset += offset;
         ty = inner_ty;
     }
 
-    let offset_upper_bound = total_offset + state.project.bit_size(&ty)? as u64;
+    let element_size = state.project.bit_size(&ty)?;
+    let upper_bound = total_offset + element_size as u64;
+
+    Ok((total_offset, upper_bound))
+}
+
+pub(crate) fn extract_value(state: &State<'_>, aggregate: &Operand, indices: &[u32]) -> Result<BV> {
+    let (total_offset, offset_upper_bound) = get_element_offset(state, aggregate, indices)?;
 
     // Get the value and check that the BV is big enough to accommodate our slice.
     let value = state.get_var(aggregate)?;
@@ -199,7 +207,9 @@ where
         }
 
         // TODO: Check if scalable vectors are similar
-        (VectorType { .. }, VectorType { .. }) => Err(VMError::UnsupportedInstruction),
+        (VectorType { .. }, VectorType { .. }) => Err(VMError::UnsupportedInstruction(
+            "Scalable vectors".to_owned(),
+        )),
 
         // The other types should not appear for this instruction.
         _ => Err(VMError::MalformedInstruction),

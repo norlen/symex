@@ -75,7 +75,11 @@ pub fn const_to_symbol_zero_size(state: &State<'_>, constant: &Constant) -> Resu
             let size = state.project.bit_size(ty)?;
             Ok(match size {
                 0 => None,
-                n => Some(state.solver.bv_anon(n as u32)),
+                n => {
+                    // TODO: boolector does not like unnamed bitvectors, thus zero allocate this
+                    // as well just to get around it.
+                    Some(state.solver.bv_zero(n))
+                }
             })
         }
 
@@ -362,7 +366,7 @@ pub fn const_to_symbol_zero_size(state: &State<'_>, constant: &Constant) -> Resu
         // Floating point is currently not supported.
         Float(_) | FAdd(_) | FSub(_) | FMul(_) | FDiv(_) | FRem(_) | FPTrunc(_) | FPExt(_)
         | FPToUI(_) | FPToSI(_) | UIToFP(_) | SIToFP(_) | FCmp(_) => {
-            Err(VMError::UnsupportedInstruction)
+            Err(VMError::UnsupportedInstruction("Floating point".to_owned()))
         }
 
         // TODO
@@ -431,7 +435,7 @@ where
         }
 
         // Not supported yet.
-        (Float(_), Float(_)) => Err(VMError::UnsupportedInstruction),
+        (Float(_), Float(_)) => Err(VMError::UnsupportedInstruction("Floating point".to_owned())),
 
         // These types should not appear here.
         _ => Err(VMError::MalformedInstruction),

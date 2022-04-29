@@ -5,7 +5,9 @@ use llvm_ir::{
 use log::{debug, warn};
 
 use crate::{
-    common::{binop, cast_to, convert_to_map, extract_value, gep, icmp, ToValue},
+    common::{
+        binop, cast_to, convert_to_map, extract_value, gep, get_element_offset, icmp, ToValue,
+    },
     hooks::FnInfo,
     project::FunctionType,
     solver::BV,
@@ -208,7 +210,7 @@ impl<'a> VM<'a> {
     /// This type is not supported in llvm-ir yet. Thus this instruction is unsupported.
     fn indirectbr(&mut self, instr: &terminator::IndirectBr) -> Result<ReturnValue> {
         debug!("{}", instr);
-        Err(VMError::UnsupportedInstruction)
+        Err(VMError::UnsupportedInstruction("indirectbr".to_owned()))
     }
 
     /// Call the specified function with support for resuming at an exception label.
@@ -217,7 +219,7 @@ impl<'a> VM<'a> {
     /// execution is resumed at the `exception` label.
     fn invoke(&mut self, instr: &terminator::Invoke) -> Result<ReturnValue> {
         debug!("{}", instr);
-        Err(VMError::UnsupportedInstruction)
+        Err(VMError::UnsupportedInstruction("invoke".to_owned()))
     }
 
     fn callbr(&mut self, instr: &terminator::CallBr) -> Result<ReturnValue> {
@@ -265,7 +267,7 @@ impl<'a> VM<'a> {
     /// Floating point is currently unsupported. Always returns [VMError::UnsupportedInstruction].
     fn fneg(&mut self, instr: &instruction::FNeg) -> Result<()> {
         debug!("{}", instr);
-        Err(VMError::UnsupportedInstruction)
+        Err(VMError::UnsupportedInstruction("fneg".to_owned()))
     }
 
     // ---------------------------------------------------------------------------------------------
@@ -300,7 +302,7 @@ impl<'a> VM<'a> {
     /// Floating point is currently unsupported. Always returns [VMError::UnsupportedInstruction].
     fn fadd(&mut self, instr: &instruction::FAdd) -> Result<()> {
         debug!("{}", instr);
-        Err(VMError::UnsupportedInstruction)
+        Err(VMError::UnsupportedInstruction("fadd".to_owned()))
     }
 
     /// Calculate the difference of two integers or two vectors of integers.
@@ -323,7 +325,7 @@ impl<'a> VM<'a> {
     /// Floating point is currently unsupported. Always returns [VMError::UnsupportedInstruction].
     fn fsub(&mut self, instr: &instruction::FSub) -> Result<()> {
         debug!("{}", instr);
-        Err(VMError::UnsupportedInstruction)
+        Err(VMError::UnsupportedInstruction("fsub".to_owned()))
     }
 
     /// Calculates the product of two integers or two vectors of integers.
@@ -346,7 +348,7 @@ impl<'a> VM<'a> {
     /// Floating point is currently unsupported. Always returns [VMError::UnsupportedInstruction].
     fn fmul(&mut self, instr: &instruction::FMul) -> Result<()> {
         debug!("{}", instr);
-        Err(VMError::UnsupportedInstruction)
+        Err(VMError::UnsupportedInstruction("fmul".to_owned()))
     }
 
     /// Calculate the quotient of two integers or two vectors of integers.
@@ -390,7 +392,7 @@ impl<'a> VM<'a> {
     /// Floating point is currently unsupported. Always returns [VMError::UnsupportedInstruction].
     fn fdiv(&mut self, instr: &instruction::FDiv) -> Result<()> {
         debug!("{}", instr);
-        Err(VMError::UnsupportedInstruction)
+        Err(VMError::UnsupportedInstruction("fdiv".to_owned()))
     }
 
     /// Calculate the remainder from unsigned division of two integers or a vector of integers.
@@ -429,7 +431,7 @@ impl<'a> VM<'a> {
     /// Floating point is currently unsupported. Always returns [VMError::UnsupportedInstruction].
     fn frem(&mut self, instr: &instruction::FRem) -> Result<()> {
         debug!("{}", instr);
-        Err(VMError::UnsupportedInstruction)
+        Err(VMError::UnsupportedInstruction("frem".to_owned()))
     }
 
     // ---------------------------------------------------------------------------------------------
@@ -537,15 +539,30 @@ impl<'a> VM<'a> {
     // Aggregate Operations
     // ---------------------------------------------------------------------------------------------
 
+    /// Extract value from an aggregate value.
+    ///
+    /// First operand should be either a struct or an array. The other operands are the indices
+    /// that specify which value should be extracted.
     fn extractvalue(&mut self, instr: &instruction::ExtractValue) -> Result<()> {
         debug!("{}", instr);
         let value = extract_value(&self.state, &instr.aggregate, &instr.indices)?;
         self.assign(instr, value)
     }
 
+    /// Insert value into an aggregate value.
+    ///
+    /// The first operand should be either a struct or an array. The second operand is the first-
+    /// class value to insert. The other operands are the indices that specify where the value
+    /// should be inserted.
     fn insertvalue(&mut self, instr: &instruction::InsertValue) -> Result<()> {
         debug!("{}", instr);
-        todo!()
+        let original = self.state.get_var(&instr.aggregate)?;
+        let value = self.state.get_var(&instr.element)?;
+
+        let (offset, _) = get_element_offset(&self.state, &instr.aggregate, &instr.indices)?;
+        let value = original.replace_part(offset as u32, value);
+
+        self.assign(instr, value)
     }
 
     // ---------------------------------------------------------------------------------------------
@@ -677,7 +694,7 @@ impl<'a> VM<'a> {
     /// Floating point is currently unsupported. Always returns [VMError::UnsupportedInstruction].
     fn fptrunc(&mut self, instr: &instruction::FPTrunc) -> Result<()> {
         debug!("{}", instr);
-        Err(VMError::UnsupportedInstruction)
+        Err(VMError::UnsupportedInstruction("fptrunc".to_owned()))
     }
 
     /// Convert a floating point value from a smaller type to a larger type.
@@ -685,7 +702,7 @@ impl<'a> VM<'a> {
     /// Floating point is currently unsupported. Always returns [VMError::UnsupportedInstruction].
     fn fpext(&mut self, instr: &instruction::FPExt) -> Result<()> {
         debug!("{}", instr);
-        Err(VMError::UnsupportedInstruction)
+        Err(VMError::UnsupportedInstruction("fpext".to_owned()))
     }
 
     /// Convert a floating point to unsigned integer.
@@ -693,7 +710,7 @@ impl<'a> VM<'a> {
     /// Floating point is currently unsupported. Always returns [VMError::UnsupportedInstruction].
     fn fptoui(&mut self, instr: &instruction::FPToUI) -> Result<()> {
         debug!("{}", instr);
-        Err(VMError::UnsupportedInstruction)
+        Err(VMError::UnsupportedInstruction("fptoui".to_owned()))
     }
 
     /// Convert floating point to signed integer.
@@ -701,7 +718,7 @@ impl<'a> VM<'a> {
     /// Floating point is currently unsupported. Always returns [VMError::UnsupportedInstruction].
     fn fptosi(&mut self, instr: &instruction::FPToSI) -> Result<()> {
         debug!("{}", instr);
-        Err(VMError::UnsupportedInstruction)
+        Err(VMError::UnsupportedInstruction("fptosi".to_owned()))
     }
 
     /// Convert unsigned integer to floating point.
@@ -709,7 +726,7 @@ impl<'a> VM<'a> {
     /// Floating point is currently unsupported. Always returns [VMError::UnsupportedInstruction].
     fn uitofp(&mut self, instr: &instruction::UIToFP) -> Result<()> {
         debug!("{}", instr);
-        Err(VMError::UnsupportedInstruction)
+        Err(VMError::UnsupportedInstruction("uitofp".to_owned()))
     }
 
     /// Convert signed integer to floating point.
@@ -717,7 +734,7 @@ impl<'a> VM<'a> {
     /// Floating point is currently unsupported. Always returns [VMError::UnsupportedInstruction].
     fn sitofp(&mut self, instr: &instruction::SIToFP) -> Result<()> {
         debug!("{}", instr);
-        Err(VMError::UnsupportedInstruction)
+        Err(VMError::UnsupportedInstruction("sitofp".to_owned()))
     }
 
     /// Takes a pointer or a vector of pointers and converts to an integer or a vector of integers.
@@ -789,7 +806,7 @@ impl<'a> VM<'a> {
     /// Floating point is currently unsupported. Always returns [VMError::UnsupportedInstruction].
     fn fcmp(&mut self, instr: &instruction::FCmp) -> Result<()> {
         debug!("{}", instr);
-        Err(VMError::UnsupportedInstruction)
+        Err(VMError::UnsupportedInstruction("fcmp".to_owned()))
     }
 
     fn phi(&mut self, instr: &instruction::Phi) -> Result<()> {

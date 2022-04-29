@@ -39,8 +39,8 @@ pub enum VMError {
     // Errors when running the VM
     // -------------------------------------------------------------------------
     /// UnsupportedInstruction
-    #[error("UnsupportedInstruction")]
-    UnsupportedInstruction,
+    #[error("UnsupportedInstruction {0}")]
+    UnsupportedInstruction(String),
 
     /// UnreachableInstruction
     #[error("UnreachableInstruction")]
