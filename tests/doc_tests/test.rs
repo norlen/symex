@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 fn function_to_analyze(x: u32) -> u32 {
     if x < 10 {
         x

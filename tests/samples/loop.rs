@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 fn simple_loop_works() -> i32 {
     for i in 0..10 {
         if i == 5 {

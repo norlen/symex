@@ -6,6 +6,7 @@ use llvm_ir::{
 use log::{debug, trace};
 
 use crate::{
+    common::SolutionVariable,
     project::Project,
     solver::{Solutions, Solver, BV},
 };
@@ -38,7 +39,7 @@ pub struct VM<'a> {
     pub solver: Solver,
 
     /// Parameters passed to the initial entry function.
-    pub parameters: Vec<BV>,
+    pub parameters: Vec<SolutionVariable>,
 }
 
 impl<'a> Clone for VM<'a> {
@@ -102,7 +103,12 @@ impl<'a> VM<'a> {
             assert_ne!(size, 0);
 
             let bv = self.solver.bv(size as u32, &param.name.to_string());
-            self.parameters.push(bv.clone());
+            let solution_var = SolutionVariable {
+                name: param.name.to_string(),
+                value: bv.clone(),
+                ty: param.ty.clone(),
+            };
+            self.parameters.push(solution_var);
 
             self.state.vars.insert(param.name.clone(), bv)?;
         }
@@ -305,7 +311,7 @@ impl<'a> VM<'a> {
                 Operand::LocalOperand { .. } => {
                     let addr = self.state.get_var(operand)?;
                     let solutions = self.solver.get_solutions_for_bv(&addr, 1).unwrap();
-                    dbg!(&solutions);
+                    //dbg!(&solutions);
                     match solutions {
                         Solutions::None => todo!(),
                         Solutions::Exactly(v) => {

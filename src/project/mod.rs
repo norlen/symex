@@ -285,7 +285,7 @@ impl Project {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```ignore
     /// # use x0001e::{Project, project::ModuleHandle};
     /// #
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -317,7 +317,8 @@ impl Project {
             return Ok(FunctionType::Function { function, module });
         }
 
-        Err(VMError::FunctionNotFound(name.to_string()))
+        let f = format!("{name} ({demangled_name})");
+        Err(VMError::FunctionNotFound(f))
     }
 
     /// Get the definition of a named struct.

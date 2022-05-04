@@ -119,7 +119,13 @@ pub fn generate_build_command(opts: &Settings) -> Command {
     }
 
     // Commands to pass to rustc.
-    cargo.args(&["--", "--emit=llvm-bc"]);
+    cargo.args(&[
+        "--",
+        "--emit=llvm-bc",
+        "--emit=llvm-ir",
+        "-C",
+        "link-dead-code=yes",
+    ]);
     debug!("Running cargo command: {cargo:?}");
     cargo
 }

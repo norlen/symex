@@ -1,0 +1,12 @@
+[package]
+name = "runner"
+version = "1.0.0"
+edition = "2021"
+
+
+[dependencies]
+anyhow = "1.0.57"
+indenter = "0.3.3"
+colored = "2.0.0"
+rustc-demangle = "0.1.21"
+x0001e = { path = "../", version = "1.0" }

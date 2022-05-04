@@ -7,7 +7,10 @@ use llvm_ir::{
 use log::{debug, trace};
 use std::collections::HashMap;
 
-use crate::vm::{Result, ReturnValue, VMError, VM};
+use crate::{
+    common::SolutionVariable,
+    vm::{Result, ReturnValue, VMError, VM},
+};
 
 use intrinsics::{is_intrinsic, Intrinsics};
 
@@ -60,6 +63,8 @@ impl Hooks {
         hooks.add("core::panicking::panic_fmt", abort);
         hooks.add("x0001e::assume", assume);
         hooks.add("x0001e::symbolic", symbolic);
+
+        hooks.add("std::io::stdio::_print", print);
 
         hooks
     }
@@ -117,7 +122,13 @@ pub fn symbolic(vm: &mut VM<'_>, info: FnInfo) -> Result<ReturnValue> {
         };
         let new_symbol = vm.solver.bv(size, &var_name);
 
-        vm.state.symbols.push((var_name, new_symbol.clone()));
+        // vm.state.symbols.push((var_name, new_symbol.clone()));
+        let solution_var = SolutionVariable {
+            name: var_name,
+            value: new_symbol.clone(),
+            ty: inner_ty.clone(),
+        };
+        vm.state.symbols.push(solution_var);
 
         let addr = vm.state.get_var(op)?;
         vm.state.mem.write(&addr, new_symbol)?;
@@ -126,4 +137,9 @@ pub fn symbolic(vm: &mut VM<'_>, info: FnInfo) -> Result<ReturnValue> {
     } else {
         panic!("not a pointer type");
     }
+}
+
+pub fn print(_vm: &mut VM<'_>, _info: FnInfo) -> Result<ReturnValue> {
+    //println!("{info:#?}");
+    Ok(ReturnValue::Void)
 }

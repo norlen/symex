@@ -50,7 +50,7 @@
 //!         let inputs: Result<Vec<_>, _> = vm
 //!             .parameters
 //!             .iter()
-//!             .map(|input| vm.solver.get_solutions_for_bv(input, 1))
+//!             .map(|input| vm.solver.get_solutions_for_bv(&input.value, 1))
 //!             .collect();
 //!
 //!         println!("Inputs: {inputs:?}");
@@ -110,6 +110,12 @@ pub use crate::{
     vm::{Result, ReturnValue, VMError, VM},
 };
 
+pub mod ir {
+    ///! Re-exports of `llvm-ir` types.
+    pub use llvm_ir::types::NamedStructDef;
+    pub use llvm_ir::*;
+}
+
 /// Assume the condition.
 ///
 /// Adds a constraint that the passed condition must be true. If the condition can never be true,
@@ -159,4 +165,10 @@ pub fn assume(condition: bool) {
 #[allow(unused_variables)]
 pub fn symbolic<T>(value: &mut T) {
     // Implemented as hook `hooks::symbolic`.
+}
+
+#[inline(never)]
+#[allow(unused_variables)]
+pub fn solve<T>(value: &mut T) {
+    // Implemented as hook `hooks::solve`.
 }

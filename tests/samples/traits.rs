@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 trait Foo {
     fn add_five(&mut self) -> i32;
 }

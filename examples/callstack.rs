@@ -1,7 +1,7 @@
 //! Run example with `cargo run -p cli -- --example callstack --function foobar`
 use x0001e::{assume, symbolic};
 
-fn bar(x: i32, y: i32) -> i32 {
+fn bar(x: i64, y: i64) -> i64 {
     // Assume these are not too big, otherwise it catches overflow as well (at least in debug)
     assume(x < 1000);
     assume(y < 1000);
@@ -12,7 +12,7 @@ fn bar(x: i32, y: i32) -> i32 {
     }
 }
 
-fn foo(x: i32) -> i32 {
+fn foo(x: i64) -> i64 {
     let mut y = 0;
     if x > 100 {
         symbolic(&mut y);
@@ -22,7 +22,7 @@ fn foo(x: i32) -> i32 {
     }
 }
 
-fn foobar(x: i32) -> i32 {
+fn foobar(x: i64) -> i64 {
     foo(x)
 }
 

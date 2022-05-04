@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 fn myfunc(a: i32) -> i32 {
     a
 }

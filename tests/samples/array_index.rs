@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 fn get(idx: usize) -> i32 {
     let arr = [0, 1, 2, 3];
     arr[idx]

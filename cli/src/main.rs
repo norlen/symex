@@ -6,13 +6,12 @@ const BINARY_NAME: &str = "x0001e";
 
 mod args;
 mod build;
-mod runner;
 
 use args::Args;
 use build::{
     generate_build_command, get_extra_filename, get_latest_bc, Features, Settings, Target,
 };
-use runner::run_analysis;
+use runner;
 
 fn main() -> Result<()> {
     env_logger::init();
@@ -75,7 +74,7 @@ fn run() -> Result<()> {
     };
     let fn_name = format!("{}::{fn_name}", opts.get_module_name()?);
     debug!("Starting analysis on target: {target_path:?}, function: {fn_name}");
-    run_analysis(&target_path, &fn_name)
+    runner::run(&target_path, &fn_name)
 }
 
 fn settings_from_args(opts: &Args) -> Settings {

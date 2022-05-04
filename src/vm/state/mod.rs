@@ -8,7 +8,7 @@ use log::warn;
 
 use super::{GlobalReference, GlobalReferenceKind, GlobalReferences, Result};
 use crate::{
-    common::{const_to_symbol, operand_to_symbol, Op},
+    common::{const_to_symbol, operand_to_symbol, Op, SolutionVariable},
     memory::Memory,
     project::{ModuleHandle, Project},
     {Solver, BV},
@@ -114,8 +114,9 @@ pub struct State<'a> {
 
     /// Global memory.
     pub mem: Memory,
+
     /// Lookup for all the variables that have been explicitly marked as `symbolic`.
-    pub symbols: Vec<(String, BV)>,
+    pub symbols: Vec<SolutionVariable>,
 
     /// Global references, these can be either a [Function] or a [GlobalVariable].
     ///
