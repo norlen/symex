@@ -104,6 +104,7 @@ pub struct State<'a> {
 
     /// Reference to the solver, used in the `VM` as well.
     pub solver: Solver,
+
     pub callstack: Vec<Callsite<'a>>,
 
     /// Current location where we are executing at.

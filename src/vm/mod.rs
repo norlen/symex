@@ -167,13 +167,17 @@ impl<'a> VM<'a> {
 
             // For `Call` we go to the next instruction, and for `Invoke` we enter the label that
             // it specifies.
-            if matches!(callsite.instruction, Call::Call(_)) {
-                callsite.location.inc_pc();
-            } else if matches!(callsite.instruction, Call::Invoke(_)) {
-                return Err(VMError::UnsupportedInstruction("invoke".to_owned()));
+            match callsite.instruction {
+                Call::Call(_) => {
+                    callsite.location.inc_pc();
+                    self.state.current_loc = callsite.location;
+                }
+                Call::Invoke(instr) => {
+                    // TODO
+                    let mut location = Location::jump_bb(callsite.location, &instr.return_label)?;
+                    std::mem::swap(&mut self.state.current_loc, &mut location);
+                }
             }
-
-            self.state.current_loc = callsite.location;
         }
     }
 

@@ -1,6 +1,6 @@
 use llvm_ir::{
     instruction::{self, BinaryOp, Instruction},
-    terminator, Terminator,
+    terminator, Terminator, Type,
 };
 use log::{debug, warn};
 
@@ -76,7 +76,7 @@ impl<'a> VM<'a> {
     }
 
     /// Process a single LLVM IR terminator instruction.
-    pub(super) fn process_terminator(&mut self, terminator: &Terminator) -> Result<ReturnValue> {
+    pub(super) fn process_terminator(&mut self, terminator: &'a Terminator) -> Result<ReturnValue> {
         match terminator {
             Terminator::Ret(i) => self.ret(i),
             Terminator::Br(i) => self.br(i),
@@ -217,9 +217,55 @@ impl<'a> VM<'a> {
     ///
     /// If the function returns normally it resumes execution at the `normal` label, if not
     /// execution is resumed at the `exception` label.
-    fn invoke(&mut self, instr: &terminator::Invoke) -> Result<ReturnValue> {
+    fn invoke(&mut self, instr: &'a terminator::Invoke) -> Result<ReturnValue> {
         debug!("{}", instr);
-        Err(VMError::UnsupportedInstruction("invoke".to_owned()))
+        // Exception handling is not supported, to this is bascially the same as the regular call.
+        //
+        // When execptions are supported, these should be caught and the interpreter should then
+        // instead jump to the exception label.
+
+        let current_module = self.state.current_loc.module;
+        let name = self.resolve_function(&instr.function)?;
+        debug!("resolved function: {}", name);
+        let function = self.project.get_function(&name, current_module)?;
+
+        let return_value = match function {
+            FunctionType::Hook(hook) => {
+                let info = FnInfo::from_invoke(instr);
+                hook(self, info)?
+            }
+            FunctionType::Function { function, module } => {
+                let arguments = instr
+                    .arguments
+                    .iter()
+                    .map(|(op, _)| self.state.get_var(op))
+                    .collect::<Result<Vec<_>>>()?;
+
+                // Create new location at the start of function to call, and store our current
+                // position in the callstack so we can return here later.
+                let mut new_location = Location::new(module, function);
+                std::mem::swap(&mut new_location, &mut self.state.current_loc);
+
+                let callsite = Callsite::from_invoke(new_location, instr);
+                self.state.callstack.push(callsite);
+
+                let ret_val = self.call_fn(function, arguments)?;
+
+                // Restore callsite.
+                let callsite = self.state.callstack.pop().unwrap();
+                self.state.current_loc = callsite.location;
+
+                ret_val
+            }
+        };
+
+        let name = instr.result.clone();
+        match return_value {
+            ReturnValue::Value(symbol) => self.state.assign_bv(name, symbol)?,
+            ReturnValue::Void => {}
+        }
+
+        self.branch(&instr.return_label)
     }
 
     fn callbr(&mut self, instr: &terminator::CallBr) -> Result<ReturnValue> {
@@ -809,14 +855,77 @@ impl<'a> VM<'a> {
         Err(VMError::UnsupportedInstruction("fcmp".to_owned()))
     }
 
+    /// Phi selects one of the values based on which basic block was previously executed.
     fn phi(&mut self, instr: &instruction::Phi) -> Result<()> {
+        // Phi takes the value where block in [value, block] was the block that was *just* executed.
         debug!("{}", instr);
-        todo!()
+
+        if let Some(previous_block) = self.state.current_loc.previous_block {
+            let mut value = None;
+            for (op, block_name) in instr.incoming_values.iter() {
+                if &previous_block.name == block_name {
+                    let symbol = self.state.get_var(op)?;
+                    value = Some(symbol);
+                    break;
+                }
+            }
+
+            match value {
+                Some(value) => self.assign(instr, value),
+                None => {
+                    println!("State: {:#?}", self.state.current_loc);
+                    panic!("Could not find previous block in list")
+                }
+            }
+        } else {
+            println!("State: {:#?}", self.state.current_loc);
+            panic!("No previous basic block");
+        }
     }
 
+    /// Select chooses one value based on a condition.
+    ///
+    /// If the condition is an `i1` it returns the first value if the condition is `1`, otherwise
+    /// the second value.
+    ///
+    /// If the condition is a vector of `i1`s then element per element selection of the values
+    /// are performed.
     fn select(&mut self, instr: &instruction::Select) -> Result<()> {
         debug!("{}", instr);
-        todo!()
+
+        let condition = self.state.get_var(&instr.condition)?;
+        let true_value = self.state.get_var(&instr.true_value)?;
+        let false_value = self.state.get_var(&instr.false_value)?;
+
+        let ty = self.state.type_of(&instr.condition);
+        let result = match ty.as_ref() {
+            Type::IntegerType { bits: 1 } => condition.ite(&true_value, &false_value),
+            Type::VectorType {
+                element_type,
+                num_elements,
+                scalable: _,
+            } => {
+                let inner_ty = self.state.type_of(element_type);
+                let bits = self.project.bit_size(&inner_ty)?;
+                let num_elements = *num_elements as u32;
+
+                (0..num_elements)
+                    .map(|i| {
+                        let low = i * bits;
+                        let high = (i + 1) * bits - 1;
+                        let true_value = true_value.slice(low, high);
+                        let false_value = false_value.slice(low, high);
+
+                        let condition = condition.slice(i, i);
+                        condition.ite(&true_value, &false_value)
+                    })
+                    .reduce(|acc, v| v.concat(&acc))
+                    .ok_or(VMError::MalformedInstruction)?
+            }
+            _ => panic!("select: expected either i1 or vector of i1s, got {ty:?}"),
+        };
+
+        self.assign(instr, result)
     }
 
     fn freeze(&mut self, instr: &instruction::Freeze) -> Result<()> {

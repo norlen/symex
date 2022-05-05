@@ -13,6 +13,7 @@ use crate::{
         get_bit_offset_concrete, get_bit_offset_symbol, get_byte_offset_concrete,
         get_byte_offset_symbol, size_in_bits,
     },
+    custom_modules::{CustomModule, RustModule},
     hooks::{Hook, Hooks},
     memory::to_bytes,
     VMError, BV,
@@ -67,6 +68,9 @@ pub struct Project {
 
     /// Global variables that are private to this module.
     private_global_variables: HashMap<ModuleHandle, HashMap<Name, GlobalVariableHandle>>,
+
+    /// Public functions from user-defined modules.
+    custom_module_functions: HashMap<&'static str, Hook>,
 
     /// User defined hooks.
     hooks: Hooks,
@@ -225,7 +229,7 @@ impl Project {
             }
         }
 
-        Ok(Project {
+        let mut project = Project {
             modules,
             ptr_size,
             default_alignment: 1,
@@ -233,8 +237,31 @@ impl Project {
             global_variables,
             private_functions,
             private_global_variables,
+            custom_module_functions: HashMap::new(),
             hooks: Hooks::new(),
-        })
+        };
+        project.add_custom_module(RustModule {});
+
+        Ok(project)
+    }
+
+    /// Add a [CustomModule] to the project.
+    ///
+    /// This adds all functions exposed in the module as public functions available in the VM.
+    ///
+    /// These functions have priority over functions defined in the IR, but not over hooks.
+    /// Functions from other modules can override each other.
+    pub fn add_custom_module(&mut self, custom_module: impl CustomModule) {
+        for (name, function) in custom_module.get_all_functions() {
+            let old_fn = self.custom_module_functions.insert(name, *function);
+
+            if old_fn.is_some() {
+                warn!(
+                    "Overriding function {name} defined in module {}",
+                    custom_module.get_name()
+                );
+            }
+        }
     }
 
     /// Locate an entry point.
@@ -306,9 +333,17 @@ impl Project {
         let demangled_name = demangled.to_string();
         let demangled_name_no_hash = format!("{demangled:#?}");
 
+        // Check for hooks.
         for name in [name, &demangled_name, &demangled_name_no_hash] {
             if let Some(hook) = self.hooks.get(name) {
                 return Ok(FunctionType::Hook(hook));
+            }
+        }
+
+        // Check for custom module functions.
+        for name in [name, &demangled_name, &demangled_name_no_hash] {
+            if let Some(hook) = self.custom_module_functions.get(name) {
+                return Ok(FunctionType::Hook(*hook));
             }
         }
 

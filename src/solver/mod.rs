@@ -1,5 +1,5 @@
 use boolector::{
-    option::{BtorOption, ModelGen, NumberFormat},
+    option::{BtorOption, ModelGen, NumberFormat, RewriteLevel},
     BVSolution, Btor, SolverResult,
 };
 use std::{collections::HashMap, rc::Rc};
@@ -88,6 +88,17 @@ impl Solver {
         btor.set_opt(BtorOption::Incremental(true));
         btor.set_opt(BtorOption::PrettyPrint(true));
         btor.set_opt(BtorOption::OutputNumberFormat(NumberFormat::Hexadecimal));
+        btor.set_opt(BtorOption::RewriteLevel(RewriteLevel::Full));
+        btor.set_opt(BtorOption::SkeletonPreproc(true));
+        btor.set_opt(BtorOption::Ackermann(true));
+        btor.set_opt(BtorOption::BetaReduce(true));
+        btor.set_opt(BtorOption::EliminateSlices(true));
+        btor.set_opt(BtorOption::VariableSubst(true));
+        //btor.set_opt(BtorOption::UnconstrainedOpt(true));
+        btor.set_opt(BtorOption::MergeLambdas(true));
+        btor.set_opt(BtorOption::ExtractLambdas(true));
+        btor.set_opt(BtorOption::Normalize(true));
+        btor.set_opt(BtorOption::NormalizeAdd(true));
 
         Self(Rc::new(btor))
     }
@@ -103,17 +114,26 @@ impl Solver {
     /// All asserts and assumes are implicitly combined with a boolean and. Returns true or false,
     /// and [SolverError::Unknown] if the result cannot be determined.
     pub fn is_sat(&self) -> Result<bool, SolverError> {
-        match self.0.sat() {
+        let is_sat = self.0.sat();
+        match is_sat {
             SolverResult::Sat => Ok(true),
             SolverResult::Unsat => Ok(false),
             SolverResult::Unknown => Err(SolverError::Unknown),
         }
     }
 
-    /// Solve for the solver state with the passed constraint asserted.
+    /// Solve for the solver state with the assumption of the passed constraint.
     pub fn is_sat_with_constraint(&self, constraint: &BV) -> Result<bool, SolverError> {
         // Assume the constraint, will be forgotten after the next call to `is_sat`.
         constraint.0.assume();
+        self.is_sat()
+    }
+
+    /// Solve for the solver state with the assumption of the passed constraints.
+    pub fn is_sat_with_constraints(&self, constraints: &[&BV]) -> Result<bool, SolverError> {
+        for constraint in constraints {
+            constraint.0.assume();
+        }
         self.is_sat()
     }
 
@@ -154,6 +174,19 @@ impl Solver {
         self.0.set_opt(BtorOption::ModelGen(ModelGen::Disabled));
         self.pop();
 
+        result
+    }
+
+    /// Returns the highest value a solution can have for the given bit-vector.
+    pub fn get_solution_maximum(&self, bv: &BV) -> Result<u64, SolverError> {
+        self.push();
+        self.0.set_opt(BtorOption::ModelGen(ModelGen::All));
+
+        let result = self.internal_get_max_solution(bv);
+
+        // Restore solver to initial state.
+        self.0.set_opt(BtorOption::ModelGen(ModelGen::Disabled));
+        self.pop();
         result
     }
 
@@ -221,10 +254,6 @@ impl Solver {
         bv: &BV,
         max_solutions: usize,
     ) -> Result<Solutions, SolverError> {
-        if !self.is_sat()? {
-            return Ok(Solutions::None);
-        }
-
         let mut solutions = Vec::new();
         while solutions.len() < max_solutions && self.is_sat()? {
             let solution = bv.get_solution().disambiguate();
@@ -244,6 +273,28 @@ impl Solver {
                 false => Ok(Solutions::Exactly(solutions)),
                 true => Ok(Solutions::AtLeast(solutions)),
             }
+        }
+    }
+
+    /// Helper to ensure we always set `ModelGen::Disabled` for all paths in this function.
+    fn internal_get_max_solution(&self, bv: &BV) -> Result<u64, SolverError> {
+        let mut highest = None;
+        while self.is_sat()? {
+            let solution = bv.get_solution();
+            let solution = solution.disambiguate();
+
+            // Constrain the next value to not be an already found solution.
+            let solution_bv = self.from_binary_string(solution.as_01x_str());
+            highest = Some(solution);
+
+            self.assert(&bv.ugt(&solution_bv));
+        }
+
+        match highest {
+            // None => Ok(Solutions::None),
+            None => panic!("unsat"),
+            Some(value) => Ok(value.as_u64().unwrap()),
+            // Some(value) => Ok(Solutions::Exactly(vec![value])),
         }
     }
 }

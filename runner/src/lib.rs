@@ -10,7 +10,7 @@ use x0001e::{
 mod display_impls;
 mod run;
 
-pub use run::run;
+pub use run::{run, run_project};
 
 /// Result for a single path of execution.
 ///

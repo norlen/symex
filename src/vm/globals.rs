@@ -2,7 +2,7 @@
 //!
 //! Keeps track of both external and internal global references ([Function]s and [GlobalVariable]s).
 use llvm_ir::{module::GlobalVariable, Function, Name, Type};
-use log::debug;
+use log::{debug, trace};
 use std::collections::HashMap;
 
 use crate::{
@@ -127,6 +127,12 @@ impl<'p> GlobalReferences<'p> {
                 };
 
                 let addr = memory.allocate(size as u64, align as u64)?;
+
+                trace!(
+                    "Global {} allocated at: {addr:x} with size: {size} bits, {} bytes",
+                    var.name,
+                    size / 8
+                );
                 Ok(GlobalReference {
                     addr,
                     kind: GlobalReferenceKind::GlobalVariable(var),

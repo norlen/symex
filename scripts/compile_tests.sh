@@ -6,7 +6,7 @@ for file in $(find tests -name '*.c'); do
     clang -c -emit-llvm $file -o ${file%.*}.bc && clang -S -emit-llvm $file -o ${file%.*}.ll
 done
 
-opts="-C panic=abort -C link-dead-code=yes --crate-type=staticlib" # -C debuginfo=2"
+opts="-C panic=abort -C link-dead-code=yes" # -C debuginfo=2"
 
 # Compile all .rs files used in tests.
 for file in $(find tests/samples -name '*.rs'); do

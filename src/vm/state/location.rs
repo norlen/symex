@@ -33,6 +33,9 @@ pub struct Location<'a> {
     /// The current `BasicBlock` that is being executed.
     pub block: &'a BasicBlock,
 
+    /// The `BasicBlock` that was executed prior to the current basic block.
+    pub previous_block: Option<&'a BasicBlock>,
+
     /// Determines the current instruction being executed in in the `BasicBlock`.
     pub instr: InstructionIndex,
 
@@ -44,7 +47,14 @@ pub struct Location<'a> {
 // has debug output for the types defined here.
 impl<'a> std::fmt::Debug for Location<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Location").finish()
+        f.debug_struct("Location")
+            .field("module", &self.module)
+            .field("func", &self.func.name)
+            .field("block", &self.block.name)
+            .field("previous_block", &self.previous_block.map(|b| &b.name))
+            .field("instr", &self.instr)
+            .field("source_loc", &self.source_loc)
+            .finish()
     }
 }
 
@@ -59,6 +69,7 @@ impl<'a> Location<'a> {
             module,
             func,
             block,
+            previous_block: None,
             instr: InstructionIndex::NotStarted,
             source_loc: None,
         }
@@ -75,6 +86,7 @@ impl<'a> Location<'a> {
         Ok(Self {
             module: location.module,
             func: location.func,
+            previous_block: Some(location.block),
             block,
             instr: InstructionIndex::NotStarted,
             source_loc: None,
@@ -128,6 +140,7 @@ impl<'a> Location<'a> {
     }
 
     pub fn set_basic_block(&mut self, name: &Name) {
+        self.previous_block = Some(self.block);
         self.block = self.func.get_bb_by_name(name).unwrap();
         self.instr = InstructionIndex::NotStarted;
     }

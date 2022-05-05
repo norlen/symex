@@ -1,7 +1,10 @@
 /target
 Cargo.lock
+.vscode
 
 .z3-trace
 **/_check
 *.bc
 *.ll
+/perf
+/dbg

@@ -275,6 +275,7 @@ impl Memory {
 
         let end_addr = start_addr.add(&last_byte);
 
+        self.outside_address_space(start_addr, &end_addr)?;
         self.check_out_of_bounds(start_addr, &end_addr)
     }
 
@@ -289,6 +290,26 @@ impl Memory {
             Err(MemoryError::OutOfBounds)
         } else {
             Ok(())
+        }
+    }
+
+    /// Check if the address is outside of any allocated address.
+    fn outside_address_space(&self, start_addr: &BV, end_addr: &BV) -> Result<(), MemoryError> {
+        let start = self
+            .solver
+            .bv_from_u64(BumpAllocator::ALLOC_START, self.ptr_size);
+
+        let end = self
+            .solver
+            .bv_from_u64(self.allocator.cursor, self.ptr_size);
+
+        let c0 = start_addr.ugte(&start);
+        let c1 = end_addr.ult(&end);
+
+        if self.solver.is_sat_with_constraints(&[&c0, &c1])? {
+            Ok(())
+        } else {
+            Err(MemoryError::OutOfBounds)
         }
     }
 }

@@ -97,6 +97,7 @@
 //#![warn(missing_docs)]
 
 pub mod common;
+pub mod custom_modules;
 pub mod hooks;
 pub mod memory;
 pub mod project;

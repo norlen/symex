@@ -30,6 +30,11 @@ fn generate_solutions<'a>(
 /// Start running the analysis from a path to a BC file and the function to analyze.
 pub fn run(path: impl AsRef<Path>, function: &str) -> Result<()> {
     let project = Project::from_path(path)?;
+    run_project(&project, function)
+}
+
+/// Start running analysis from with a given Project.
+pub fn run_project(project: &Project, function: &str) -> Result<()> {
     let mut vm = VM::new(function, &project)?;
 
     let mut path_num = 0;
@@ -73,7 +78,7 @@ pub fn run(path: impl AsRef<Path>, function: &str) -> Result<()> {
                             None
                         }
                     }
-                    ReturnValue::Void => todo!(),
+                    ReturnValue::Void => None,
                 };
 
                 PathStatus::Ok(return_value)

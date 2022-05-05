@@ -69,6 +69,7 @@
 //!
 //! [1]: https://llvm.org/docs/LangRef.html#intrinsic-functions
 use llvm_ir::Operand;
+use log::trace;
 use radix_trie::Trie;
 use std::collections::HashMap;
 
@@ -114,9 +115,11 @@ impl Intrinsics {
         };
 
         // Add fixed intrinsics.
+        s.add_fixed("llvm.assume", llvm_assume);
 
         // Add variable intrinsics.
         s.add_variable("llvm.memcpy.", llvm_memcpy);
+        s.add_variable("llvm.memset.", llvm_memset);
 
         s.add_variable("llvm.sadd.with.overflow.", llvm_sadd_with_overflow);
         s.add_variable("llvm.uadd.with.overflow.", llvm_uadd_with_overflow);
@@ -132,14 +135,16 @@ impl Intrinsics {
 
         // Temporary.
         s.add_variable("llvm.dbg", noop);
+        s.add_variable("llvm.lifetime", noop);
+        s.add_variable("llvm.experimental", noop);
 
         s
     }
 
-    // /// Add a fixed length intrinsic.
-    // fn add_fixed(&mut self, name: impl Into<String>, hook: Hook) {
-    //     self.fixed.insert(name.into(), hook);
-    // }
+    /// Add a fixed length intrinsic.
+    fn add_fixed(&mut self, name: impl Into<String>, hook: Hook) {
+        self.fixed.insert(name.into(), hook);
+    }
 
     /// Add a variable length intrinsic, e.g. if they support any kind of bit width such as
     /// `llvm.abs.*`.
@@ -186,6 +191,7 @@ pub fn llvm_memcpy(vm: &mut VM<'_>, f: FnInfo) -> Result<ReturnValue> {
     // TODO: What is a `well-defined` value?
     // TODO: Check the isvolatile and the details of volatile operations.
     assert_eq!(f.arguments.len(), 4);
+    trace!("llvm_memcpy");
 
     let (dst, _) = &f.arguments[0];
     let (src, _) = &f.arguments[1];
@@ -202,6 +208,43 @@ pub fn llvm_memcpy(vm: &mut VM<'_>, f: FnInfo) -> Result<ReturnValue> {
             //println!("memcpy size={}", size);
             let value = vm.state.mem.read(&src, size)?;
             vm.state.mem.write(&dst, value)?;
+
+            Ok(ReturnValue::Void)
+        }
+        Operand::MetadataOperand => Err(VMError::MalformedInstruction),
+    }
+}
+
+pub fn llvm_memset(vm: &mut VM<'_>, f: FnInfo) -> Result<ReturnValue> {
+    // Arguments:
+    // 1. Pointer to address to fill.
+    // 2. Byte to to fill with.
+    // 3. Number of bytes to fill.
+    // 4. Indicates volatile access.
+    assert_eq!(f.arguments.len(), 4);
+    trace!("llvm_memset");
+
+    let (dst, _) = &f.arguments[0];
+    let (value, _) = &f.arguments[1];
+    let (size, _) = &f.arguments[2];
+
+    let dst = vm.state.get_var(dst)?;
+    let value = vm.state.get_var(value)?;
+    assert_eq!(value.len(), BITS_IN_BYTE);
+
+    match size {
+        Operand::LocalOperand { name: _, ty: _ } => {
+            todo!("Symbolic operand in memcpy not supported yet")
+        }
+        Operand::ConstantOperand(constant) => {
+            let bytes = constant.to_value()? * BITS_IN_BYTE as u64;
+
+            for byte in 0..bytes {
+                let offset = vm.solver.bv_from_u64(byte, vm.project.ptr_size);
+                let addr = dst.add(&offset);
+
+                vm.state.mem.write(&addr, value.clone())?;
+            }
 
             Ok(ReturnValue::Void)
         }
@@ -325,4 +368,14 @@ pub fn llvm_expect(vm: &mut VM<'_>, f: FnInfo) -> Result<ReturnValue> {
     let val = vm.state.get_var(a0).unwrap();
 
     Ok(ReturnValue::Value(val))
+}
+
+pub fn llvm_assume(vm: &mut VM<'_>, info: FnInfo) -> Result<ReturnValue> {
+    assert_eq!(info.arguments.len(), 1);
+
+    let (condition, _) = &info.arguments[0];
+    let condition = vm.state.get_var(condition)?;
+    vm.state.solver.assert(&condition);
+
+    Ok(ReturnValue::Void)
 }

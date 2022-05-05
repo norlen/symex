@@ -2,19 +2,20 @@
 use llvm_ir::{
     function::{FunctionAttribute, ParameterAttribute},
     instruction::Call,
+    terminator::Invoke,
     Name, Operand, Type,
 };
-use log::{debug, trace};
+use log::trace;
 use std::collections::HashMap;
 
 use crate::{
     common::SolutionVariable,
-    vm::{Result, ReturnValue, VMError, VM},
+    vm::{Result, ReturnValue, VM},
 };
 
-use intrinsics::{is_intrinsic, Intrinsics};
-
 mod intrinsics;
+
+use intrinsics::{is_intrinsic, Intrinsics};
 
 /// Hook type
 pub type Hook = fn(&mut VM<'_>, f: FnInfo) -> Result<ReturnValue>;
@@ -35,6 +36,14 @@ impl FnInfo {
             arguments: call.arguments.clone(),
             return_attrs: call.return_attributes.clone(),
             fn_attrs: call.function_attributes.clone(),
+        }
+    }
+
+    pub fn from_invoke(invoke: &Invoke) -> Self {
+        Self {
+            arguments: invoke.arguments.clone(),
+            return_attrs: invoke.return_attributes.clone(),
+            fn_attrs: invoke.function_attributes.clone(),
         }
     }
 }
@@ -58,9 +67,6 @@ impl Hooks {
             intrinsics: Intrinsics::new_with_defaults(),
         };
 
-        hooks.add("core::panicking::panic_bounds_check", abort);
-        hooks.add("core::panicking::panic", abort);
-        hooks.add("core::panicking::panic_fmt", abort);
         hooks.add("x0001e::assume", assume);
         hooks.add("x0001e::symbolic", symbolic);
 
@@ -81,12 +87,6 @@ impl Hooks {
             self.hooks.get(name).copied()
         }
     }
-}
-
-/// Hook that tells the VM to abort.
-pub fn abort(_vm: &mut VM<'_>, _info: FnInfo) -> Result<ReturnValue> {
-    debug!("Hook: ABORT");
-    Err(VMError::Abort(-1))
 }
 
 pub fn assume(vm: &mut VM<'_>, info: FnInfo) -> Result<ReturnValue> {
