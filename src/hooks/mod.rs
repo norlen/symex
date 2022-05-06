@@ -11,6 +11,7 @@ use std::collections::HashMap;
 use crate::{
     common::SolutionVariable,
     vm::{Result, ReturnValue, VM},
+    VMError,
 };
 
 mod intrinsics;
@@ -67,6 +68,7 @@ impl Hooks {
             intrinsics: Intrinsics::new_with_defaults(),
         };
 
+        hooks.add("assume", c_assume);
         hooks.add("x0001e::assume", assume);
         hooks.add("x0001e::symbolic", symbolic);
 
@@ -89,6 +91,22 @@ impl Hooks {
     }
 }
 
+pub fn c_assume(vm: &mut VM<'_>, info: FnInfo) -> Result<ReturnValue> {
+    trace!("assume info: {:?}", info);
+
+    let (condition, _) = info.arguments.get(0).unwrap();
+    let condition = vm.state.get_var(condition)?;
+    let zero = vm.solver.bv_zero(condition.len());
+
+    vm.state.solver.assert(&condition.ne(&zero));
+
+    if vm.solver.is_sat()? {
+        Ok(ReturnValue::Void)
+    } else {
+        Err(VMError::Unsat)
+    }
+}
+
 pub fn assume(vm: &mut VM<'_>, info: FnInfo) -> Result<ReturnValue> {
     trace!("assume info: {:?}", info);
 
@@ -96,7 +114,11 @@ pub fn assume(vm: &mut VM<'_>, info: FnInfo) -> Result<ReturnValue> {
     let condition = vm.state.get_var(condition)?;
     vm.state.solver.assert(&condition);
 
-    Ok(ReturnValue::Void)
+    if vm.solver.is_sat()? {
+        Ok(ReturnValue::Void)
+    } else {
+        Err(VMError::Unsat)
+    }
 }
 
 pub fn symbolic(vm: &mut VM<'_>, info: FnInfo) -> Result<ReturnValue> {

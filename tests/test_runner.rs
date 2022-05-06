@@ -131,6 +131,8 @@ pub struct PathResult {
 }
 
 pub fn run(path: impl AsRef<Path>, function: &str) -> Result<Vec<PathResult>> {
+    let _ = env_logger::builder().is_test(true).try_init();
+
     let project = Project::from_path(path)?;
     let mut vm = VM::new(function, &project)?;
     let mut results = Vec::new();
@@ -140,7 +142,7 @@ pub fn run(path: impl AsRef<Path>, function: &str) -> Result<Vec<PathResult>> {
         // Cache for solutions.
         //
         // Solutions cannot be cached between paths, so instantiate a new one for each path.
-        let mut cache = SolutionGenerator::new(vm.solver.clone());
+        let mut cache = SolutionGenerator::new(vm.solver.clone())?;
 
         let inputs = generate_solutions(vm.parameters.iter(), &mut cache, &project)?;
         let symbolics = generate_solutions(vm.state.symbols.iter(), &mut cache, &project)?;

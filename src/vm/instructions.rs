@@ -11,7 +11,8 @@ use crate::{
     hooks::FnInfo,
     project::FunctionType,
     solver::BV,
-    vm::{Callsite, Location, Result, ReturnValue, VMError, VM},
+    vm::{Call, Result, TerminatorResult, VMError, VM},
+    ReturnValue,
 };
 
 impl<'a> VM<'a> {
@@ -76,7 +77,10 @@ impl<'a> VM<'a> {
     }
 
     /// Process a single LLVM IR terminator instruction.
-    pub(super) fn process_terminator(&mut self, terminator: &'a Terminator) -> Result<ReturnValue> {
+    pub(super) fn process_terminator(
+        &mut self,
+        terminator: &'a Terminator,
+    ) -> Result<TerminatorResult> {
         match terminator {
             Terminator::Ret(i) => self.ret(i),
             Terminator::Br(i) => self.br(i),
@@ -98,13 +102,13 @@ impl<'a> VM<'a> {
     // ---------------------------------------------------------------------------------------------
 
     /// Returns control back to the caller, and optionally a return value.
-    fn ret(&mut self, instr: &terminator::Ret) -> Result<ReturnValue> {
+    fn ret(&mut self, instr: &terminator::Ret) -> Result<TerminatorResult> {
         debug!("{}", instr);
-        let ret_val = if let Some(op) = &instr.return_operand {
+        let value = if let Some(op) = &instr.return_operand {
             let value = self.state.get_var(op)?;
-            ReturnValue::Value(value)
+            Some(value)
         } else {
-            ReturnValue::Void
+            None
         };
 
         // When returning the variable scope has to be destroyed.
@@ -112,11 +116,12 @@ impl<'a> VM<'a> {
         // However, we may not reach this in the case of errors earlier, but that does not matter
         // since if an error is encountered the path is considered dead, and cannot be resumed.
         self.state.vars.leave_scope();
-        Ok(ret_val)
+
+        Ok(TerminatorResult::Return(value))
     }
 
     /// Unconditionally jumps to a basic block inside the current function.
-    fn br(&mut self, instr: &terminator::Br) -> Result<ReturnValue> {
+    fn br(&mut self, instr: &terminator::Br) -> Result<TerminatorResult> {
         debug!("{}", instr);
         self.branch(&instr.dest)
     }
@@ -128,7 +133,7 @@ impl<'a> VM<'a> {
     /// path can be selected a save point is created.
     ///
     /// If the condition cannot be either `true` or `false` [VMError::Unsat] is returned.
-    fn condbr(&mut self, instr: &terminator::CondBr) -> Result<ReturnValue> {
+    fn condbr(&mut self, instr: &terminator::CondBr) -> Result<TerminatorResult> {
         debug!("{}", instr);
 
         let cond = self.state.get_var(&instr.condition)?;
@@ -157,7 +162,7 @@ impl<'a> VM<'a> {
     ///
     /// It will check which conditions are satisfiable, and create save points for these. It will
     /// then branch to the first `true` condition it found.
-    fn switch(&mut self, instr: &terminator::Switch) -> Result<ReturnValue> {
+    fn switch(&mut self, instr: &terminator::Switch) -> Result<TerminatorResult> {
         debug!("{}", instr);
         let value = self.state.get_var(&instr.operand).unwrap();
 
@@ -208,7 +213,7 @@ impl<'a> VM<'a> {
     /// a `BlockAddress`.
     ///
     /// This type is not supported in llvm-ir yet. Thus this instruction is unsupported.
-    fn indirectbr(&mut self, instr: &terminator::IndirectBr) -> Result<ReturnValue> {
+    fn indirectbr(&mut self, instr: &terminator::IndirectBr) -> Result<TerminatorResult> {
         debug!("{}", instr);
         Err(VMError::UnsupportedInstruction("indirectbr".to_owned()))
     }
@@ -217,7 +222,7 @@ impl<'a> VM<'a> {
     ///
     /// If the function returns normally it resumes execution at the `normal` label, if not
     /// execution is resumed at the `exception` label.
-    fn invoke(&mut self, instr: &'a terminator::Invoke) -> Result<ReturnValue> {
+    fn invoke(&mut self, instr: &'a terminator::Invoke) -> Result<TerminatorResult> {
         debug!("{}", instr);
         // Exception handling is not supported, to this is bascially the same as the regular call.
         //
@@ -241,21 +246,7 @@ impl<'a> VM<'a> {
                     .map(|(op, _)| self.state.get_var(op))
                     .collect::<Result<Vec<_>>>()?;
 
-                // Create new location at the start of function to call, and store our current
-                // position in the callstack so we can return here later.
-                let mut new_location = Location::new(module, function);
-                std::mem::swap(&mut new_location, &mut self.state.current_loc);
-
-                let callsite = Callsite::from_invoke(new_location, instr);
-                self.state.callstack.push(callsite);
-
-                let ret_val = self.call_fn(function, arguments)?;
-
-                // Restore callsite.
-                let callsite = self.state.callstack.pop().unwrap();
-                self.state.current_loc = callsite.location;
-
-                ret_val
+                self.call_fn(Call::Invoke(instr), module, function, arguments)?
             }
         };
 
@@ -268,27 +259,27 @@ impl<'a> VM<'a> {
         self.branch(&instr.return_label)
     }
 
-    fn callbr(&mut self, instr: &terminator::CallBr) -> Result<ReturnValue> {
+    fn callbr(&mut self, instr: &terminator::CallBr) -> Result<TerminatorResult> {
         debug!("{}", instr);
         todo!()
     }
 
-    fn resume(&mut self, instr: &terminator::Resume) -> Result<ReturnValue> {
+    fn resume(&mut self, instr: &terminator::Resume) -> Result<TerminatorResult> {
         debug!("{}", instr);
         todo!()
     }
 
-    fn catchswitch(&mut self, instr: &terminator::CatchSwitch) -> Result<ReturnValue> {
+    fn catchswitch(&mut self, instr: &terminator::CatchSwitch) -> Result<TerminatorResult> {
         debug!("{}", instr);
         todo!()
     }
 
-    fn catchret(&mut self, instr: &terminator::CatchRet) -> Result<ReturnValue> {
+    fn catchret(&mut self, instr: &terminator::CatchRet) -> Result<TerminatorResult> {
         debug!("{}", instr);
         todo!()
     }
 
-    fn cleanupret(&mut self, instr: &terminator::CleanupRet) -> Result<ReturnValue> {
+    fn cleanupret(&mut self, instr: &terminator::CleanupRet) -> Result<TerminatorResult> {
         debug!("{}", instr);
         todo!()
     }
@@ -297,7 +288,7 @@ impl<'a> VM<'a> {
     ///
     /// The `unreachable` instruction as it name says, should be unreachable. If this is called, it
     /// is most likely an error in the interpreter.
-    fn unreachable(&mut self, instr: &terminator::Unreachable) -> Result<ReturnValue> {
+    fn unreachable(&mut self, instr: &terminator::Unreachable) -> Result<TerminatorResult> {
         debug!("{}", instr);
         Err(VMError::UnreachableInstruction)
     }
@@ -953,21 +944,7 @@ impl<'a> VM<'a> {
                     .map(|(op, _)| self.state.get_var(op))
                     .collect::<Result<Vec<_>>>()?;
 
-                // Create new location at the start of function to call, and store our current
-                // position in the callstack so we can return here later.
-                let mut new_location = Location::new(module, function);
-                std::mem::swap(&mut new_location, &mut self.state.current_loc);
-
-                let callsite = Callsite::from_call(new_location, instr);
-                self.state.callstack.push(callsite);
-
-                let ret_val = self.call_fn(function, arguments)?;
-
-                // Restore callsite.
-                let callsite = self.state.callstack.pop().unwrap();
-                self.state.current_loc = callsite.location;
-
-                ret_val
+                self.call_fn(Call::Call(instr), module, function, arguments)?
             }
         };
 
@@ -975,7 +952,9 @@ impl<'a> VM<'a> {
         if let Some(name) = instr.dest.clone() {
             match return_value {
                 ReturnValue::Value(symbol) => self.state.assign_bv(name, symbol),
-                ReturnValue::Void => panic!("call expected return value, but got void"),
+
+                // Expected return value but got void.
+                ReturnValue::Void => Err(VMError::MalformedInstruction),
             }
         } else {
             // If it expected void that's fine. Note that the case where we returned a value

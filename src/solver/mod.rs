@@ -8,6 +8,8 @@ use thiserror::Error;
 mod array;
 mod bv;
 
+use crate::VMError;
+
 pub use self::{array::Array, bv::BV};
 
 #[derive(Debug, Error, PartialEq, Eq)]
@@ -48,28 +50,38 @@ impl Drop for SolutionGenerator {
 }
 
 impl SolutionGenerator {
-    pub fn new(solver: Solver) -> Self {
+    pub fn new(solver: Solver) -> Result<Self, VMError> {
+        if !solver.is_sat()? {
+            return Err(VMError::Unsat);
+        }
+
         solver.push();
         solver.0.set_opt(BtorOption::ModelGen(ModelGen::All));
 
-        Self {
+        Ok(Self {
             solver,
             cache: HashMap::new(),
-        }
+        })
     }
 
-    pub fn get_solution(&mut self, bv: &BV) -> Result<BVSolution, SolverError> {
+    pub fn get_solution(&mut self, bv: &BV) -> Result<BVSolution, VMError> {
         let id = bv.0.get_id();
         if let Some(cached) = self.cache.get(&id).cloned() {
             return Ok(cached);
         }
 
         // Setup before checking for solutions.
-        if !self.solver.is_sat()? {}
+        if !self.solver.is_sat()? {
+            return Err(VMError::Unsat);
+        }
 
-        let solution = bv.get_solution().disambiguate();
-        self.cache.insert(id, solution.clone());
-        Ok(solution)
+        if let Some(binary_str) = bv.0.as_binary_str() {
+            Ok(BVSolution::from_01x_str(binary_str))
+        } else {
+            let solution = bv.get_solution().disambiguate();
+            self.cache.insert(id, solution.clone());
+            Ok(solution)
+        }
     }
 }
 
@@ -164,6 +176,12 @@ impl Solver {
         bv: &BV,
         max_solutions: usize,
     ) -> Result<Solutions, SolverError> {
+        // Check if bit-vector is a constant.
+        if let Some(str) = bv.0.as_binary_str() {
+            let solution = BVSolution::from_01x_str(str);
+            return Ok(Solutions::Exactly(vec![solution]));
+        }
+
         // Setup before checking for solutions.
         self.push();
         self.0.set_opt(BtorOption::ModelGen(ModelGen::All));
@@ -179,6 +197,12 @@ impl Solver {
 
     /// Returns the highest value a solution can have for the given bit-vector.
     pub fn get_solution_maximum(&self, bv: &BV) -> Result<u64, SolverError> {
+        // Check if bit-vector is a constant.
+        if let Some(str) = bv.0.as_binary_str() {
+            let solution = u64::from_str_radix(&str, 2).unwrap();
+            return Ok(solution);
+        }
+
         self.push();
         self.0.set_opt(BtorOption::ModelGen(ModelGen::All));
 

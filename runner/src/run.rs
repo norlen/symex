@@ -45,7 +45,7 @@ pub fn run_project(project: &Project, function: &str) -> Result<()> {
         // Cache for solutions.
         //
         // Solutions cannot be cached between paths, so instantiate a new one for each path.
-        let mut cache = SolutionGenerator::new(vm.solver.clone());
+        let mut cache = SolutionGenerator::new(vm.solver.clone())?;
 
         let inputs = generate_solutions(vm.parameters.iter(), &mut cache, project)?;
         let symbolics = generate_solutions(vm.state.symbols.iter(), &mut cache, project)?;

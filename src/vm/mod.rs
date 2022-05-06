@@ -7,7 +7,7 @@ use log::{debug, trace};
 
 use crate::{
     common::SolutionVariable,
-    project::Project,
+    project::{ModuleHandle, Project},
     solver::{Solutions, Solver, BV},
 };
 
@@ -25,6 +25,14 @@ pub enum ReturnValue {
     Value(BV),
 
     Void,
+}
+
+pub enum TerminatorResult {
+    Return(Option<BV>),
+
+    /// If execution should be resumed. This can happen for terminators such as `br`, where the next
+    /// label should be executed.
+    Branch,
 }
 
 pub struct VM<'a> {
@@ -58,7 +66,7 @@ impl<'a> Iterator for VM<'a> {
     type Item = Result<ReturnValue>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.backtrack_and_continue()
+        self.backtrack_and_resume_execution()
     }
 }
 
@@ -118,32 +126,22 @@ impl<'a> VM<'a> {
 
     /// Execute a single path in the VM to completion.
     pub fn run(&mut self) -> Option<Result<ReturnValue>> {
-        self.backtrack_and_continue()
+        self.backtrack_and_resume_execution()
     }
 
-    /// Helper to run all the paths the VM finds.
-    pub fn run_all(&mut self) -> Vec<Result<ReturnValue>> {
-        let mut results = Vec::new();
-
-        let mut paths_explored = 0;
-        while let Some(path_result) = self.backtrack_and_continue() {
-            paths_explored += 1;
-            results.push(path_result);
-        }
-        println!("Explored {} paths", paths_explored);
-        results
-    }
-
-    /// Start executing from the current location.
+    /// Resume execution from a stored path.
     ///
-    /// However when the execution stops we check if the execution state's callstack is empty, if
-    /// not we have resumed execution inside a called function.
+    /// When we restore the state from a stored path, the VM's call stack is empty. So it cannot
+    /// use the VM's stack to know when to stop execution.
     ///
-    /// This means we have to return this value to the previous callstack location and continue
-    /// execution there.
-    fn execute(&mut self) -> Result<ReturnValue> {
+    /// `resume_execution` instead iteratively executes until all the callsites in the stored state
+    /// have been exhausted.
+    fn resume_execution(&mut self) -> Result<ReturnValue> {
         loop {
-            let result = self.execute_to_terminator()?;
+            // When executing a basic block we can either get a value from e.g. `ret` but we can
+            // also want to resume execution for e.g. `br`.
+            let result = self.execute_function()?;
+
             let mut callsite = if let Some(callstack) = self.state.callstack.pop() {
                 callstack
             } else {
@@ -165,25 +163,54 @@ impl<'a> VM<'a> {
                 }
             }
 
-            // For `Call` we go to the next instruction, and for `Invoke` we enter the label that
-            // it specifies.
+            // Set up which instruction to execute next.
             match callsite.instruction {
+                // For `Call` the next instruction should be executed.
                 Call::Call(_) => {
                     callsite.location.inc_pc();
                     self.state.current_loc = callsite.location;
                 }
+
+                // For `invoke` since this is a successful case, jump to the label it specifies.
                 Call::Invoke(instr) => {
-                    // TODO
-                    let mut location = Location::jump_bb(callsite.location, &instr.return_label)?;
-                    std::mem::swap(&mut self.state.current_loc, &mut location);
+                    // Restore the callsite's location.
+                    std::mem::swap(&mut self.state.current_loc, &mut callsite.location);
+
+                    self.branch(&instr.return_label)?;
                 }
             }
         }
     }
 
-    /// Starts execution from the current instruction stored in the state, and runs until it hits
-    /// a terminator instruction at the end of the basic block.
-    fn execute_to_terminator(&mut self) -> Result<ReturnValue> {
+    /// Execute a single function.
+    ///
+    /// This will iteratively go through each basic block until it hits a terminator that returns
+    /// a value (or void).
+    fn execute_function(&mut self) -> Result<ReturnValue> {
+        loop {
+            let result = self.execute_basic_block()?;
+            match result {
+                // For function returns, the value is just returned.
+                TerminatorResult::Return(value) => {
+                    let value = match value {
+                        Some(value) => ReturnValue::Value(value),
+                        None => ReturnValue::Void,
+                    };
+                    return Ok(value);
+                }
+
+                // Continue as long as we hit branches in the IR.
+                TerminatorResult::Branch => {}
+            }
+        }
+    }
+
+    /// Execute a single basic block.
+    ///
+    /// Resumes execution from the instruction stored in the current location and runs until it
+    /// hits a terminator. This can either be a value, or a variant denoting a branch has occurred
+    /// and that the callee should call this function again to resume execution in that basic block.
+    fn execute_basic_block(&mut self) -> Result<TerminatorResult> {
         debug!(
             "function {}, block: {}",
             self.state.current_loc.func.name, self.state.current_loc.block.name
@@ -209,6 +236,7 @@ impl<'a> VM<'a> {
         self.process_terminator(terminator)
     }
 
+    /// Save a backtracking path that can be resumed later.
     pub fn save_backtracking_path(
         &mut self,
         bb_label: &Name,
@@ -233,12 +261,8 @@ impl<'a> VM<'a> {
         Ok(())
     }
 
-    pub fn branch(&mut self, target: &Name) -> Result<ReturnValue> {
-        self.state.current_loc.set_basic_block(target);
-        self.execute_to_terminator()
-    }
-
-    fn backtrack_and_continue(&mut self) -> Option<Result<ReturnValue>> {
+    /// Backtrack and resume execution with that state.
+    fn backtrack_and_resume_execution(&mut self) -> Option<Result<ReturnValue>> {
         if let Some(path) = self.backtracking_paths.pop() {
             trace!("Backtrack, {} paths remain", self.backtracking_paths.len());
 
@@ -254,36 +278,71 @@ impl<'a> VM<'a> {
             }
 
             // Resume execution.
-            Some(self.execute())
+            Some(self.resume_execution())
         } else {
             None
         }
     }
 
-    pub fn call_fn(&mut self, f: &'a Function, arguments: Vec<BV>) -> Result<ReturnValue> {
-        if arguments.len() != f.parameters.len() {
-            if f.is_var_arg {
+    /// Helper to call a function.
+    ///
+    /// This will store the current location as a callsite, and set up the target location. It will
+    /// then execute all the basic blocks in the function and return the final return value of the
+    /// function.
+    pub fn call_fn(
+        &mut self,
+        call: Call<'a>,
+        module: ModuleHandle,
+        function: &'a Function,
+        arguments: Vec<BV>,
+    ) -> Result<ReturnValue> {
+        if arguments.len() != function.parameters.len() {
+            if function.is_var_arg {
                 panic!("variadic functions are not supported");
             } else {
                 panic!("invalid fn call");
             }
         }
 
+        // Create new location at the start of function to call, and store our current
+        // position in the callstack so we can return here later.
+        let mut new_location = Location::new(module, function);
+        std::mem::swap(&mut new_location, &mut self.state.current_loc);
+
+        let callsite = match call {
+            Call::Call(call) => Callsite::from_call(new_location, call),
+            Call::Invoke(invoke) => Callsite::from_invoke(new_location, invoke),
+        };
+        // let callsite = Callsite::from_invoke(new_location, instr);
+        self.state.callstack.push(callsite);
+
         // Create a new variable scope for the function we're about to call.
         self.state.vars.enter_scope();
 
         // Map arguments to parameters.
-        for (param, arg) in f.parameters.iter().zip(arguments) {
+        for (param, arg) in function.parameters.iter().zip(arguments) {
             self.state.vars.insert(param.name.clone(), arg)?;
         }
 
-        // Update our current location and start executing the the new
-        // function's basic block.
-        let ret_val = self.execute_to_terminator()?;
+        // Update our current location and start executing the the new function's basic block.
+        //
+        // Don't really have to care about errors, since if an error occurs the path is dead.
+        let return_value = self.execute_function()?;
 
-        Ok(ret_val)
+        // Restore callsite.
+        let callsite = self.state.callstack.pop().unwrap();
+        self.state.current_loc = callsite.location;
+
+        Ok(return_value)
     }
 
+    /// Helper to update the location to another basic block inside the same function.
+    pub fn branch(&mut self, target: &Name) -> Result<TerminatorResult> {
+        self.state.current_loc.set_basic_block(target);
+        Ok(TerminatorResult::Branch)
+    }
+
+    /// Helper function to assign to the result variable in the instruction.
     pub fn assign(&mut self, dst: &impl HasResult, src_bv: BV) -> Result<()> {
         let target_ty = self.state.type_of(dst);
         let target_size = self.project.bit_size(&target_ty)?;

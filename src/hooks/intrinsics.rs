@@ -8,12 +8,12 @@
 //! - [ ] `llvm.abs.*`
 //! - [ ] `llvm.smax.*`
 //! - [ ] `llvm.smin.*`
-//! - [ ] `llvm.umax.*`
+//! - [x] `llvm.umax.*`
 //! - [ ] `llvm.umin.*`
 //! - [x] `llvm.memcpy`
 //! - [ ] `llvm.memcpy.inline`
 //! - [ ] `llvm.memmove`
-//! - [ ] `llvm.memset`
+//! - [x] `llvm.memset`
 //! - [ ] `llvm.sqrt.*`
 //! - [ ] `llvm.powi.*`
 //! - [ ] `llvm.sin.*`
@@ -63,21 +63,20 @@
 //!
 //! ## General intrinsics (non-exhaustive)
 //!
-//! - [ ] `llvm.expect`
+//! - [x] `llvm.expect`
 //! - [ ] `llvm.expect.with.probability`
-//! - [ ] `llvm.assume`
+//! - [x] `llvm.assume`
 //!
 //! [1]: https://llvm.org/docs/LangRef.html#intrinsic-functions
-use llvm_ir::Operand;
 use log::trace;
 use radix_trie::Trie;
 use std::collections::HashMap;
 
 use crate::{
-    common::ToValue,
+    common::{binop, get_u64_solution_from_operand},
     hooks::{FnInfo, Hook},
     memory::BITS_IN_BYTE,
-    vm::{Result, ReturnValue, VMError, VM},
+    vm::{Result, ReturnValue, VM},
 };
 
 /// Check if the given name is an LLVM intrinsic.
@@ -120,6 +119,7 @@ impl Intrinsics {
         // Add variable intrinsics.
         s.add_variable("llvm.memcpy.", llvm_memcpy);
         s.add_variable("llvm.memset.", llvm_memset);
+        s.add_variable("llvm.umax.", llvm_umax);
 
         s.add_variable("llvm.sadd.with.overflow.", llvm_sadd_with_overflow);
         s.add_variable("llvm.uadd.with.overflow.", llvm_uadd_with_overflow);
@@ -199,20 +199,14 @@ pub fn llvm_memcpy(vm: &mut VM<'_>, f: FnInfo) -> Result<ReturnValue> {
 
     let dst = vm.state.get_var(dst)?;
     let src = vm.state.get_var(src)?;
-    match size {
-        Operand::LocalOperand { name: _, ty: _ } => {
-            todo!("Symbolic operand in memcpy not supported yet")
-        }
-        Operand::ConstantOperand(constant) => {
-            let size = constant.to_value()? as u32 * BITS_IN_BYTE;
-            //println!("memcpy size={}", size);
-            let value = vm.state.mem.read(&src, size)?;
-            vm.state.mem.write(&dst, value)?;
 
-            Ok(ReturnValue::Void)
-        }
-        Operand::MetadataOperand => Err(VMError::MalformedInstruction),
-    }
+    let size = get_u64_solution_from_operand(&vm.state, size)?;
+    let size = size as u32 * BITS_IN_BYTE;
+
+    let value = vm.state.mem.read(&src, size)?;
+    vm.state.mem.write(&dst, value)?;
+
+    Ok(ReturnValue::Void)
 }
 
 pub fn llvm_memset(vm: &mut VM<'_>, f: FnInfo) -> Result<ReturnValue> {
@@ -232,24 +226,29 @@ pub fn llvm_memset(vm: &mut VM<'_>, f: FnInfo) -> Result<ReturnValue> {
     let value = vm.state.get_var(value)?;
     assert_eq!(value.len(), BITS_IN_BYTE);
 
-    match size {
-        Operand::LocalOperand { name: _, ty: _ } => {
-            todo!("Symbolic operand in memcpy not supported yet")
-        }
-        Operand::ConstantOperand(constant) => {
-            let bytes = constant.to_value()? * BITS_IN_BYTE as u64;
+    let size = get_u64_solution_from_operand(&vm.state, size)?;
 
-            for byte in 0..bytes {
-                let offset = vm.solver.bv_from_u64(byte, vm.project.ptr_size);
-                let addr = dst.add(&offset);
+    for byte in 0..size {
+        let offset = vm.solver.bv_from_u64(byte, vm.project.ptr_size);
+        let addr = dst.add(&offset);
 
-                vm.state.mem.write(&addr, value.clone())?;
-            }
-
-            Ok(ReturnValue::Void)
-        }
-        Operand::MetadataOperand => Err(VMError::MalformedInstruction),
+        vm.state.mem.write(&addr, value.clone())?;
     }
+
+    Ok(ReturnValue::Void)
+}
+
+pub fn llvm_umax(vm: &mut VM<'_>, f: FnInfo) -> Result<ReturnValue> {
+    assert_eq!(f.arguments.len(), 2);
+    let lhs = &f.arguments[0].0;
+    let rhs = &f.arguments[1].0;
+
+    let result = binop(&vm.state, lhs, rhs, |lhs, rhs| {
+        let condition = lhs.ugt(rhs);
+        condition.ite(lhs, rhs)
+    })?;
+
+    Ok(ReturnValue::Value(result))
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -269,6 +268,7 @@ enum BinaryOpOverflow {
 /// Binary operations that indicate whether an overflow occurred or not.
 fn binary_op_overflow(vm: &mut VM<'_>, f: FnInfo, op: BinaryOpOverflow) -> Result<ReturnValue> {
     assert_eq!(f.arguments.len(), 2);
+    // TODO: Can these be vectors?
 
     let (a0, _) = f.arguments.get(0).unwrap();
     let (a1, _) = f.arguments.get(1).unwrap();
@@ -337,6 +337,7 @@ enum BinaryOpSaturate {
 
 fn binary_op_saturate(vm: &mut VM<'_>, f: FnInfo, op: BinaryOpSaturate) -> Result<ReturnValue> {
     assert_eq!(f.arguments.len(), 2);
+    // TODO: Can these be vectors?
 
     let (a0, _) = f.arguments.get(0).unwrap();
     let (a1, _) = f.arguments.get(1).unwrap();
