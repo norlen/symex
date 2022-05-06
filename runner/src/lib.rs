@@ -135,7 +135,7 @@ impl ConcreteValue {
                 element_type,
                 num_elements,
             } => {
-                let el_size = project.bit_size(&element_type).unwrap() as usize;
+                let el_size = project.bit_size(element_type).unwrap() as usize;
 
                 let mut elements = Vec::new();
                 for i in 0..*num_elements {
@@ -153,7 +153,7 @@ impl ConcreteValue {
                 let mut fields = Vec::new();
                 let mut current_offset = 0;
                 for el_ty in element_types {
-                    let size = project.bit_size(&el_ty).unwrap() as usize;
+                    let size = project.bit_size(el_ty).unwrap() as usize;
                     let end = current_offset + size;
                     let s = &binary_str[current_offset..end];
 

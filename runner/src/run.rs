@@ -35,7 +35,7 @@ pub fn run(path: impl AsRef<Path>, function: &str) -> Result<()> {
 
 /// Start running analysis from with a given Project.
 pub fn run_project(project: &Project, function: &str) -> Result<()> {
-    let mut vm = VM::new(function, &project)?;
+    let mut vm = VM::new(function, project)?;
 
     let mut path_num = 0;
     // Go through all paths.
@@ -47,8 +47,8 @@ pub fn run_project(project: &Project, function: &str) -> Result<()> {
         // Solutions cannot be cached between paths, so instantiate a new one for each path.
         let mut cache = SolutionGenerator::new(vm.solver.clone());
 
-        let inputs = generate_solutions(vm.parameters.iter(), &mut cache, &project)?;
-        let symbolics = generate_solutions(vm.state.symbols.iter(), &mut cache, &project)?;
+        let inputs = generate_solutions(vm.parameters.iter(), &mut cache, project)?;
+        let symbolics = generate_solutions(vm.state.symbols.iter(), &mut cache, project)?;
 
         let result = match path_result {
             Ok(return_value) => {
@@ -70,7 +70,7 @@ pub fn run_project(project: &Project, function: &str) -> Result<()> {
                             let value = ConcreteValue::from_binary_str(
                                 value.as_01x_str(),
                                 ty.as_ref(),
-                                &project,
+                                project,
                             );
                             let variable = Variable { name: None, value };
                             Some(variable)
