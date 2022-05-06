@@ -1,17 +1,20 @@
 use anyhow::{anyhow, Result};
 use clap::Parser;
 use log::debug;
+use std::{fs, path::PathBuf};
 
 const BINARY_NAME: &str = "x0001e";
 
 mod args;
 mod build;
+mod build_c;
 
-use args::Args;
+use args::{Args, ClangArgs};
 use build::{
     generate_build_command, get_extra_filename, get_latest_bc, Features, Settings, Target,
 };
-use runner;
+
+use crate::args::Subcommands;
 
 fn main() -> Result<()> {
     env_logger::init();
@@ -41,6 +44,16 @@ fn run() -> Result<()> {
     }
 
     let args = Args::parse_from(args);
+
+    match args.subcommand {
+        Some(subcommand) => match subcommand {
+            Subcommands::C(clang_args) => run_c(clang_args),
+        },
+        None => run_rs(args),
+    }
+}
+
+fn run_rs(args: Args) -> Result<()> {
     let opts = settings_from_args(&args);
 
     // Build LLVM BC file.
@@ -98,5 +111,44 @@ fn settings_from_args(opts: &Args) -> Settings {
         target,
         features,
         release: opts.release,
+    }
+}
+
+fn run_c(args: ClangArgs) -> Result<()> {
+    let opts = clang_settings_from_args(&args);
+
+    // Create output directory
+    let mut dir = opts.out_path.clone();
+    dir.pop();
+    fs::create_dir_all(dir)?;
+
+    // Build .bc
+    let clang_out = build_c::generate_build_command(&opts).output()?;
+    debug!("clang output: {clang_out:?}");
+    if !clang_out.status.success() {
+        let clang_output = String::from_utf8(clang_out.stderr)?;
+        return Err(anyhow!(clang_output));
+    }
+
+    // Get function name and analyze code.
+    let fn_name = match args.function {
+        None => "main".to_owned(),
+        Some(name) => name,
+    };
+    debug!(
+        "Starting analysis on target: {:?}, function: {fn_name}",
+        opts.out_path
+    );
+    runner::run(&opts.out_path, &fn_name)
+}
+
+fn clang_settings_from_args(opts: &ClangArgs) -> build_c::Settings {
+    let mut out_path = PathBuf::from("target/c");
+    out_path.push(opts.path.file_stem().unwrap());
+    out_path.set_extension("bc");
+
+    build_c::Settings {
+        path: opts.path.clone(),
+        out_path,
     }
 }

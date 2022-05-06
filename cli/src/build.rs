@@ -77,7 +77,13 @@ impl Settings {
 
                 Ok(project.name().to_string())
             }
-            Target::Example(name) => Ok(name.clone()),
+            Target::Example(name) => match name.chars().next() {
+                Some(ch) if ch.is_digit(10) => {
+                    // If the module name starts with a number, an underscore is put as prefix
+                    Ok(format!("_{name}"))
+                }
+                _ => Ok(name.clone()),
+            },
         }
     }
 }

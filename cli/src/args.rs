@@ -1,4 +1,5 @@
 use clap::Parser;
+use std::path::PathBuf;
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
@@ -29,5 +30,25 @@ pub struct Args {
 
     /// Name of function to run. Should be a full module path, excluding the root module.
     #[clap(short, long)]
+    pub function: Option<String>,
+
+    #[clap(subcommand)]
+    pub subcommand: Option<Subcommands>,
+}
+
+#[derive(Parser, Debug)]
+pub enum Subcommands {
+    /// Compile with Clang.
+    C(ClangArgs),
+}
+
+#[derive(Parser, Debug)]
+pub struct ClangArgs {
+    /// Path to c-file to build.
+    #[clap(name = "File")]
+    pub path: PathBuf,
+
+    /// Name of function to run.
+    #[clap(long, short)]
     pub function: Option<String>,
 }
