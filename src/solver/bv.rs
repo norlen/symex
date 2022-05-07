@@ -41,8 +41,8 @@ impl BV {
     pub fn resize_unsigned(self, width: u32) -> BV {
         match self.len().cmp(&width) {
             Ordering::Equal => self,
-            Ordering::Less => self.slice(0, width - 1),
-            Ordering::Greater => self.zero_ext(width),
+            Ordering::Less => self.zero_ext(width),
+            Ordering::Greater => self.slice(0, width - 1),
         }
     }
 

@@ -1,10 +1,17 @@
+# Cargo
 /target
 Cargo.lock
 .vscode
 
+# Misc
 .z3-trace
 **/_check
-*.bc
-*.ll
 /perf
 /dbg
+
+# Generated IR files
+*.bc
+*.ll
+
+# Keep hand written .ll files for unit tests.
+!tests/unit_tests/*.ll

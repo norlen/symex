@@ -667,6 +667,7 @@ impl<'a> VM<'a> {
     /// GetElementPtr calculates the offset into an array or struct from a base pointer.
     fn getelementptr(&mut self, instr: &instruction::GetElementPtr) -> Result<()> {
         debug!("{}", instr);
+        // TODO: Support vector of pointers. Ref: https://llvm.org/docs/LangRef.html#vector-of-pointers
         let target_address = gep(
             &self.state,
             &instr.address,
@@ -888,6 +889,8 @@ impl<'a> VM<'a> {
         let true_value = self.state.get_var(&instr.true_value)?;
         let false_value = self.state.get_var(&instr.false_value)?;
 
+        assert_eq!(true_value.len(), false_value.len());
+
         let ty = self.state.type_of(&instr.condition);
         let result = match ty.as_ref() {
             Type::IntegerType { bits: 1 } => condition.ite(&true_value, &false_value),
@@ -896,22 +899,50 @@ impl<'a> VM<'a> {
                 num_elements,
                 scalable: _,
             } => {
-                let inner_ty = self.state.type_of(element_type);
-                let bits = self.project.bit_size(&inner_ty)?;
-                let num_elements = *num_elements as u32;
+                let condition_ty = self.state.type_of(element_type);
+                let condition_bits = self.project.bit_size(&condition_ty)?;
+                assert_eq!(condition_bits, 1);
 
-                (0..num_elements)
-                    .map(|i| {
-                        let low = i * bits;
-                        let high = (i + 1) * bits - 1;
-                        let true_value = true_value.slice(low, high);
-                        let false_value = false_value.slice(low, high);
+                // The values selected on should be vectors with same type an number of elements,
+                // and should have the same number of elements as the condition.
+                let lhs_ty = self.state.type_of(&instr.true_value);
+                let rhs_ty = self.state.type_of(&instr.false_value);
+                match (lhs_ty.as_ref(), rhs_ty.as_ref()) {
+                    (
+                        Type::VectorType {
+                            element_type: ty0,
+                            num_elements: num_elements0,
+                            scalable: _,
+                        },
+                        Type::VectorType {
+                            element_type: ty1,
+                            num_elements: num_elements1,
+                            scalable: _,
+                        },
+                    ) => {
+                        assert_eq!(ty0, ty1);
+                        assert_eq!(num_elements0, num_elements1);
+                        assert_eq!(num_elements, num_elements0);
 
-                        let condition = condition.slice(i, i);
-                        condition.ite(&true_value, &false_value)
-                    })
-                    .reduce(|acc, v| v.concat(&acc))
-                    .ok_or(VMError::MalformedInstruction)?
+                        let num_elements = *num_elements as u32;
+                        let inner_ty = self.state.type_of(ty0);
+                        let size_in_bits = self.project.bit_size(&inner_ty)?;
+
+                        (0..num_elements)
+                            .map(|i| {
+                                let low = i * size_in_bits;
+                                let high = (i + 1) * size_in_bits - 1;
+                                let true_value = true_value.slice(low, high);
+                                let false_value = false_value.slice(low, high);
+
+                                let condition = condition.slice(i, i);
+                                condition.ite(&true_value, &false_value)
+                            })
+                            .reduce(|acc, v| v.concat(&acc))
+                            .ok_or(VMError::MalformedInstruction)?
+                    }
+                    _ => return Err(VMError::MalformedInstruction),
+                }
             }
             _ => panic!("select: expected either i1 or vector of i1s, got {ty:?}"),
         };
@@ -981,5 +1012,726 @@ impl<'a> VM<'a> {
     fn cleanuppad(&mut self, instr: &instruction::CleanupPad) -> Result<()> {
         debug!("{}", instr);
         todo!()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{Project, ReturnValue, Solutions, VMError, VM};
+
+    fn run(module: &str, fn_name: &str) -> Vec<Result<Option<i64>, VMError>> {
+        let path = format!("./tests/unit_tests/{module}.bc");
+        let project = Project::from_path(&path).expect("Failed to created proejct");
+        let mut vm = VM::new(fn_name, &project).expect("Failed to create VM");
+
+        let mut path_results = Vec::new();
+        while let Some(path_result) = vm.run() {
+            let path_result = match path_result {
+                Ok(value) => match value {
+                    ReturnValue::Value(value) => {
+                        let sol = vm.solver.get_solutions_for_bv(&value, 1).unwrap();
+                        match sol {
+                            Solutions::None => panic!("No solutions"),
+                            Solutions::Exactly(s) => Ok(Some(s[0].as_u64().unwrap() as i64)),
+                            Solutions::AtLeast(_) => panic!("More than one solution"),
+                        }
+                    }
+                    ReturnValue::Void => Ok(None),
+                },
+                Err(e) => Err(e),
+            };
+            path_results.push(path_result);
+        }
+
+        println!("{path_results:x?}");
+        path_results
+    }
+
+    #[test]
+    fn test_add() {
+        let res = run("test", "test_add");
+        assert_eq!(res.len(), 1);
+        assert!(res[0].is_ok());
+        assert_eq!(res[0], Ok(Some(15)));
+    }
+
+    // #[test]
+    // fn test_add_overflow() {
+    //     let res = run("test", "test_add_overflow");
+    //     assert_eq!(res.len(), 1);
+    //     assert!(res[0].is_ok());
+    //     assert_eq!(res[0], Ok(Some(15)));
+    // }
+
+    #[test]
+    fn test_add_vector() {
+        let res = run("test", "test_add_vector");
+        assert_eq!(res.len(), 1);
+        assert!(res[0].is_ok());
+        assert_eq!(res[0], Ok(Some(0x0000_006E_0000_0019)));
+    }
+
+    #[test]
+    fn test_sub() {
+        let res = run("test", "test_sub");
+        assert_eq!(res.len(), 1);
+        assert!(res[0].is_ok());
+        assert_eq!(res[0], Ok(Some(10)));
+    }
+
+    #[test]
+    fn test_mul() {
+        let res = run("test", "test_mul");
+        assert_eq!(res.len(), 1);
+        assert!(res[0].is_ok());
+        assert_eq!(res[0], Ok(Some(35)));
+    }
+
+    #[test]
+    fn test_udiv() {
+        let res = run("test", "test_udiv");
+        assert_eq!(res.len(), 1);
+        assert!(res[0].is_ok());
+        assert_eq!(res[0], Ok(Some(20)));
+    }
+
+    #[test]
+    fn test_sdiv() {
+        let res = run("test", "test_sdiv");
+        assert_eq!(res.len(), 1);
+        assert!(res[0].is_ok());
+        assert_eq!(res[0], Ok(Some(-20)));
+    }
+
+    #[test]
+    fn test_urem() {
+        let res = run("test", "test_urem");
+        assert_eq!(res.len(), 1);
+        assert!(res[0].is_ok());
+        assert_eq!(res[0], Ok(Some(3)));
+    }
+
+    #[test]
+    fn test_srem() {
+        let res = run("test", "test_srem");
+        assert_eq!(res.len(), 1);
+        assert!(res[0].is_ok());
+        assert_eq!(res[0], Ok(Some(3)));
+    }
+
+    #[test]
+    fn test_srem2() {
+        let res = run("test", "test_srem2");
+        assert_eq!(res.len(), 1);
+        assert!(res[0].is_ok());
+        assert_eq!(res[0], Ok(Some(-3)));
+    }
+
+    #[test]
+    fn test_and() {
+        let res = run("test", "test_and");
+        assert_eq!(res.len(), 1);
+        assert!(res[0].is_ok());
+        assert_eq!(res[0], Ok(Some(48)));
+    }
+
+    #[test]
+    fn test_or() {
+        let res = run("test", "test_or");
+        assert_eq!(res.len(), 1);
+        assert!(res[0].is_ok());
+        assert_eq!(res[0], Ok(Some(59)));
+    }
+
+    #[test]
+    fn test_xor() {
+        let res = run("test", "test_xor");
+        assert_eq!(res.len(), 1);
+        assert!(res[0].is_ok());
+        assert_eq!(res[0], Ok(Some(11)));
+    }
+
+    #[test]
+    fn test_shl() {
+        let res = run("test", "test_shl");
+        assert_eq!(res.len(), 1);
+        assert!(res[0].is_ok());
+        assert_eq!(res[0], Ok(Some(116)));
+    }
+
+    #[test]
+    fn test_lshr() {
+        let res = run("test", "test_lshr");
+        assert_eq!(res.len(), 1);
+        assert!(res[0].is_ok());
+        assert_eq!(res[0], Ok(Some(29)));
+    }
+
+    #[test]
+    fn test_ashr() {
+        let res = run("test", "test_ashr");
+        assert_eq!(res.len(), 1);
+        assert!(res[0].is_ok());
+        assert_eq!(res[0], Ok(Some(29)));
+    }
+
+    #[test]
+    fn test_ashr2() {
+        let res = run("test", "test_ashr2");
+        assert_eq!(res.len(), 1);
+        assert!(res[0].is_ok());
+        assert_eq!(res[0], Ok(Some(221)));
+    }
+
+    #[test]
+    fn test_extract_value_arr1() {
+        let res = run("test", "test_extract_value_arr1");
+        assert_eq!(res.len(), 1);
+        assert!(res[0].is_ok());
+        assert_eq!(res[0], Ok(Some(1)));
+    }
+
+    #[test]
+    fn test_extract_value_arr2() {
+        let res = run("test", "test_extract_value_arr2");
+        assert_eq!(res.len(), 1);
+        assert!(res[0].is_ok());
+        assert_eq!(res[0], Ok(Some(2)));
+    }
+
+    #[test]
+    fn test_extract_value_arr3() {
+        let res = run("test", "test_extract_value_arr3");
+        assert_eq!(res.len(), 1);
+        assert!(res[0].is_ok());
+        assert_eq!(res[0], Ok(Some(3)));
+    }
+
+    #[test]
+    fn test_extract_value_arr4() {
+        let res = run("test", "test_extract_value_arr4");
+        assert_eq!(res.len(), 1);
+        assert!(res[0].is_ok());
+        assert_eq!(res[0], Ok(Some(4)));
+    }
+
+    #[test]
+    fn test_extract_value_struct1() {
+        let res = run("test", "test_extract_value_struct1");
+        assert_eq!(res.len(), 1);
+        assert!(res[0].is_ok());
+        assert_eq!(res[0], Ok(Some(4)));
+    }
+
+    #[test]
+    fn test_extract_value_struct2() {
+        let res = run("test", "test_extract_value_struct2");
+        assert_eq!(res.len(), 1);
+        assert!(res[0].is_ok());
+        assert_eq!(res[0], Ok(Some(10)));
+    }
+
+    #[test]
+    fn test_extract_value_struct3() {
+        let res = run("test", "test_extract_value_struct3");
+        assert_eq!(res.len(), 1);
+        assert!(res[0].is_ok());
+        assert_eq!(res[0], Ok(Some(1)));
+    }
+
+    #[test]
+    fn test_extract_value_struct4() {
+        let res = run("test", "test_extract_value_struct4");
+        assert_eq!(res.len(), 1);
+        assert!(res[0].is_ok());
+        assert_eq!(res[0], Ok(Some(2)));
+    }
+
+    #[test]
+    fn test_insert_value_arr1() {
+        let res = run("test", "test_insert_value_arr1");
+        assert_eq!(res.len(), 1);
+        assert!(res[0].is_ok());
+        assert_eq!(res[0], Ok(Some(0x0403020a)));
+    }
+
+    #[test]
+    fn test_insert_value_arr2() {
+        let res = run("test", "test_insert_value_arr2");
+        assert_eq!(res.len(), 1);
+        assert!(res[0].is_ok());
+        assert_eq!(res[0], Ok(Some(0x04030a01)));
+    }
+
+    #[test]
+    fn test_insert_value_arr3() {
+        let res = run("test", "test_insert_value_arr3");
+        assert_eq!(res.len(), 1);
+        assert!(res[0].is_ok());
+        assert_eq!(res[0], Ok(Some(0x040a0201)));
+    }
+
+    #[test]
+    fn test_insert_value_arr4() {
+        let res = run("test", "test_insert_value_arr4");
+        assert_eq!(res.len(), 1);
+        assert!(res[0].is_ok());
+        assert_eq!(res[0], Ok(Some(0x0a030201)));
+    }
+
+    #[test]
+    fn test_insert_value_arr5() {
+        let res = run("test", "test_insert_value_arr5");
+        assert_eq!(res.len(), 1);
+        assert!(res[0].is_ok());
+        assert_eq!(res[0], Ok(Some(0x0506070803040102)));
+    }
+
+    #[test]
+    fn test_insert_value_struct1() {
+        let res = run("test", "test_insert_value_struct1");
+        assert_eq!(res.len(), 1);
+        assert!(res[0].is_ok());
+        assert_eq!(res[0], Ok(Some(0x00020001000a000f)));
+    }
+
+    #[test]
+    fn test_insert_value_struct2() {
+        let res = run("test", "test_insert_value_struct2");
+        assert_eq!(res.len(), 1);
+        assert!(res[0].is_ok());
+        assert_eq!(res[0], Ok(Some(0x00020001000f0004)));
+    }
+
+    #[test]
+    fn test_insert_value_struct3() {
+        let res = run("test", "test_insert_value_struct3");
+        assert_eq!(res.len(), 1);
+        assert!(res[0].is_ok());
+        assert_eq!(res[0], Ok(Some(0x0002000f000a0004)));
+    }
+
+    #[test]
+    fn test_insert_value_struct4() {
+        let res = run("test", "test_insert_value_struct4");
+        assert_eq!(res.len(), 1);
+        assert!(res[0].is_ok());
+        assert_eq!(res[0], Ok(Some(0x000f0001000a0004)));
+    }
+
+    #[test]
+    fn test_load_store1() {
+        let res = run("test", "test_load_store1");
+        assert_eq!(res.len(), 1);
+        assert!(res[0].is_ok());
+        assert_eq!(res[0], Ok(Some(0x3456)));
+    }
+
+    #[test]
+    fn test_load_store2() {
+        let res = run("test", "test_load_store2");
+        assert_eq!(res.len(), 1);
+        assert!(res[0].is_ok());
+        assert_eq!(res[0], Ok(Some(0x56)));
+    }
+
+    #[test]
+    fn test_gep1() {
+        let res = run("test", "test_gep1");
+        assert_eq!(res.len(), 1);
+        assert!(res[0].is_ok());
+        assert_eq!(res[0], Ok(Some(1)));
+    }
+
+    #[test]
+    fn test_gep2() {
+        let res = run("test", "test_gep2");
+        assert_eq!(res.len(), 1);
+        assert!(res[0].is_ok());
+        assert_eq!(res[0], Ok(Some(2)));
+    }
+
+    #[test]
+    fn test_gep3() {
+        let res = run("test", "test_gep3");
+        assert_eq!(res.len(), 1);
+        assert!(res[0].is_ok());
+        assert_eq!(res[0], Ok(Some(3)));
+    }
+
+    #[test]
+    fn test_gep4() {
+        let res = run("test", "test_gep4");
+        assert_eq!(res.len(), 1);
+        assert!(res[0].is_ok());
+        assert_eq!(res[0], Ok(Some(4)));
+    }
+
+    #[test]
+    fn test_gep5() {
+        let res = run("test", "test_gep5");
+        assert_eq!(res.len(), 1);
+        assert!(res[0].is_ok());
+        assert_eq!(res[0], Ok(Some(5)));
+    }
+
+    #[test]
+    fn test_gep6() {
+        let res = run("test", "test_gep6");
+        assert_eq!(res.len(), 1);
+        assert!(res[0].is_ok());
+        assert_eq!(res[0], Ok(Some(6)));
+    }
+
+    #[test]
+    fn test_gep_arr() {
+        let res = run("test", "test_gep_arr");
+        assert_eq!(res.len(), 1);
+        assert!(res[0].is_ok());
+        assert_eq!(res[0], Ok(Some(2)));
+    }
+
+    #[test]
+    fn test_bitcast1() {
+        let res = run("test", "test_bitcast1");
+        assert_eq!(res.len(), 1);
+        assert!(res[0].is_ok());
+        assert_eq!(res[0], Ok(Some(0x56781234)));
+    }
+
+    #[test]
+    fn test_bitcast2() {
+        let res = run("test", "test_bitcast2");
+        assert_eq!(res.len(), 1);
+        assert!(res[0].is_ok());
+        assert_eq!(res[0], Ok(Some(0x78563412)));
+    }
+
+    #[test]
+    fn test_trunc() {
+        let res = run("test", "test_trunc");
+        assert_eq!(res.len(), 1);
+        assert!(res[0].is_ok());
+        assert_eq!(res[0], Ok(Some(0xCD)));
+    }
+
+    #[test]
+    fn test_zext() {
+        let res = run("test", "test_zext");
+        assert_eq!(res.len(), 1);
+        assert!(res[0].is_ok());
+        assert_eq!(res[0], Ok(Some(0x00FF)));
+    }
+
+    #[test]
+    fn test_zext_vec() {
+        let res = run("test", "test_zext_vec");
+        assert_eq!(res.len(), 1);
+        assert!(res[0].is_ok());
+        assert_eq!(res[0], Ok(Some(0x000F00FF)));
+    }
+
+    #[test]
+    fn test_sext() {
+        let res = run("test", "test_sext");
+        assert_eq!(res.len(), 1);
+        assert!(res[0].is_ok());
+        assert_eq!(res[0], Ok(Some(0xFFFF)));
+    }
+
+    #[test]
+    fn test_inttoptr_trunc() {
+        let res = run("test", "test_inttoptr_trunc");
+        assert_eq!(res.len(), 1);
+        assert!(res[0].is_ok());
+        assert_eq!(res[0], Ok(Some(0x5555666677778888)));
+    }
+
+    #[test]
+    fn test_inttoptr_noop() {
+        let res = run("test", "test_inttoptr_noop");
+        assert_eq!(res.len(), 1);
+        assert!(res[0].is_ok());
+        assert_eq!(res[0], Ok(Some(0x1111222233334444)));
+    }
+
+    #[test]
+    fn test_inttoptr_extend() {
+        let res = run("test", "test_inttoptr_extend");
+        assert_eq!(res.len(), 1);
+        assert!(res[0].is_ok());
+        assert_eq!(res[0], Ok(Some(0x0000000011112222)));
+    }
+
+    #[test]
+    fn test_ptrtoint_trunc() {
+        let res = run("test", "test_ptrtoint_trunc");
+        assert_eq!(res.len(), 1);
+        assert!(res[0].is_ok());
+        assert_eq!(res[0], Ok(Some(0x44)));
+    }
+
+    #[test]
+    fn test_ptrtoint_noop() {
+        let res = run("test", "test_ptrtoint_noop");
+        assert_eq!(res.len(), 1);
+        assert!(res[0].is_ok());
+        assert_eq!(res[0], Ok(Some(0x1111222233334444)));
+    }
+
+    #[test]
+    fn test_ptrtoint_vec_trunc() {
+        let res = run("test", "test_ptrtoint_vec_trunc");
+        assert_eq!(res.len(), 1);
+        assert!(res[0].is_ok());
+        assert_eq!(res[0], Ok(Some(0x7777888833334444)));
+    }
+
+    #[test]
+    fn test_addrspacecast() {
+        let res = run("test", "test_addrspacecast");
+        assert_eq!(res.len(), 1);
+        assert!(res[0].is_ok());
+        assert_eq!(res[0], Ok(Some(0x1111222233334444)));
+    }
+
+    #[test]
+    fn test_icmp_eq_false() {
+        let res = run("test", "test_icmp_eq_false");
+        assert_eq!(res.len(), 1);
+        assert!(res[0].is_ok());
+        assert_eq!(res[0], Ok(Some(0x0)));
+    }
+
+    #[test]
+    fn test_icmp_eq_true() {
+        let res = run("test", "test_icmp_eq_true");
+        assert_eq!(res.len(), 1);
+        assert!(res[0].is_ok());
+        assert_eq!(res[0], Ok(Some(0x1)));
+    }
+
+    #[test]
+    fn test_icmp_ne_false() {
+        let res = run("test", "test_icmp_ne_false");
+        assert_eq!(res.len(), 1);
+        assert!(res[0].is_ok());
+        assert_eq!(res[0], Ok(Some(0x0)));
+    }
+
+    #[test]
+    fn test_icmp_ne_true() {
+        let res = run("test", "test_icmp_ne_true");
+        assert_eq!(res.len(), 1);
+        assert!(res[0].is_ok());
+        assert_eq!(res[0], Ok(Some(0x1)));
+    }
+
+    #[test]
+    fn test_icmp_ugt_false() {
+        let res = run("test", "test_icmp_ugt_false");
+        assert_eq!(res.len(), 1);
+        assert!(res[0].is_ok());
+        assert_eq!(res[0], Ok(Some(0x0)));
+    }
+
+    #[test]
+    fn test_icmp_ugt_true() {
+        let res = run("test", "test_icmp_ugt_true");
+        assert_eq!(res.len(), 1);
+        assert!(res[0].is_ok());
+        assert_eq!(res[0], Ok(Some(0x1)));
+    }
+
+    #[test]
+    fn test_icmp_uge_false() {
+        let res = run("test", "test_icmp_uge_false");
+        assert_eq!(res.len(), 1);
+        assert!(res[0].is_ok());
+        assert_eq!(res[0], Ok(Some(0x0)));
+    }
+
+    #[test]
+    fn test_icmp_uge_true() {
+        let res = run("test", "test_icmp_uge_true");
+        assert_eq!(res.len(), 1);
+        assert!(res[0].is_ok());
+        assert_eq!(res[0], Ok(Some(0x1)));
+    }
+
+    #[test]
+    fn test_icmp_ult_false() {
+        let res = run("test", "test_icmp_ult_false");
+        assert_eq!(res.len(), 1);
+        assert!(res[0].is_ok());
+        assert_eq!(res[0], Ok(Some(0x0)));
+    }
+
+    #[test]
+    fn test_icmp_ult_true() {
+        let res = run("test", "test_icmp_ult_true");
+        assert_eq!(res.len(), 1);
+        assert!(res[0].is_ok());
+        assert_eq!(res[0], Ok(Some(0x1)));
+    }
+
+    #[test]
+    fn test_icmp_ule_false() {
+        let res = run("test", "test_icmp_ule_false");
+        assert_eq!(res.len(), 1);
+        assert!(res[0].is_ok());
+        assert_eq!(res[0], Ok(Some(0x0)));
+    }
+
+    #[test]
+    fn test_icmp_ule_true() {
+        let res = run("test", "test_icmp_ule_true");
+        assert_eq!(res.len(), 1);
+        assert!(res[0].is_ok());
+        assert_eq!(res[0], Ok(Some(0x1)));
+    }
+
+    #[test]
+    fn test_icmp_sgt_false() {
+        let res = run("test", "test_icmp_sgt_false");
+        assert_eq!(res.len(), 1);
+        assert!(res[0].is_ok());
+        assert_eq!(res[0], Ok(Some(0x0)));
+    }
+
+    #[test]
+    fn test_icmp_sgt_true() {
+        let res = run("test", "test_icmp_sgt_true");
+        assert_eq!(res.len(), 1);
+        assert!(res[0].is_ok());
+        assert_eq!(res[0], Ok(Some(0x1)));
+    }
+
+    #[test]
+    fn test_icmp_sge_false() {
+        let res = run("test", "test_icmp_sge_false");
+        assert_eq!(res.len(), 1);
+        assert!(res[0].is_ok());
+        assert_eq!(res[0], Ok(Some(0x0)));
+    }
+
+    #[test]
+    fn test_icmp_sge_true() {
+        let res = run("test", "test_icmp_sge_true");
+        assert_eq!(res.len(), 1);
+        assert!(res[0].is_ok());
+        assert_eq!(res[0], Ok(Some(0x1)));
+    }
+
+    #[test]
+    fn test_icmp_slt_false() {
+        let res = run("test", "test_icmp_slt_false");
+        assert_eq!(res.len(), 1);
+        assert!(res[0].is_ok());
+        assert_eq!(res[0], Ok(Some(0x0)));
+    }
+
+    #[test]
+    fn test_icmp_slt_true() {
+        let res = run("test", "test_icmp_slt_true");
+        assert_eq!(res.len(), 1);
+        assert!(res[0].is_ok());
+        assert_eq!(res[0], Ok(Some(0x1)));
+    }
+
+    #[test]
+    fn test_icmp_sle_false() {
+        let res = run("test", "test_icmp_sle_false");
+        assert_eq!(res.len(), 1);
+        assert!(res[0].is_ok());
+        assert_eq!(res[0], Ok(Some(0x0)));
+    }
+
+    #[test]
+    fn test_icmp_sle_true() {
+        let res = run("test", "test_icmp_sle_true");
+        assert_eq!(res.len(), 1);
+        assert!(res[0].is_ok());
+        assert_eq!(res[0], Ok(Some(0x1)));
+    }
+
+    #[test]
+    fn test_icmp_eq_vec() {
+        let res = run("test", "test_icmp_eq_vec");
+        assert_eq!(res.len(), 1);
+        assert!(res[0].is_ok());
+        assert_eq!(res[0], Ok(Some(0x5)));
+    }
+
+    #[test]
+    fn test_phi1() {
+        let res = run("test", "test_phi1");
+        assert_eq!(res.len(), 1);
+        assert!(res[0].is_ok());
+        assert_eq!(res[0], Ok(Some(0xab)));
+    }
+
+    #[test]
+    fn test_phi2() {
+        let res = run("test", "test_phi2");
+        assert_eq!(res.len(), 1);
+        assert!(res[0].is_ok());
+        assert_eq!(res[0], Ok(Some(0xcd)));
+    }
+
+    #[test]
+    fn test_select1() {
+        let res = run("test", "test_select1");
+        assert_eq!(res.len(), 1);
+        assert!(res[0].is_ok());
+        assert_eq!(res[0], Ok(Some(0xaa)));
+    }
+
+    #[test]
+    fn test_select2() {
+        let res = run("test", "test_select2");
+        assert_eq!(res.len(), 1);
+        assert!(res[0].is_ok());
+        assert_eq!(res[0], Ok(Some(0xbb)));
+    }
+
+    #[test]
+    fn test_select_vec_values() {
+        let res = run("test", "test_select_vec_values");
+        assert_eq!(res.len(), 1);
+        assert!(res[0].is_ok());
+        assert_eq!(res[0], Ok(Some(0x000000dd000000cc)));
+    }
+
+    #[test]
+    fn test_select_vec_cond() {
+        let res = run("test", "test_select_vec_cond");
+        assert_eq!(res.len(), 1);
+        assert!(res[0].is_ok());
+        assert_eq!(res[0], Ok(Some(0x000000dd000000aa)));
+    }
+
+    #[test]
+    fn test_call() {
+        let res = run("test", "test_call");
+        assert_eq!(res.len(), 1);
+        assert!(res[0].is_ok());
+        assert_eq!(res[0], Ok(Some(0xabcd)));
+    }
+
+    #[test]
+    fn test_vector_constant() {
+        let res = run("test", "test_vector_constant");
+        assert_eq!(res.len(), 1);
+        assert!(res[0].is_ok());
+        assert_eq!(res[0], Ok(Some(0x5321)));
+    }
+
+    #[test]
+    fn test_vector_constant2() {
+        let res = run("test", "test_vector_constant2");
+        assert_eq!(res.len(), 1);
+        assert!(res[0].is_ok());
+        assert_eq!(res[0], Ok(Some(0x04030201)));
     }
 }

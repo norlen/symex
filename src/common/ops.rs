@@ -192,7 +192,7 @@ where
             let source_bits = state.project.bit_size(source_element_ty)?;
             let target_bits = state.project.bit_size(element_type)?;
             let num_elements = *num_elements as u32;
-            assert!(source_bits == symbol.len());
+            assert!(source_bits * num_elements == symbol.len());
 
             // Process each element one by one and concatenate the result.
             (0..num_elements)
@@ -229,13 +229,13 @@ where
     Ok(bv)
 }
 
-pub(crate) fn icmp<'p, T>(state: &State<'_>, lhs: T, rhs: T, predicate: IntPredicate) -> Result<BV>
-where
-    T: Into<Op<'p>>,
-{
-    let lhs = state.get_var(lhs.into())?;
-    let rhs = state.get_var(rhs.into())?;
-    let result = match predicate {
+pub(crate) fn icmp(
+    state: &State<'_>,
+    lhs: &Operand,
+    rhs: &Operand,
+    predicate: IntPredicate,
+) -> Result<BV> {
+    binop(state, lhs, rhs, |lhs, rhs| match predicate {
         IntPredicate::EQ => lhs.eq(&rhs),
         IntPredicate::NE => lhs.ne(&rhs),
         IntPredicate::UGT => lhs.ugt(&rhs),
@@ -246,6 +246,5 @@ where
         IntPredicate::SGE => lhs.sgte(&rhs),
         IntPredicate::SLT => lhs.slt(&rhs),
         IntPredicate::SLE => lhs.slte(&rhs),
-    };
-    Ok(result)
+    })
 }
