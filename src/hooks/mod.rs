@@ -72,8 +72,6 @@ impl Hooks {
         hooks.add("x0001e::assume", assume);
         hooks.add("x0001e::symbolic", symbolic);
 
-        hooks.add("std::io::stdio::_print", print);
-
         hooks
     }
 
@@ -159,9 +157,4 @@ pub fn symbolic(vm: &mut VM<'_>, info: FnInfo) -> Result<ReturnValue> {
     } else {
         panic!("not a pointer type");
     }
-}
-
-pub fn print(_vm: &mut VM<'_>, _info: FnInfo) -> Result<ReturnValue> {
-    //println!("{info:#?}");
-    Ok(ReturnValue::Void)
 }

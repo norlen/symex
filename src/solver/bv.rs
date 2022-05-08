@@ -205,7 +205,7 @@ impl BV {
 
         let result = self.add(other);
         let overflow = self.uaddo(other);
-        let saturated = BV(boolector::BV::ones(self.0.get_btor(), self.len()));
+        let saturated = self.get_solver().bv_unsigned_max(self.len());
 
         overflow.ite(&saturated, &result)
     }
@@ -220,22 +220,16 @@ impl BV {
     pub fn sadds(&self, other: &BV) -> BV {
         assert_eq!(self.len(), other.len());
         let width = self.len();
-        let solver = self.0.get_btor();
+        let solver = self.get_solver();
 
         let result = self.add(other);
         let overflow = self.saddo(other);
 
+        let min = solver.bv_signed_min(width);
+        let max = solver.bv_signed_max(width);
+
         // Check the sign bit.
         let is_negative = self.slice(self.len() - 1, self.len() - 1);
-
-        // Minimum value: 1000...0
-        let min = BV(boolector::BV::one(solver.clone(), 1)
-            .concat(&boolector::BV::zero(solver.clone(), width - 1)));
-
-        // Maximum value: 0111...1
-        let max =
-            BV(boolector::BV::zero(solver.clone(), 1)
-                .concat(&boolector::BV::one(solver, width - 1)));
 
         overflow.ite(&is_negative.ite(&min, &max), &result)
     }

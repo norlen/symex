@@ -21,3 +21,9 @@ for file in $(find tests/doc_tests -name '*.rs'); do
     rustc --emit=llvm-bc --edition=2021 -o ${file%.*}.bc $opts $file
     rustc --emit=llvm-ir --edition=2021 -o ${file%.*}.ll $opts $file
 done
+
+# Compile .ll files used by unit tests
+for file in $(find tests/unit_tests -name '*.ll'); do
+    echo "generating files for $file"
+    llvm-as $file
+done

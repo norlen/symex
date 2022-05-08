@@ -357,7 +357,6 @@ impl<'a> VM<'a> {
         &mut self,
         function: &Either<InlineAssembly, Operand>,
     ) -> Result<String> {
-        //trace!("\n\nresolve fn: {:?}", function);
         match function {
             Either::Left(_) => todo!(),
             Either::Right(operand) => match operand {
@@ -365,10 +364,7 @@ impl<'a> VM<'a> {
                     Constant::GlobalReference {
                         name: Name::Name(name),
                         ..
-                    } => {
-                        // println!("global ref name: {:?}", name);
-                        Ok(name.to_string())
-                    }
+                    } => Ok(name.to_string()),
                     _ => todo!(),
                 },
                 Operand::LocalOperand { .. } => {

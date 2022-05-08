@@ -87,21 +87,13 @@ pub fn get_bit_offset_concrete(ty: &Type, index: u64, project: &Project) -> Resu
     use Type::*;
 
     match ty {
-        // Offsets for pointers are just the pointer size times the index.
-        #[rustfmt::skip]
-        PointerType { pointee_type: inner_ty, .. } => {
-            size_in_bits(ty, project)
-                .map(|size| (size * index, inner_ty.clone()))
-                .ok_or_else(|| anyhow!("Cannot take size of type").into())
-        },
-
-        // For vector and arrays, the indexes are based on the inner type. So e.g. an array
-        // [4 x i32] with an index 3, should index into the fourth element.
+        // Pointers, vectors, and arrays are similar in that they operate on their inner types.
         //
         // Note that in the LLVM docs for GEP vector indexing may be disallowed in the future,
         // thus it should not really happen.
         #[rustfmt::skip]
-        VectorType { element_type: inner_ty, .. }
+        PointerType { pointee_type: inner_ty, .. }
+        | VectorType { element_type: inner_ty, .. }
         | ArrayType { element_type: inner_ty, .. } => {
             size_in_bits(inner_ty, project)
                 .map(|size| (size * index, inner_ty.clone()))
@@ -157,21 +149,10 @@ pub fn get_byte_offset_symbol(ty: &Type, index: &BV, project: &Project) -> Resul
     use Type::*;
 
     match ty {
-        // Offsets for pointers are just the pointer size times the index.
+        // Pointers, vectors, and arrays are similar in that they operate on their inner types.
         #[rustfmt::skip]
-        PointerType { pointee_type: inner_ty, .. } => {
-            let size = size_in_bits(ty, project)
-                .ok_or_else(|| VMError::Other(anyhow!("Cannot take size of type")))?;
-
-            let size = to_bytes(size)?;
-            let size = index.get_solver().bv_from_u64(size, index.len());
-            Ok((size.mul(index), inner_ty.clone()))
-        }
-
-        // For vector and arrays, the indexes are based on the inner type. So e.g. an array
-        // [4 x i32] with an index 3, should index into the fourth element.
-        #[rustfmt::skip]
-        VectorType { element_type: inner_ty, .. }
+        PointerType { pointee_type: inner_ty, .. }
+        | VectorType { element_type: inner_ty, .. }
         | ArrayType { element_type: inner_ty, .. } => {
             let size = size_in_bits(inner_ty, project)
                 .ok_or_else(|| VMError::Other(anyhow!("Cannot take size of type")))?;
@@ -207,20 +188,10 @@ pub fn get_bit_offset_symbol(ty: &Type, index: &BV, project: &Project) -> Result
     use Type::*;
 
     match ty {
-        // Offsets for pointers are just the pointer size times the index.
+        // Pointers, vectors, and arrays are similar in that they operate on their inner types.
         #[rustfmt::skip]
-        PointerType { pointee_type: inner_ty, .. } => {
-            let size = size_in_bits(ty, project)
-                .ok_or_else(|| VMError::Other(anyhow!("Cannot take size of type")))?;
-
-            let size = index.get_solver().bv_from_u64(size, index.len());
-            Ok((size.mul(index), inner_ty.clone()))
-        }
-
-        // For vector and arrays, the indexes are based on the inner type. So e.g. an array
-        // [4 x i32] with an index 3, should index into the fourth element.
-        #[rustfmt::skip]
-        VectorType { element_type: inner_ty, .. }
+        PointerType { pointee_type: inner_ty, .. }
+        | VectorType { element_type: inner_ty, .. }
         | ArrayType { element_type: inner_ty, .. } => {
             let size = size_in_bits(inner_ty, project)
                 .ok_or_else(|| VMError::Other(anyhow!("Cannot take size of type")))?;

@@ -331,6 +331,20 @@ define dso_local i32 @test_gep_arr() #0 {
     ret i32 %2 ; expect 2 ([2])
 }
 
+define dso_local i32 @test_gep_arr2() #0 {
+    %ptr = alloca [4 x i32], align 4
+    store [4 x i32] [i32 0, i32 1, i32 2, i32 3], [4 x i32]* %ptr
+    ; so for this assume we have the c code:
+    ;   int arr[4] = {0, 1, 2, 3};
+    ; a `getelementptr ty, ty* %arr, i64 1` can be seen as
+    ;   int* ptr = &arr[1] // (char*)arr + 4
+    %ptr2 = bitcast [4 x i32]* %ptr to i32*
+    %1 = getelementptr inbounds i32, i32* %ptr2, i64 2
+    ; should be the same as the previous example
+    %2 = load i32, i32* %1
+    ret i32 %2 ; expect 2 ([2])
+}
+
 ; --------------------------------------------------------------------------------------------------
 ; Conversion Operations
 ;

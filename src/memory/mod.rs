@@ -215,7 +215,9 @@ impl Memory {
             self.check_out_of_bounds_by_size(addr, bits)?;
         }
 
-        self.store.read(addr, bits, &self.solver, self.ptr_size)
+        let val = self.store.read(addr, bits, &self.solver, self.ptr_size)?;
+        trace!("Read value: {val:?}");
+        Ok(val)
     }
 
     /// Writes `value` to the address `addr`.

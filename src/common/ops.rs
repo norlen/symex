@@ -1,4 +1,5 @@
 use llvm_ir::{IntPredicate, Operand, Type};
+use log::error;
 
 use super::{Op, ToValue};
 use crate::{
@@ -62,6 +63,11 @@ where
 
     // The offsets modifies the address ptr, and this is the type of what is currently pointed to.
     let mut curr_ty = state.type_of(&address);
+    if !matches!(curr_ty.as_ref(), Type::PointerType { .. }) {
+        error!("getelementptr address should always be a pointer");
+        return Err(VMError::MalformedInstruction);
+    }
+
     for index in indices {
         let (offset, ty) = if index.is_constant() {
             let index = index.to_value()?;
@@ -100,6 +106,9 @@ where
     match (lhs_ty.as_ref(), rhs_ty.as_ref()) {
         // For simple integer types the result is trivial to do, just perform the operation.
         (IntegerType { .. }, IntegerType { .. }) => Ok(operation(&lhs, &rhs)),
+
+        // Some may support pointer operands, such as icmp, which work the same as integer ones.
+        (PointerType { .. }, PointerType { .. }) => Ok(operation(&lhs, &rhs)),
 
         // The docs do not really specify how the vector operations should work. But I'll assume it
         // is the operation on a per element basis.

@@ -68,6 +68,7 @@
 //! - [x] `llvm.assume`
 //!
 //! [1]: https://llvm.org/docs/LangRef.html#intrinsic-functions
+use llvm_ir::Type;
 use log::trace;
 use radix_trie::Trie;
 use std::collections::HashMap;
@@ -77,6 +78,7 @@ use crate::{
     hooks::{FnInfo, Hook},
     memory::BITS_IN_BYTE,
     vm::{Result, ReturnValue, VM},
+    VMError, BV,
 };
 
 /// Check if the given name is an LLVM intrinsic.
@@ -268,26 +270,95 @@ enum BinaryOpOverflow {
 /// Binary operations that indicate whether an overflow occurred or not.
 fn binary_op_overflow(vm: &mut VM<'_>, f: FnInfo, op: BinaryOpOverflow) -> Result<ReturnValue> {
     assert_eq!(f.arguments.len(), 2);
-    // TODO: Can these be vectors?
 
-    let (a0, _) = f.arguments.get(0).unwrap();
-    let (a1, _) = f.arguments.get(1).unwrap();
+    let (lhs, _) = f.arguments.get(0).unwrap();
+    let (rhs, _) = f.arguments.get(1).unwrap();
 
-    let a0 = vm.state.get_var(a0)?;
-    let a1 = vm.state.get_var(a1)?;
+    let lhs_ty = vm.state.type_of(lhs);
+    let rhs_ty = vm.state.type_of(rhs);
+    let lhs = vm.state.get_var(lhs)?;
+    let rhs = vm.state.get_var(rhs)?;
 
-    let (result, overflow) = match op {
-        BinaryOpOverflow::SAdd => (a0.add(&a1), a0.saddo(&a1)),
-        BinaryOpOverflow::UAdd => (a0.add(&a1), a0.uaddo(&a1)),
-        BinaryOpOverflow::SSub => (a0.sub(&a1), a0.ssubo(&a1)),
-        BinaryOpOverflow::USub => (a0.sub(&a1), a0.usubo(&a1)),
-        BinaryOpOverflow::SMul => (a0.mul(&a1), a0.smulo(&a1)),
-        BinaryOpOverflow::UMul => (a0.mul(&a1), a0.umulo(&a1)),
+    let operation = |lhs: BV, rhs: BV| {
+        let (result, overflow) = match op {
+            BinaryOpOverflow::SAdd => (lhs.add(&rhs), lhs.saddo(&rhs)),
+            BinaryOpOverflow::UAdd => (lhs.add(&rhs), lhs.uaddo(&rhs)),
+            BinaryOpOverflow::SSub => (lhs.sub(&rhs), lhs.ssubo(&rhs)),
+            BinaryOpOverflow::USub => (lhs.sub(&rhs), lhs.usubo(&rhs)),
+            BinaryOpOverflow::SMul => (lhs.mul(&rhs), lhs.smulo(&rhs)),
+            BinaryOpOverflow::UMul => (lhs.mul(&rhs), lhs.umulo(&rhs)),
+        };
+        assert_eq!(overflow.len(), 1);
+        trace!("result: {result:?}, overflow: {overflow:?}");
+
+        (result, overflow)
     };
-    assert_eq!(overflow.len(), 1);
 
-    let result_with_overflow = overflow.concat(&result);
-    Ok(ReturnValue::Value(result_with_overflow))
+    // This has to be special cased a bit compared to regular binary operations.
+    //
+    // The result type is a struct so {result, overflow} and for vectors this means {<iX res>, <i1>}
+    // so the results and overflows have to be appended separately until the final return. Which the
+    // regular `binop` does not handle.
+    use Type::*;
+    let result = match (lhs_ty.as_ref(), rhs_ty.as_ref()) {
+        // For integers just perform the operation.
+        (IntegerType { .. }, IntegerType { .. }) => {
+            let (result, overflow) = operation(lhs, rhs);
+            Ok(overflow.concat(&result))
+        }
+
+        // For vectors each operation has to be done independently, and the return should be in
+        // the format of {results, overflows}.
+        (
+            VectorType {
+                element_type: lhs_inner_ty,
+                num_elements: n,
+                scalable: false,
+            },
+            VectorType {
+                element_type: rhs_inner_ty,
+                num_elements: m,
+                scalable: false,
+            },
+        ) => {
+            assert_eq!(lhs_inner_ty, rhs_inner_ty);
+            assert_eq!(
+                vm.state.project.bit_size(lhs_inner_ty),
+                vm.state.project.bit_size(rhs_inner_ty)
+            );
+            assert_eq!(*n, *m);
+
+            let bits = vm.state.project.bit_size(lhs_inner_ty)?;
+            let num_elements = *n as u32;
+
+            // Perform the operation per element and concatenate the result.
+            let (results, overflows) = (0..num_elements)
+                .map(|i| {
+                    let low = i * bits;
+                    let high = (i + 1) * bits - 1;
+                    let lhs = lhs.slice(low, high);
+                    let rhs = rhs.slice(low, high);
+                    operation(lhs, rhs)
+                })
+                .reduce(|(res_acc, overflow_acc), (res, overflow)| {
+                    (res.concat(&res_acc), overflow.concat(&overflow_acc))
+                })
+                .ok_or(VMError::MalformedInstruction)?;
+
+            trace!("results: {results:?}, overflows: {overflows:?}");
+            Ok(overflows.concat(&results))
+        }
+
+        // TODO: Check out scalable vectors.
+        (VectorType { .. }, VectorType { .. }) => {
+            todo!()
+        }
+
+        // These types should not appear in a binary operation.
+        _ => Err(VMError::MalformedInstruction),
+    }?;
+
+    Ok(ReturnValue::Value(result))
 }
 
 /// Signed addition on any bit width, performs a signed addition and indicates whether an overflow
@@ -337,18 +408,15 @@ enum BinaryOpSaturate {
 
 fn binary_op_saturate(vm: &mut VM<'_>, f: FnInfo, op: BinaryOpSaturate) -> Result<ReturnValue> {
     assert_eq!(f.arguments.len(), 2);
-    // TODO: Can these be vectors?
 
-    let (a0, _) = f.arguments.get(0).unwrap();
-    let (a1, _) = f.arguments.get(1).unwrap();
+    let (lhs, _) = f.arguments.get(0).unwrap();
+    let (rhs, _) = f.arguments.get(1).unwrap();
 
-    let a0 = vm.state.get_var(a0)?;
-    let a1 = vm.state.get_var(a1)?;
+    let result = binop(&vm.state, lhs, rhs, |lhs, rhs| match op {
+        BinaryOpSaturate::UAdd => lhs.uadds(&rhs),
+        BinaryOpSaturate::SAdd => lhs.sadds(&rhs),
+    })?;
 
-    let result = match op {
-        BinaryOpSaturate::SAdd => a0.uadds(&a1),
-        BinaryOpSaturate::UAdd => a0.sadds(&a1),
-    };
     Ok(ReturnValue::Value(result))
 }
 
@@ -379,4 +447,170 @@ pub fn llvm_assume(vm: &mut VM<'_>, info: FnInfo) -> Result<ReturnValue> {
     vm.state.solver.assert(&condition);
 
     Ok(ReturnValue::Void)
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{Project, ReturnValue, Solutions, VMError, VM};
+
+    fn run(fn_name: &str) -> Vec<Result<Option<i64>, VMError>> {
+        let path = format!("./tests/unit_tests/intrinsics.bc");
+        let project = Project::from_path(&path).expect("Failed to created proejct");
+        let mut vm = VM::new(fn_name, &project).expect("Failed to create VM");
+
+        let mut path_results = Vec::new();
+        while let Some(path_result) = vm.run() {
+            let path_result = match path_result {
+                Ok(value) => match value {
+                    ReturnValue::Value(value) => {
+                        let sol = vm.solver.get_solutions_for_bv(&value, 1).unwrap();
+                        match sol {
+                            Solutions::None => panic!("No solutions"),
+                            Solutions::Exactly(s) => Ok(Some(s[0].as_u64().unwrap() as i64)),
+                            Solutions::AtLeast(_) => panic!("More than one solution"),
+                        }
+                    }
+                    ReturnValue::Void => Ok(None),
+                },
+                Err(e) => Err(e),
+            };
+            path_results.push(path_result);
+        }
+
+        println!("{path_results:x?}");
+        path_results
+    }
+
+    #[test]
+    fn test_memcpy() {
+        let res = run("test_memcpy");
+        assert_eq!(res.len(), 1);
+        assert_eq!(res[0], Ok(Some(0x6543fe671234abcd)));
+    }
+
+    #[test]
+    fn test_memset() {
+        let res = run("test_memset");
+        assert_eq!(res.len(), 1);
+        assert_eq!(res[0], Ok(Some(-6076574517859464245i64))); // 0xababababcbcbcbcb
+    }
+
+    #[test]
+    fn test_umax() {
+        let res = run("test_umax");
+        assert_eq!(res.len(), 1);
+        assert_eq!(res[0], Ok(Some(0xbcef)));
+    }
+
+    #[test]
+    fn test_umax_vec() {
+        let res = run("test_umax_vec");
+        assert_eq!(res.len(), 1);
+        assert_eq!(res[0], Ok(Some(0x000043210000bcef)));
+    }
+
+    #[test]
+    fn test_sadd_sat0() {
+        let res = run("test_sadd_sat0");
+        assert_eq!(res.len(), 1);
+        assert_eq!(res[0], Ok(Some(3)));
+    }
+
+    #[test]
+    fn test_sadd_sat1() {
+        let res = run("test_sadd_sat1");
+        assert_eq!(res.len(), 1);
+        assert_eq!(res[0], Ok(Some(7)));
+    }
+
+    #[test]
+    fn test_sadd_sat2() {
+        let res = run("test_sadd_sat2");
+        assert_eq!(res.len(), 1);
+        assert_eq!(res[0], Ok(Some(-2)));
+    }
+
+    #[test]
+    fn test_sadd_sat3() {
+        let res = run("test_sadd_sat3");
+        assert_eq!(res.len(), 1);
+        assert_eq!(res[0], Ok(Some(-8)));
+    }
+
+    #[test]
+    fn test_uadd_sat0() {
+        let res = run("test_uadd_sat0");
+        assert_eq!(res.len(), 1);
+        assert_eq!(res[0], Ok(Some(3)));
+    }
+
+    #[test]
+    fn test_uadd_sat1() {
+        let res = run("test_uadd_sat1");
+        assert_eq!(res.len(), 1);
+        assert_eq!(res[0], Ok(Some(11)));
+    }
+
+    #[test]
+    fn test_uadd_sat2() {
+        let res = run("test_uadd_sat2");
+        assert_eq!(res.len(), 1);
+        assert_eq!(res[0], Ok(Some(15)));
+    }
+
+    #[test]
+    fn test_uadd_sat_vec() {
+        let res = run("test_uadd_sat_vec");
+        assert_eq!(res.len(), 1);
+        assert_eq!(res[0], Ok(Some(0xfb3)));
+    }
+
+    #[test]
+    fn test_sadd_with_overflow0() {
+        let res = run("test_sadd_with_overflow0");
+        assert_eq!(res.len(), 1);
+        assert_eq!(res[0], Ok(Some(0x0182)));
+    }
+
+    #[test]
+    fn test_sadd_with_overflow1() {
+        let res = run("test_sadd_with_overflow1");
+        assert_eq!(res.len(), 1);
+        assert_eq!(res[0], Ok(Some(0x6e)));
+    }
+
+    #[test]
+    fn test_sadd_with_overflow_vec() {
+        let res = run("test_sadd_with_overflow_vec");
+        assert_eq!(res.len(), 1);
+        assert_eq!(res[0], Ok(Some(0x5b07e6e82)));
+    }
+
+    #[test]
+    fn test_uadd_with_overflow0() {
+        let res = run("test_uadd_with_overflow0");
+        assert_eq!(res.len(), 1);
+        assert_eq!(res[0], Ok(Some(0x0104)));
+    }
+
+    #[test]
+    fn test_uadd_with_overflow1() {
+        let res = run("test_uadd_with_overflow1");
+        assert_eq!(res.len(), 1);
+        assert_eq!(res[0], Ok(Some(0x00fa)));
+    }
+
+    #[test]
+    fn test_expect() {
+        let res = run("test_expect");
+        assert_eq!(res.len(), 1);
+        assert_eq!(res[0], Ok(Some(100)));
+    }
+
+    #[test]
+    fn test_assume() {
+        let res = run("test_assume");
+        assert_eq!(res.len(), 1);
+        assert_eq!(res[0], Ok(Some(5)));
+    }
 }

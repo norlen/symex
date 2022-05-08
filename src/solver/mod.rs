@@ -272,6 +272,31 @@ impl Solver {
         BV(boolector::BV::from_binary_str(self.0.clone(), bits))
     }
 
+    /// Creates a big-vector of size `bits` containing the maximum unsigned value.
+    pub fn bv_unsigned_max(&self, bits: u32) -> BV {
+        BV(boolector::BV::ones(self.0.clone(), bits))
+    }
+
+    /// Create a bit-vector of size `bits` containing the maximum signed value.
+    pub fn bv_signed_max(&self, bits: u32) -> BV {
+        assert!(bits > 1);
+
+        // Maximum value: 0111...1
+        let leading_zero = boolector::BV::zero(self.0.clone(), 1);
+        let ones = boolector::BV::ones(self.0.clone(), bits - 1);
+        BV(leading_zero.concat(&ones))
+    }
+
+    /// Create a bit-vector of size `bits` containing the minimum signed value.
+    pub fn bv_signed_min(&self, bits: u32) -> BV {
+        assert!(bits > 1);
+
+        // Minimum value: 1000...0
+        let leading_one = boolector::BV::one(self.0.clone(), 1);
+        let zeroes = boolector::BV::zero(self.0.clone(), bits - 1);
+        BV(leading_one.concat(&zeroes))
+    }
+
     /// Helper to ensure we always set `ModelGen::Disabled` for all paths in this function.
     fn internal_get_solutions_for_bv(
         &self,
