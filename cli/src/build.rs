@@ -131,6 +131,14 @@ pub fn generate_build_command(opts: &Settings) -> Command {
         "--emit=llvm-ir",
         "-C",
         "link-dead-code=yes",
+        "-C",
+        "linker=true",
+        "-C",
+        "lto",
+        "-C",
+        "embed-bitcode=yes",
+        "-C",
+        "panic=abort",
     ]);
     debug!("Running cargo command: {cargo:?}");
     cargo

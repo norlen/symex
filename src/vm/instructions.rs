@@ -654,14 +654,58 @@ impl<'a> VM<'a> {
         todo!()
     }
 
+    /// Atomically loads the value and compares it, if equal store a new value.
     fn cmpxchg(&mut self, instr: &instruction::CmpXchg) -> Result<()> {
         debug!("{}", instr);
-        todo!()
+        // All operations are atomic, so just perform the operation.
+        let addr = self.state.get_var(&instr.address)?;
+        let expected = self.state.get_var(&instr.expected)?;
+        let replacement = self.state.get_var(&instr.replacement)?;
+
+        let current = self.state.mem.read(&addr, expected.len())?;
+
+        // Replace if the current value at the address it equal to the expected value.
+        let condition = current.eq(&expected);
+        let result = condition.ite(&replacement, &current);
+
+        // Write the result to memory.
+        self.state.mem.write(&addr, result.clone())?;
+
+        // The instructions returns a struct of { expected type, condition i1 }.
+        let return_value = condition.concat(&result);
+        self.assign(instr, return_value)
     }
 
+    /// Atomically modify memory.
+    ///
+    /// The contents of the address is atomically read, modified and written back. The original
+    /// value is assigned to the resulting register.
     fn atomicrmw(&mut self, instr: &instruction::AtomicRMW) -> Result<()> {
         debug!("{}", instr);
-        todo!()
+        let addr = self.state.get_var(&instr.address)?;
+        let rhs = self.state.get_var(&instr.value)?;
+
+        let lhs = self.state.mem.read(&addr, rhs.len())?;
+
+        use instruction::RMWBinOp::*;
+        let result = match instr.operation {
+            Xchg => rhs,
+            Add => lhs.add(&rhs),
+            Sub => lhs.sub(&rhs),
+            And => lhs.and(&rhs),
+            Nand => lhs.and(&rhs).not(),
+            Or => lhs.or(&rhs),
+            Xor => lhs.xor(&rhs),
+            Max => lhs.sgte(&rhs).ite(&lhs, &rhs),
+            Min => lhs.slte(&rhs).ite(&lhs, &rhs),
+            UMax => lhs.ugte(&rhs).ite(&lhs, &rhs),
+            UMin => lhs.ulte(&rhs).ite(&lhs, &rhs),
+            FAdd => todo!(),
+            FSub => todo!(),
+        };
+        self.state.mem.write(&addr, result)?;
+
+        self.assign(instr, lhs)
     }
 
     /// GetElementPtr calculates the offset into an array or struct from a base pointer.
