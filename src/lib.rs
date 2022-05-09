@@ -167,9 +167,3 @@ pub fn assume(condition: bool) {
 pub fn symbolic<T>(value: &mut T) {
     // Implemented as hook `hooks::symbolic`.
 }
-
-#[inline(never)]
-#[allow(unused_variables)]
-pub fn solve<T>(value: &mut T) {
-    // Implemented as hook `hooks::solve`.
-}
