@@ -45,6 +45,7 @@ impl fmt::Display for ConcreteValue {
                     write!(f, "}}")
                 }
             },
+            Unknown(bits) => write!(f, "Unknown: {bits}"),
         }
     }
 }

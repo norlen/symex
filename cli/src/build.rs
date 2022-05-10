@@ -19,6 +19,9 @@ pub struct Settings {
 
     /// Build in release.
     pub release: bool,
+
+    /// If bitcode should be embedded.
+    pub embed_bitcode: bool,
 }
 
 impl Settings {
@@ -104,6 +107,10 @@ pub fn generate_build_command(opts: &Settings) -> Command {
     let mut cargo = Command::new("cargo");
     cargo.args(&["rustc", "--verbose", "--color=never"]);
 
+    if opts.embed_bitcode {
+        cargo.env("RUSTFLAGS", "-C embed-bitcode=yes");
+    }
+
     match &opts.features {
         Features::None => {}
         Features::Some(features) => {
@@ -132,14 +139,12 @@ pub fn generate_build_command(opts: &Settings) -> Command {
         "-C",
         "link-dead-code=yes",
         "-C",
-        "linker=true",
-        "-C",
-        "lto",
-        "-C",
-        "embed-bitcode=yes",
-        "-C",
         "panic=abort",
     ]);
+
+    if opts.embed_bitcode {
+        cargo.args(&["-C", "linker=true", "-C", "lto"]);
+    }
     debug!("Running cargo command: {cargo:?}");
     cargo
 }

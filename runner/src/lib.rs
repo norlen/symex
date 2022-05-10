@@ -106,6 +106,9 @@ pub enum ConcreteValue {
 
     /// Structure with fields.
     Struct(Vec<ConcreteValue>),
+
+    /// Value of unknown type.
+    Unknown(String),
 }
 
 impl ConcreteValue {

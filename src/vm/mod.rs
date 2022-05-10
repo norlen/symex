@@ -114,7 +114,7 @@ impl<'a> VM<'a> {
             let solution_var = SolutionVariable {
                 name: param.name.to_string(),
                 value: bv.clone(),
-                ty: param.ty.clone(),
+                ty: Some(param.ty.clone()),
             };
             self.parameters.push(solution_var);
 

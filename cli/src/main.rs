@@ -111,6 +111,7 @@ fn settings_from_args(opts: &Args) -> Settings {
         target,
         features,
         release: opts.release,
+        embed_bitcode: opts.embed_bitcode.unwrap_or(false),
     }
 }
 

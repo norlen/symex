@@ -138,7 +138,7 @@ pub mod ir {
 #[inline(never)]
 #[allow(unused_variables)]
 pub fn assume(condition: bool) {
-    // Implemented as hook `hooks::assume`.
+    // unsafe { x0001e_assume(condition) }
 }
 
 /// Creates a new symbolic value for `value`. This removes all constraints.
@@ -165,5 +165,18 @@ pub fn assume(condition: bool) {
 #[inline(never)]
 #[allow(unused_variables)]
 pub fn symbolic<T>(value: &mut T) {
+    // unsafe {
+    //     let size = std::mem::size_of_val(value);
+    //     let ptr = std::mem::transmute(value);
+    //     x0001e_symbolic(ptr, size);
+    // }
+}
+
+// These are implemented as hooks.
+extern "C" {
+    // Implemented as hook `hooks::assume`.
+    fn x0001e_assume(condition: bool);
+
     // Implemented as hook `hooks::symbolic`.
+    fn x0001e_symbolic(ptr: *mut std::ffi::c_void, size: usize);
 }

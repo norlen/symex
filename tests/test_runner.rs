@@ -11,13 +11,22 @@ use x0001e::{
 #[derive(Debug, Clone, PartialEq)]
 pub enum ConcreteValue {
     /// Integer value of size.
-    Value { value: u64, bits: u32 },
+    Value {
+        value: u64,
+        bits: u32,
+    },
 
     /// Array or vector of values
-    Array { elements: Vec<ConcreteValue> },
+    Array {
+        elements: Vec<ConcreteValue>,
+    },
 
     /// Structure with fields.
-    Struct { fields: Vec<ConcreteValue> },
+    Struct {
+        fields: Vec<ConcreteValue>,
+    },
+
+    Unknown(String),
 }
 
 impl ConcreteValue {
@@ -101,6 +110,7 @@ impl ConcreteValue {
             ConcreteValue::Value { value, .. } => *value,
             ConcreteValue::Array { .. } => panic!("Expected u64, got {self:?}"),
             ConcreteValue::Struct { .. } => panic!("Expected u64, got {self:?}"),
+            ConcreteValue::Unknown(_) => panic!("Expected u64, got {self:?}"),
         }
     }
 }
@@ -115,7 +125,10 @@ fn generate_solutions<'a>(
 
     for symbol in symbols {
         let value = cache.get_solution(&symbol.value)?;
-        let value = ConcreteValue::from_binary_str(value.as_01x_str(), symbol.ty.as_ref(), project);
+        let value = match &symbol.ty {
+            Some(ty) => ConcreteValue::from_binary_str(value.as_01x_str(), ty.as_ref(), project),
+            None => ConcreteValue::Unknown(value.as_01x_str().to_owned()),
+        };
         values.push(value);
     }
 

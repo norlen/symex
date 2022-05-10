@@ -11,7 +11,7 @@ use std::collections::HashMap;
 use crate::{
     common::SolutionVariable,
     vm::{Result, ReturnValue, VM},
-    VMError,
+    Solutions, VMError,
 };
 
 mod intrinsics;
@@ -68,9 +68,10 @@ impl Hooks {
             intrinsics: Intrinsics::new_with_defaults(),
         };
 
-        hooks.add("assume", c_assume);
         hooks.add("x0001e::assume", assume);
         hooks.add("x0001e::symbolic", symbolic);
+        hooks.add("assume", assume);
+        hooks.add("symbolic", symbolic_no_type);
 
         hooks
     }
@@ -89,28 +90,19 @@ impl Hooks {
     }
 }
 
-pub fn c_assume(vm: &mut VM<'_>, info: FnInfo) -> Result<ReturnValue> {
-    trace!("assume info: {:?}", info);
-
-    let (condition, _) = info.arguments.get(0).unwrap();
-    let condition = vm.state.get_var(condition)?;
-    let zero = vm.solver.bv_zero(condition.len());
-
-    vm.state.solver.assert(&condition.ne(&zero));
-
-    if vm.solver.is_sat()? {
-        Ok(ReturnValue::Void)
-    } else {
-        Err(VMError::Unsat)
-    }
-}
-
 pub fn assume(vm: &mut VM<'_>, info: FnInfo) -> Result<ReturnValue> {
     trace!("assume info: {:?}", info);
 
     let (condition, _) = info.arguments.get(0).unwrap();
     let condition = vm.state.get_var(condition)?;
-    vm.state.solver.assert(&condition);
+
+    match condition.len() {
+        1 => vm.state.solver.assert(&condition),
+        _ => {
+            let zero = vm.solver.bv_zero(condition.len());
+            vm.state.solver.assert(&condition.ne(&zero))
+        }
+    }
 
     if vm.solver.is_sat()? {
         Ok(ReturnValue::Void)
@@ -119,20 +111,52 @@ pub fn assume(vm: &mut VM<'_>, info: FnInfo) -> Result<ReturnValue> {
     }
 }
 
+pub fn symbolic_no_type(vm: &mut VM<'_>, info: FnInfo) -> Result<ReturnValue> {
+    trace!("symbolic fninfo: {:?}", info);
+
+    let addr = &info.arguments[0].0;
+    let size = &info.arguments[1].0;
+
+    let ty = vm.state.type_of(addr);
+    if !matches!(ty.as_ref(), Type::PointerType { .. }) {
+        panic!("Expected pointer type");
+    }
+
+    let size = vm.state.get_var(size)?;
+    let size = match vm.solver.get_solutions_for_bv(&size, 1)? {
+        Solutions::None => Err(VMError::Unsat),
+        Solutions::Exactly(s) => Ok(s[0].as_u64().unwrap()),
+        Solutions::AtLeast(_) => panic!("Found multiple solutions for size"),
+    }?;
+
+    let name = addr.to_string();
+    let value = vm.solver.bv(size as u32, &name);
+
+    let addr = vm.state.get_var(addr)?;
+    vm.state.mem.write(&addr, value.clone())?;
+
+    let solution_var = SolutionVariable {
+        name,
+        value,
+        ty: None,
+    };
+    vm.state.symbols.push(solution_var);
+
+    Ok(ReturnValue::Void)
+}
+
 pub fn symbolic(vm: &mut VM<'_>, info: FnInfo) -> Result<ReturnValue> {
     trace!("symbolic fninfo: {:?}", info);
 
-    let (op, _) = info.arguments.get(0).unwrap();
-    let ty = vm.state.type_of(op);
+    let addr = &info.arguments[0].0;
 
+    let ty = vm.state.type_of(addr);
     if let Type::PointerType {
         pointee_type: inner_ty,
         ..
     } = ty.as_ref()
     {
-        let size = vm.project.bit_size(inner_ty.as_ref())?;
-
-        let var_name: String = match op {
+        let name: String = match addr {
             Operand::LocalOperand { name, .. } => match name {
                 Name::Name(name) => String::from(name.as_str()),
                 Name::Number(_) => name.to_string(),
@@ -140,17 +164,17 @@ pub fn symbolic(vm: &mut VM<'_>, info: FnInfo) -> Result<ReturnValue> {
             Operand::ConstantOperand(_) => todo!(),
             Operand::MetadataOperand => todo!(),
         };
-        let new_symbol = vm.solver.bv(size, &var_name);
 
-        // vm.state.symbols.push((var_name, new_symbol.clone()));
+        let size = vm.project.bit_size(inner_ty.as_ref())?;
+        let new_symbol = vm.solver.bv(size, &name);
         let solution_var = SolutionVariable {
-            name: var_name,
+            name,
             value: new_symbol.clone(),
-            ty: inner_ty.clone(),
+            ty: Some(inner_ty.clone()),
         };
         vm.state.symbols.push(solution_var);
 
-        let addr = vm.state.get_var(op)?;
+        let addr = vm.state.get_var(addr)?;
         vm.state.mem.write(&addr, new_symbol)?;
 
         Ok(ReturnValue::Void)

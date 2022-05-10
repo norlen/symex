@@ -18,7 +18,10 @@ fn generate_solutions<'a>(
     for symbol in symbols {
         let name = Some(symbol.name.clone());
         let value = cache.get_solution(&symbol.value)?;
-        let value = ConcreteValue::from_binary_str(value.as_01x_str(), symbol.ty.as_ref(), project);
+        let value = match &symbol.ty {
+            Some(ty) => ConcreteValue::from_binary_str(value.as_01x_str(), ty.as_ref(), project),
+            None => ConcreteValue::Unknown(value.as_01x_str().to_owned()),
+        };
 
         let variable = Variable { name, value };
         variables.push(variable);

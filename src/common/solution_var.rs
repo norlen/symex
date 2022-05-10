@@ -8,5 +8,5 @@ pub struct SolutionVariable {
 
     pub value: BV,
 
-    pub ty: TypeRef,
+    pub ty: Option<TypeRef>,
 }

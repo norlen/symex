@@ -34,6 +34,9 @@ pub struct Args {
 
     #[clap(subcommand)]
     pub subcommand: Option<Subcommands>,
+
+    #[clap(short, long)]
+    pub embed_bitcode: Option<bool>,
 }
 
 #[derive(Parser, Debug)]

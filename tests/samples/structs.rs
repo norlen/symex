@@ -9,7 +9,6 @@ struct MyStruct {
 }
 
 fn bar(s: MyStruct) -> u64 {
-    println!("{s:?}");
     if s.a == 5 {
         s.b as u64
     } else {
