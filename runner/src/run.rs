@@ -18,6 +18,7 @@ fn generate_solutions<'a>(
     for symbol in symbols {
         let name = Some(symbol.name.clone());
         let value = cache.get_solution(&symbol.value)?;
+        println!("RAW {}", value.as_01x_str().to_owned());
         let value = match &symbol.ty {
             Some(ty) => ConcreteValue::from_binary_str(value.as_01x_str(), ty.as_ref(), project),
             None => ConcreteValue::Unknown(value.as_01x_str().to_owned()),
