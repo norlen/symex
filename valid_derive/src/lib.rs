@@ -1,11 +1,8 @@
 extern crate proc_macro;
 
 use proc_macro::TokenStream;
-use quote::{quote, quote_spanned};
-use syn::{
-    parse_macro_input, parse_quote, Data, DataEnum, DeriveInput, Fields, GenericParam, Generics,
-    Index,
-};
+use quote::quote;
+use syn::{parse_macro_input, Data, DeriveInput, Fields};
 
 #[proc_macro_derive(Validate)]
 pub fn validate_macro_derive(input: TokenStream) -> TokenStream {
