@@ -1,6 +1,7 @@
 extern crate proc_macro;
 
 use proc_macro::TokenStream;
+<<<<<<< HEAD
 use quote::quote;
 use syn::{parse_macro_input, Data, DeriveInput, Fields};
 
@@ -57,4 +58,13 @@ pub fn validate_macro_derive(input: TokenStream) -> TokenStream {
         }
     );
     proc_macro::TokenStream::from(expanded)
+=======
+use syn::
+
+#[proc_macro_derive(Validate)]
+pub fn hello_macro_derive(input: TokenStream) -> TokenStream {
+    // Construct a representation of Rust code as a syntax tree
+    // that we can manipulate
+    input
+>>>>>>> 2085f9c (validate_derive, wip)
 }
