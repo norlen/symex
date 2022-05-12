@@ -1,6 +1,5 @@
 use valid_derive::*;
 
-<<<<<<< HEAD
 trait Valid {
     fn is_valid(&self) -> bool;
 }
@@ -53,12 +52,6 @@ impl IsValid for Enum2 {
             false
         }
     }
-=======
-#[derive(Validate)]
-enum Enum {
-    A,
-    B,
->>>>>>> 2085f9c (validate_derive, wip)
 }
 
 fn main() {}
