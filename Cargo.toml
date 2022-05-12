@@ -19,6 +19,5 @@ rand = "0.8.4"
 [workspace]
 members = ["cli", "runner", "valid_derive", "x0001e_lib"]
 
-
 # [profile.release]
 # debug = true
