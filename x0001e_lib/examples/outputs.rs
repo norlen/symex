@@ -1,6 +1,6 @@
 //! Run example with `cargo run -p cli -- --example outputs --function foobar`
 #![allow(dead_code)]
-use x0001e::symbolic;
+use x0001e_lib::symbolic;
 
 struct MyStruct {
     a: i32,

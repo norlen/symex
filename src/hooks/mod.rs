@@ -130,10 +130,11 @@ pub fn symbolic_no_type(vm: &mut VM<'_>, info: FnInfo) -> Result<ReturnValue> {
     }?;
 
     let name = addr.to_string();
+    let name = format!("{}-{}", name, rand::random::<u32>());
     let value = vm.solver.bv(size as u32, &name);
 
     let addr = vm.state.get_var(addr)?;
-    vm.state.mem.write(&addr, value.clone())?;
+    vm.state.mem.borrow_mut().write(&addr, value.clone())?;
 
     let solution_var = SolutionVariable {
         name,
@@ -164,6 +165,8 @@ pub fn symbolic(vm: &mut VM<'_>, info: FnInfo) -> Result<ReturnValue> {
             Operand::ConstantOperand(_) => todo!(),
             Operand::MetadataOperand => todo!(),
         };
+        let name = format!("{}-{}", name, rand::random::<u32>());
+        //println!("Symbolic {name}");
 
         let size = vm.project.bit_size(inner_ty.as_ref())?;
         let new_symbol = vm.solver.bv(size, &name);
@@ -175,7 +178,7 @@ pub fn symbolic(vm: &mut VM<'_>, info: FnInfo) -> Result<ReturnValue> {
         vm.state.symbols.push(solution_var);
 
         let addr = vm.state.get_var(addr)?;
-        vm.state.mem.write(&addr, new_symbol)?;
+        vm.state.mem.borrow_mut().write(&addr, new_symbol)?;
 
         Ok(ReturnValue::Void)
     } else {

@@ -20,7 +20,7 @@ use crate::solver::{Array, Solver, SolverError, BV};
 
 /// Feature flag that enables checking when reading that the first byte read matches the last byte
 /// read's allocation id.
-pub const CHECK_OUT_OF_BOUNDS: bool = true;
+pub const CHECK_OUT_OF_BOUNDS: bool = false;
 
 /// Error representing an issue when performing memory operations.
 #[derive(Debug, Error, PartialEq, Eq)]
@@ -132,7 +132,7 @@ impl Memory {
             store,
             allocations,
             ptr_size,
-            null_detection: true,
+            null_detection: false,
             nullptr,
             next_allocation_id: 0,
         }
@@ -166,12 +166,14 @@ impl Memory {
             self.next_allocation_id
         );
 
-        let alloc_id = self.solver.bv_from_u64(self.next_allocation_id as u64, 8);
-        for i in 0..bytes {
-            let addr = self.solver.bv_from_u64(addr + i, self.ptr_size);
-            self.allocations = self.allocations.write(&addr, &alloc_id);
+        if CHECK_OUT_OF_BOUNDS {
+            let alloc_id = self.solver.bv_from_u64(self.next_allocation_id as u64, 8);
+            for i in 0..bytes {
+                let addr = self.solver.bv_from_u64(addr + i, self.ptr_size);
+                self.allocations = self.allocations.write(&addr, &alloc_id);
+            }
+            self.next_allocation_id += 1;
         }
-        self.next_allocation_id += 1;
 
         Ok(addr)
     }

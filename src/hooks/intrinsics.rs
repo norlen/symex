@@ -205,8 +205,8 @@ pub fn llvm_memcpy(vm: &mut VM<'_>, f: FnInfo) -> Result<ReturnValue> {
     let size = get_u64_solution_from_operand(&vm.state, size)?;
     let size = size as u32 * BITS_IN_BYTE;
 
-    let value = vm.state.mem.read(&src, size)?;
-    vm.state.mem.write(&dst, value)?;
+    let value = vm.state.mem.borrow_mut().read(&src, size)?;
+    vm.state.mem.borrow_mut().write(&dst, value)?;
 
     Ok(ReturnValue::Void)
 }
@@ -234,7 +234,7 @@ pub fn llvm_memset(vm: &mut VM<'_>, f: FnInfo) -> Result<ReturnValue> {
         let offset = vm.solver.bv_from_u64(byte, vm.project.ptr_size);
         let addr = dst.add(&offset);
 
-        vm.state.mem.write(&addr, value.clone())?;
+        vm.state.mem.borrow_mut().write(&addr, value.clone())?;
     }
 
     Ok(ReturnValue::Void)

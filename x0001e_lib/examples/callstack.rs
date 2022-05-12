@@ -1,5 +1,5 @@
 //! Run example with `cargo run -p cli -- --example callstack --function foobar`
-use x0001e::{assume, symbolic};
+use x0001e_lib::{assume, symbolic};
 
 fn bar(x: i64, y: i64) -> i64 {
     // Assume these are not too big, otherwise it catches overflow as well (at least in debug)

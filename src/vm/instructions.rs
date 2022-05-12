@@ -633,7 +633,7 @@ impl<'a> VM<'a> {
 
         let target_ty = self.state.type_of(instr);
         let target_size = self.project.bit_size(&target_ty)?;
-        let value = self.state.mem.read(&addr, target_size)?;
+        let value = self.state.mem.borrow_mut().read(&addr, target_size)?;
         self.assign(instr, value)
     }
 
@@ -645,7 +645,7 @@ impl<'a> VM<'a> {
 
         let value = self.state.get_var(&instr.value)?;
         let addr = self.state.get_var(&instr.address)?;
-        self.state.mem.write(&addr, value)?;
+        self.state.mem.borrow_mut().write(&addr, value)?;
         Ok(())
     }
 
@@ -662,14 +662,14 @@ impl<'a> VM<'a> {
         let expected = self.state.get_var(&instr.expected)?;
         let replacement = self.state.get_var(&instr.replacement)?;
 
-        let current = self.state.mem.read(&addr, expected.len())?;
+        let current = self.state.mem.borrow_mut().read(&addr, expected.len())?;
 
         // Replace if the current value at the address it equal to the expected value.
         let condition = current.eq(&expected);
         let result = condition.ite(&replacement, &current);
 
         // Write the result to memory.
-        self.state.mem.write(&addr, result.clone())?;
+        self.state.mem.borrow_mut().write(&addr, result.clone())?;
 
         // The instructions returns a struct of { expected type, condition i1 }.
         let return_value = condition.concat(&result);
@@ -685,7 +685,7 @@ impl<'a> VM<'a> {
         let addr = self.state.get_var(&instr.address)?;
         let rhs = self.state.get_var(&instr.value)?;
 
-        let lhs = self.state.mem.read(&addr, rhs.len())?;
+        let lhs = self.state.mem.borrow_mut().read(&addr, rhs.len())?;
 
         use instruction::RMWBinOp::*;
         let result = match instr.operation {
@@ -703,7 +703,7 @@ impl<'a> VM<'a> {
             FAdd => todo!(),
             FSub => todo!(),
         };
-        self.state.mem.write(&addr, result)?;
+        self.state.mem.borrow_mut().write(&addr, result)?;
 
         self.assign(instr, lhs)
     }
