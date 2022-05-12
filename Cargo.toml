@@ -17,7 +17,7 @@ radix_trie = "0.2.1"
 rand = "0.8.4"
 
 [workspace]
-members = ["cli", "runner", "x0001e_lib"]
+members = ["cli", "runner", "valid_derive", "x0001e_lib"]
 
 # [profile.release]
 # debug = true
