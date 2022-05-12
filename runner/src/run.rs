@@ -52,6 +52,8 @@ pub fn run_project(project: &Project, function: &str) -> Result<()> {
 
         let inputs = generate_solutions(vm.parameters.iter(), &mut cache, project)?;
         let symbolics = generate_solutions(vm.state.symbols.iter(), &mut cache, project)?;
+        // let inputs = vec![];
+        // let symbolics = vec![];
 
         let result = match path_result {
             Ok(return_value) => {
@@ -128,6 +130,7 @@ pub fn run_project(project: &Project, function: &str) -> Result<()> {
 
         println!("{}", path_result);
     }
+    println!("Paths: {path_num}");
 
     Ok(())
 }

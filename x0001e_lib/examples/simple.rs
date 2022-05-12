@@ -1,5 +1,5 @@
 //! Run example with `cargo run -p cli -- --example simple --function rust_simple_test`
-use x0001e::{assume, symbolic};
+use x0001e_lib::{assume, symbolic};
 
 fn rust_simple_test(mut t: u32) -> u32 {
     assume(t > 0);

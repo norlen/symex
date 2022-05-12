@@ -82,8 +82,8 @@ fn rust_realloc(vm: &mut VM<'_>, info: FnInfo) -> Result<ReturnValue> {
     let new_addr = vm.state.allocate(size_in_bits, align)?;
     let new_addr = vm.solver.bv_from_u64(new_addr, vm.project.ptr_size);
 
-    let old_data = vm.state.mem.read(&addr, size as u32)?;
-    vm.state.mem.write(&new_addr, old_data)?;
+    let old_data = vm.state.mem.borrow_mut().read(&addr, size as u32)?;
+    vm.state.mem.borrow_mut().write(&new_addr, old_data)?;
 
     Ok(ReturnValue::Value(new_addr))
 }
@@ -103,7 +103,7 @@ fn rust_alloc_zeroed(vm: &mut VM<'_>, info: FnInfo) -> Result<ReturnValue> {
     let addr = vm.solver.bv_from_u64(addr, vm.project.ptr_size);
 
     let zeroes = vm.solver.bv_zero(size_in_bits as u32);
-    vm.state.mem.write(&addr, zeroes)?;
+    vm.state.mem.borrow_mut().write(&addr, zeroes)?;
 
     Ok(ReturnValue::Value(addr))
 }

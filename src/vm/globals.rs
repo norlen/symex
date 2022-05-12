@@ -3,7 +3,7 @@
 //! Keeps track of both external and internal global references ([Function]s and [GlobalVariable]s).
 use llvm_ir::{module::GlobalVariable, Function, Name, Type};
 use log::{debug, trace};
-use std::collections::HashMap;
+use std::{cell::Cell, collections::HashMap};
 
 use crate::{
     memory::Memory,
@@ -27,7 +27,10 @@ pub struct GlobalReference<'p> {
 #[derive(Debug, Clone)]
 pub enum GlobalReferenceKind<'p> {
     /// Holds the referenced [GlobalVariable].
-    GlobalVariable(&'p GlobalVariable),
+    GlobalVariable {
+        var: &'p GlobalVariable,
+        initialized: Cell<bool>,
+    },
 
     /// Holds the referenced [Function].
     Function(&'p Function),
@@ -135,7 +138,10 @@ impl<'p> GlobalReferences<'p> {
                 );
                 Ok(GlobalReference {
                     addr,
-                    kind: GlobalReferenceKind::GlobalVariable(var),
+                    kind: GlobalReferenceKind::GlobalVariable {
+                        var,
+                        initialized: Cell::new(false),
+                    },
                 })
             };
 

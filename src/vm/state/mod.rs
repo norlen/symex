@@ -1,3 +1,5 @@
+use std::cell::RefCell;
+
 use llvm_ir::{
     instruction::{self, HasResult},
     terminator,
@@ -6,7 +8,7 @@ use llvm_ir::{
 };
 use log::warn;
 
-use super::{GlobalReference, GlobalReferenceKind, GlobalReferences, Result};
+use super::{GlobalReference, GlobalReferences, Result};
 use crate::{
     common::{const_to_symbol, operand_to_symbol, Op, SolutionVariable},
     memory::Memory,
@@ -114,7 +116,7 @@ pub struct State<'a> {
     pub vars: VarMap,
 
     /// Global memory.
-    pub mem: Memory,
+    pub mem: RefCell<Memory>,
 
     /// Lookup for all the variables that have been explicitly marked as `symbolic`.
     pub symbols: Vec<SolutionVariable>,
@@ -135,18 +137,18 @@ impl<'a> State<'a> {
         let mut memory = Memory::new(solver.clone(), project.ptr_size);
         let global_references = GlobalReferences::from_project(project, &mut memory).unwrap();
 
-        let mut state = Self {
+        let state = Self {
             project,
             current_loc: Location::new(module, function),
             vars: VarMap::new(10),
-            mem: memory,
+            mem: RefCell::new(memory),
             solver,
             callstack: Vec::new(),
             symbols: Vec::new(),
             global_references,
         };
 
-        state.initialize_global_references().unwrap();
+        // state.initialize_global_references().unwrap();
         state
     }
 
@@ -168,7 +170,7 @@ impl<'a> State<'a> {
             align
         };
 
-        let addr = self.mem.allocate(allocation_size, align)?;
+        let addr = self.mem.borrow_mut().allocate(allocation_size, align)?;
         Ok(addr)
     }
 
@@ -181,7 +183,7 @@ impl<'a> State<'a> {
             align
         };
 
-        let addr = self.mem.allocate(allocation_size, align)?;
+        let addr = self.mem.borrow_mut().allocate(allocation_size, align)?;
         let bv = self.solver.bv_from_u64(addr, self.project.ptr_size as u32);
         Ok(bv)
     }
@@ -218,30 +220,30 @@ impl<'a> State<'a> {
         self.project.type_of(t, self.current_loc.module)
     }
 
-    fn initialize_global_references(&mut self) -> Result<()> {
-        let public_globals = self.global_references.global_references.values();
-        let private_globals = self
-            .global_references
-            .private_global_references
-            .values()
-            .flat_map(|m| m.values());
+    // fn initialize_global_references(&mut self) -> Result<()> {
+    //     let public_globals = self.global_references.global_references.values();
+    //     let private_globals = self
+    //         .global_references
+    //         .private_global_references
+    //         .values()
+    //         .flat_map(|m| m.values());
 
-        for global in public_globals.chain(private_globals) {
-            if let GlobalReferenceKind::GlobalVariable(var) = global.kind {
-                if let Some(initializer) = &var.initializer {
-                    match self.get_var(initializer) {
-                        Ok(value) => {
-                            let addr = self.solver.bv_from_u64(global.addr, self.project.ptr_size);
-                            self.mem.write(&addr, value)?;
-                        }
-                        Err(err) => {
-                            warn!("Error initializing global: {:?}", err);
-                        }
-                    }
-                }
-            }
-        }
+    //     for global in public_globals.chain(private_globals) {
+    //         if let GlobalReferenceKind::GlobalVariable(var) = global.kind {
+    //             if let Some(initializer) = &var.initializer {
+    //                 match self.get_var(initializer) {
+    //                     Ok(value) => {
+    //                         let addr = self.solver.bv_from_u64(global.addr, self.project.ptr_size);
+    //                         self.mem.borrow_mut().write(&addr, value)?;
+    //                     }
+    //                     Err(err) => {
+    //                         warn!("Error initializing global: {:?}", err);
+    //                     }
+    //                 }
+    //             }
+    //         }
+    //     }
 
-        Ok(())
-    }
+    //     Ok(())
+    // }
 }

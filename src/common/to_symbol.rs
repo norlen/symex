@@ -3,11 +3,12 @@
 //!
 use anyhow::anyhow;
 use llvm_ir::{Constant, ConstantRef, IntPredicate, Operand, Type};
+use log::warn;
 
 use super::{convert_to_map, gep, ToValue};
 use crate::{
     solver::BV,
-    vm::{Result, State, VMError},
+    vm::{GlobalReferenceKind, Result, State, VMError},
 };
 
 /// Convert an operand to a symbol.
@@ -122,6 +123,25 @@ pub fn const_to_symbol_zero_size(state: &State<'_>, constant: &Constant) -> Resu
                 .get(name, state.current_loc.module)
                 .cloned()
                 .ok_or_else(|| VMError::Other(anyhow!("Global ref not found: {:?}", name)))?;
+
+            if let GlobalReferenceKind::GlobalVariable { var, initialized } = &global.kind {
+                if !initialized.get() {
+                    if let Some(initializer) = &var.initializer {
+                        match const_to_symbol(state, initializer) {
+                            Ok(value) => {
+                                let addr = state
+                                    .solver
+                                    .bv_from_u64(global.addr, state.project.ptr_size);
+                                state.mem.borrow_mut().write(&addr, value)?;
+                            }
+                            Err(err) => {
+                                warn!("Error initializing global: {:?}", err);
+                            }
+                        }
+                    }
+                    initialized.set(true);
+                }
+            }
 
             let addr = state
                 .solver
