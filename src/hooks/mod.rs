@@ -68,8 +68,8 @@ impl Hooks {
             intrinsics: Intrinsics::new_with_defaults(),
         };
 
-        hooks.add("x0001e::assume", assume);
-        hooks.add("x0001e::symbolic", symbolic);
+        hooks.add("x0001e_lib::assume", assume);
+        hooks.add("x0001e_lib::symbolic", symbolic);
         hooks.add("assume", assume);
         hooks.add("symbolic", symbolic_no_type);
 
