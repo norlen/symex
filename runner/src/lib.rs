@@ -96,7 +96,7 @@ pub enum ConcreteValue {
     /// Note that values are always treated as unsigned integers.
     Value {
         /// The integer value.
-        value: u64,
+        value: u128,
         /// Size in bits of the integer value.
         bits: u32,
     },
@@ -117,15 +117,16 @@ impl ConcreteValue {
     /// Requires the LLVM type to generate fields for structs, and iterate of arrays and vectors.
     fn from_binary_str(binary_str: &str, ty: &Type, project: &Project) -> Self {
         use Type::*;
+        let n = binary_str.len();
 
         match ty {
             IntegerType { bits } => Self::Value {
-                value: u64::from_str_radix(binary_str, 2).unwrap(),
+                value: u128::from_str_radix(binary_str, 2).unwrap(),
                 bits: *bits,
             },
 
             PointerType { .. } => Self::Value {
-                value: u64::from_str_radix(binary_str, 2).unwrap(),
+                value: u128::from_str_radix(binary_str, 2).unwrap(),
                 bits: project.ptr_size,
             },
 
@@ -142,9 +143,9 @@ impl ConcreteValue {
 
                 let mut elements = Vec::new();
                 for i in 0..*num_elements {
-                    let start = i * el_size;
-                    let end = (i + 1) * el_size;
-                    let s = &binary_str[start..end];
+                    let high = n - i * el_size;
+                    let low = n - (i + 1) * el_size;
+                    let s = &binary_str[low..high];
                     let element = Self::from_binary_str(s, element_type, project);
                     elements.push(element);
                 }
@@ -157,11 +158,12 @@ impl ConcreteValue {
                 let mut current_offset = 0;
                 for el_ty in element_types {
                     let size = project.bit_size(el_ty).unwrap() as usize;
-                    let end = current_offset + size;
-                    let s = &binary_str[current_offset..end];
+                    let low = n - (current_offset + size);
+                    let high = n - current_offset;
+                    let s = &binary_str[low..high];
 
                     fields.push(Self::from_binary_str(s, el_ty, project));
-                    current_offset = end;
+                    current_offset += size;
                 }
 
                 Self::Struct(fields)
