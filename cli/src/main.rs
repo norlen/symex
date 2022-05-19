@@ -63,9 +63,12 @@ fn run_rs(args: Args) -> Result<()> {
         let cargo_output = String::from_utf8(cargo_out.stderr)?;
         return Err(anyhow!(cargo_output));
     }
+    let output = String::from_utf8(cargo_out.stderr)?;
+    if !output.is_empty() {
+        eprintln!("{output}");
+    }
 
     // Create path to .bc file.
-    let output = String::from_utf8(cargo_out.stderr)?;
     let extra_filename = get_extra_filename(&output)?;
 
     let target_dir = opts.get_target_dir()?;

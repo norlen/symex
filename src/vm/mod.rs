@@ -370,7 +370,11 @@ impl<'a> VM<'a> {
         // If the operand is a constant global reference to a named function, then just return that
         // directly.
         if let Operand::ConstantOperand(operand) = operand {
-            if let Constant::GlobalReference { name, .. } = operand.as_ref() {
+            if let Constant::GlobalReference {
+                name: Name::Name(name),
+                ..
+            } = operand.as_ref()
+            {
                 return Ok(vec![name.to_string()]);
             }
         }
