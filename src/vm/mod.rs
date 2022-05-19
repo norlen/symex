@@ -284,7 +284,12 @@ impl<'a> VM<'a> {
             }
 
             // Resume execution.
-            Some(self.resume_execution())
+            let result = self.resume_execution();
+            if let Err(VMError::UnsatContinue) = result {
+                self.backtrack_and_resume_execution()
+            } else {
+                Some(result)
+            }
         } else {
             None
         }

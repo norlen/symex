@@ -107,7 +107,7 @@ pub fn assume(vm: &mut VM<'_>, info: FnInfo) -> Result<ReturnValue> {
     if vm.solver.is_sat()? {
         Ok(ReturnValue::Void)
     } else {
-        Err(VMError::Unsat)
+        Err(VMError::UnsatContinue)
     }
 }
 
