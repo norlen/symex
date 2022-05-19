@@ -69,7 +69,7 @@
 //!
 //! [1]: https://llvm.org/docs/LangRef.html#intrinsic-functions
 use llvm_ir::Type;
-use log::trace;
+use log::{trace, warn};
 use radix_trie::Trie;
 use std::collections::HashMap;
 
@@ -205,8 +205,13 @@ pub fn llvm_memcpy(vm: &mut VM<'_>, f: FnInfo) -> Result<ReturnValue> {
     let size = get_u64_solution_from_operand(&vm.state, size)?;
     let size = size as u32 * BITS_IN_BYTE;
 
-    let value = vm.state.mem.borrow_mut().read(&src, size)?;
-    vm.state.mem.borrow_mut().write(&dst, value)?;
+    // TODO: Seems like size can be zero for zero-sized types.
+    if size != 0 {
+        let value = vm.state.mem.borrow_mut().read(&src, size)?;
+        vm.state.mem.borrow_mut().write(&dst, value)?;
+    } else {
+        warn!("memcpy with size 0");
+    }
 
     Ok(ReturnValue::Void)
 }
