@@ -48,6 +48,9 @@ pub struct VM<'a> {
 
     /// Parameters passed to the initial entry function.
     pub parameters: Vec<SolutionVariable>,
+
+    /// Maximum number of solutions to generate when checking symbolic function pointers.
+    max_solutions_symbolic_function_addresses: usize,
 }
 
 impl<'a> Clone for VM<'a> {
@@ -58,6 +61,8 @@ impl<'a> Clone for VM<'a> {
             backtracking_paths: self.backtracking_paths.clone(),
             solver: self.solver.duplicate(),
             parameters: self.parameters.clone(),
+            max_solutions_symbolic_function_addresses: self
+                .max_solutions_symbolic_function_addresses,
         }
     }
 }
@@ -88,6 +93,7 @@ impl<'a> VM<'a> {
             backtracking_paths: Vec::new(),
             solver,
             parameters: Vec::new(),
+            max_solutions_symbolic_function_addresses: 5,
         };
 
         // Setup before the execution of a function can start.
@@ -313,7 +319,6 @@ impl<'a> VM<'a> {
             Call::Call(call) => Callsite::from_call(new_location, call),
             Call::Invoke(invoke) => Callsite::from_invoke(new_location, invoke),
         };
-        // let callsite = Callsite::from_invoke(new_location, instr);
         self.state.callstack.push(callsite);
 
         // Create a new variable scope for the function we're about to call.
@@ -356,37 +361,51 @@ impl<'a> VM<'a> {
     pub fn resolve_function(
         &mut self,
         function: &Either<InlineAssembly, Operand>,
-    ) -> Result<String> {
-        match function {
-            Either::Left(_) => todo!(),
-            Either::Right(operand) => match operand {
-                Operand::ConstantOperand(constant) => match constant.as_ref() {
-                    Constant::GlobalReference {
-                        name: Name::Name(name),
-                        ..
-                    } => Ok(name.to_string()),
-                    _ => todo!(),
-                },
-                Operand::LocalOperand { .. } => {
-                    let addr = self.state.get_var(operand)?;
-                    let solutions = self.solver.get_solutions_for_bv(&addr, 1).unwrap();
-                    //dbg!(&solutions);
-                    match solutions {
-                        Solutions::None => todo!(),
-                        Solutions::Exactly(v) => {
-                            let addr = v[0].as_u64().unwrap();
-                            let f = self
-                                .state
-                                .global_references
-                                .get_function_from_address(addr, self.state.current_loc.module)
-                                .unwrap();
-                            Ok(f.to_string())
-                        }
-                        Solutions::AtLeast(_) => todo!(),
-                    }
-                }
-                Operand::MetadataOperand => todo!(),
-            },
+    ) -> Result<Vec<String>> {
+        let operand = match function {
+            Either::Left(_) => panic!("Inline assembly not supported yet"),
+            Either::Right(operand) => operand,
+        };
+
+        // If the operand is a constant global reference to a named function, then just return that
+        // directly.
+        if let Operand::ConstantOperand(operand) = operand {
+            if let Constant::GlobalReference { name, .. } = operand.as_ref() {
+                return Ok(vec![name.to_string()]);
+            }
         }
+
+        let addr = match operand {
+            Operand::LocalOperand { .. } => self.state.get_var(operand)?,
+            Operand::ConstantOperand(_) => self.state.get_var(operand)?,
+            Operand::MetadataOperand => return Err(VMError::MalformedInstruction),
+        };
+
+        let solutions = self
+            .solver
+            .get_solutions_for_bv(&addr, self.max_solutions_symbolic_function_addresses)?;
+        let addresses = match solutions {
+            Solutions::None => panic!("No solution for function pointer"),
+            // This may be a bug, in that the pointer is unconstrained.
+            Solutions::AtLeast(_) => panic!("Too many solutions for function pointer"),
+            Solutions::Exactly(s) => s,
+        };
+
+        let mut function_names = Vec::new();
+        for addr in addresses {
+            // Should always fit, only 32-bit and 64-bit should be supported.
+            let addr = addr.as_u64().unwrap();
+
+            let name = self
+                .state
+                .global_references
+                .get_function_from_address(addr, self.state.current_loc.module)
+                .ok_or_else(|| {
+                    VMError::FunctionNotFound(format!("Function with address: {addr:x}"))
+                })?;
+
+            function_names.push(name.to_owned());
+        }
+        Ok(function_names)
     }
 }

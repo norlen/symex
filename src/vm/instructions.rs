@@ -230,8 +230,12 @@ impl<'a> VM<'a> {
         // instead jump to the exception label.
 
         let current_module = self.state.current_loc.module;
-        let name = self.resolve_function(&instr.function)?;
-        debug!("resolved function: {}", name);
+        let function_names = self.resolve_function(&instr.function)?;
+        debug!("resolved functions: {:?}", &function_names);
+        if function_names.len() > 1 {
+            panic!("Multiple symblic function pointers not supported yet");
+        }
+        let name = function_names.first().unwrap();
         let function = self.project.get_function(&name, current_module)?;
 
         let return_value = match function {
@@ -1003,8 +1007,12 @@ impl<'a> VM<'a> {
         debug!("{}", instr);
 
         let current_module = self.state.current_loc.module;
-        let name = self.resolve_function(&instr.function)?;
-        debug!("resolved function: {}", name);
+        let function_names = self.resolve_function(&instr.function)?;
+        debug!("resolved functions: {:?}", function_names);
+        if function_names.len() > 1 {
+            panic!("Multiple symblic function pointers not supported yet");
+        }
+        let name = function_names.first().unwrap();
         let function = self.project.get_function(&name, current_module)?;
 
         let return_value = match function {
