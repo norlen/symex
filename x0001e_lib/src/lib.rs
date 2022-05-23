@@ -17,9 +17,8 @@
 /// }
 /// ```
 #[inline(never)]
-#[allow(unused_variables)]
 pub fn assume(condition: bool) {
-    // unsafe { x0001e_assume(condition) }
+    unsafe { x0001e_assume(condition as u8) }
 }
 
 /// Creates a new symbolic value for `value`. This removes all constraints.
@@ -44,22 +43,25 @@ pub fn assume(condition: bool) {
 /// }
 /// ```
 #[inline(never)]
-#[allow(unused_variables)]
 pub fn symbolic<T>(value: &mut T) {
-    // unsafe {
-    //     let size = std::mem::size_of_val(value);
-    //     let ptr = std::mem::transmute(value);
-    //     x0001e_symbolic(ptr, size);
-    // }
+    unsafe {
+        let size = std::mem::size_of_val(value);
+        let ptr = std::mem::transmute(value);
+        x0001e_symbolic(ptr, size as u64);
+    }
 }
 
 // These are implemented as hooks.
 extern "C" {
     #![allow(dead_code)]
-    
-    // Implemented as hook `hooks::assume`.
-    fn x0001e_assume(condition: bool);
 
-    // Implemented as hook `hooks::symbolic`.
-    fn x0001e_symbolic(ptr: *mut std::ffi::c_void, size: usize);
+    fn x0001e_assume(condition: u8);
+
+    fn x0001e_symbolic(ptr: *mut std::ffi::c_void, size: u64);
+
+    // // Implemented as hook `hooks::assume`.
+    // fn x0001e_assume(condition: bool);
+
+    // // Implemented as hook `hooks::symbolic`.
+    // fn x0001e_symbolic(ptr: *mut std::ffi::c_void, size: usize);
 }

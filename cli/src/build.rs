@@ -105,7 +105,7 @@ pub enum Features {
 
 pub fn generate_build_command(opts: &Settings) -> Command {
     let mut cargo = Command::new("cargo");
-    cargo.args(&["rustc", "--verbose", "--color=never"]);
+    cargo.args(&["rustc", "--verbose", "--color=always"]);
 
     if opts.embed_bitcode {
         cargo.env("RUSTFLAGS", "-C embed-bitcode=yes");
@@ -140,6 +140,8 @@ pub fn generate_build_command(opts: &Settings) -> Command {
         "link-dead-code=yes",
         "-C",
         "panic=abort",
+        "-C",
+        "codegen-units=1",
     ]);
 
     if opts.embed_bitcode {

@@ -22,7 +22,7 @@
 //!
 //! Code to analyze the function can be written as
 //!
-//! ```rust
+//! ```ignore
 //! use x0001e::{Project, ReturnValue, VM};
 //!
 //! fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -93,26 +93,65 @@
 //! matches the name the VM first check if a hook is available for the function call. Each hook has
 //! full access to the [VM] so they can re-implement most of the functionality.
 //!
-#![warn(rust_2018_idioms, rust_2021_compatibility)]
+// #![warn(rust_2018_idioms, rust_2021_compatibility)]
 //#![warn(missing_docs)]
 
-pub mod common;
-pub mod custom_modules;
-pub mod hooks;
-pub mod memory;
-pub mod project;
-pub mod solver;
-pub mod vm;
+mod executor;
+mod memory;
+mod smt;
+mod util;
 
-pub use solver::{Solutions, Solver, BV};
+use std::path::Path;
 
-pub use crate::{
-    project::Project,
-    vm::{Result, ReturnValue, VMError, VM},
-};
+pub use executor::llvm::{project::Project, LLVMExecutor};
+pub use executor::vm::VM;
+pub use executor::{Executor, ExecutorError};
+pub use memory::MemoryError;
 
-pub mod ir {
-    ///! Re-exports of `llvm-ir` types.
-    pub use llvm_ir::types::NamedStructDef;
-    pub use llvm_ir::*;
+use self::executor::vm::ReturnValue;
+use self::smt::DContext;
+pub use executor::*;
+pub use util::*;
+
+pub fn run(path: impl AsRef<Path>, function: &str) -> Result<Vec<ReturnValue>, ExecutorError> {
+    let context = Box::new(DContext::new());
+    let context = Box::leak(context);
+
+    let project = Box::new(Project::from_path(path).unwrap());
+    let project = Box::leak(project);
+
+    let mut vm = VM::new(project, context, function).unwrap();
+
+    let mut results = Vec::new();
+    while let Some(r) = vm.run() {
+        println!("result: {r:?}");
+        results.push(r.unwrap());
+    }
+
+    Ok(results)
 }
+
+// // pub use solver::{Solutions, Solver, BV};
+// // pub use solver::*;
+// pub use solver_z3::{Solutions, SolverError};
+// type Solver = solver_z3::Solver<'static>;
+// type BV = solver_z3::BV<'static>;
+
+// pub use crate::{
+//     project::Project,
+//     vm::{Result, ReturnValue, VMError, VM},
+// };
+
+// pub mod ir {
+//     ///! Re-exports of `llvm-ir` types.
+//     pub use llvm_ir::types::NamedStructDef;
+//     pub use llvm_ir::*;
+// }
+
+// pub fn create_ctx() -> &'static z3::Context {
+//     let mut cfg = z3::Config::new();
+//     cfg.set_model_generation(true);
+//     let context = Box::new(z3::Context::new(&cfg));
+//     let context = Box::leak(context);
+//     context
+// }

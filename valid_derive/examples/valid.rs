@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use valid_derive::*;
 
 trait Valid {

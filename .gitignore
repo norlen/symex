@@ -15,3 +15,5 @@ Cargo.lock
 
 # Keep hand written .ll files for unit tests.
 !tests/unit_tests/*.ll
+
+/old
