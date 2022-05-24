@@ -68,54 +68,16 @@
 //! - [x] `llvm.assume`
 //!
 //! [1]: https://llvm.org/docs/LangRef.html#intrinsic-functions
-use llvm_ir::{
-    function::{FunctionAttribute, ParameterAttribute},
-    instruction::Call,
-    terminator::Invoke,
-    Operand, Type,
-};
+use llvm_ir::{Operand, Type};
 use radix_trie::Trie;
 use std::collections::HashMap;
 use tracing::{trace, warn};
 
 use crate::{
-    executor::llvm::{common::binop, LLVMExecutor, Result},
-    smt::{DExpr, Solver, SolverContext},
+    executor::llvm::{common::binop, LLVMExecutor, LLVMExecutorError, Result, ReturnValue},
+    memory::{Memory, BITS_IN_BYTE},
+    smt::{DExpr, Expression, Solver, SolverContext},
 };
-use crate::{
-    executor::llvm::{LLVMExecutorError, ReturnValue},
-    memory::Memory,
-};
-use crate::{memory::BITS_IN_BYTE, smt::Expression};
-
-use super::LLVMState;
-
-pub type Argument = (Operand, Vec<ParameterAttribute>);
-
-#[derive(Debug)]
-pub struct FnInfo {
-    pub arguments: Vec<Argument>,
-    pub return_attrs: Vec<ParameterAttribute>,
-    pub fn_attrs: Vec<FunctionAttribute>,
-}
-
-impl FnInfo {
-    pub fn from_call(call: &Call) -> Self {
-        Self {
-            arguments: call.arguments.clone(),
-            return_attrs: call.return_attributes.clone(),
-            fn_attrs: call.function_attributes.clone(),
-        }
-    }
-
-    pub fn from_invoke(invoke: &Invoke) -> Self {
-        Self {
-            arguments: invoke.arguments.clone(),
-            return_attrs: invoke.return_attributes.clone(),
-            fn_attrs: invoke.function_attributes.clone(),
-        }
-    }
-}
 
 /// Check if the given name is an LLVM intrinsic.
 ///
@@ -124,7 +86,7 @@ pub(super) fn is_intrinsic(name: &str) -> bool {
     name.starts_with("llvm.")
 }
 
-pub type Intrinsic = fn(&mut LLVMExecutor<'_>, FnInfo) -> Result<ReturnValue>;
+pub type Intrinsic = fn(&mut LLVMExecutor<'_>, &[&Operand]) -> Result<ReturnValue>;
 
 /// Intrinsic hook storage.
 ///
@@ -144,10 +106,6 @@ pub(super) struct Intrinsics {
     /// Note that the field does not care what the suffix is, it only finds the closest ancestor
     /// (if any).
     variable: Trie<String, Intrinsic>,
-}
-
-fn get_u64_solution_from_operand(state: &LLVMState, size: &Operand) -> u64 {
-    todo!()
 }
 
 impl Intrinsics {
@@ -212,7 +170,7 @@ impl Intrinsics {
     }
 }
 
-pub fn noop(_vm: &mut LLVMExecutor<'_>, _f: FnInfo) -> Result<ReturnValue> {
+pub fn noop(_vm: &mut LLVMExecutor<'_>, _args: &[&Operand]) -> Result<ReturnValue> {
     Ok(ReturnValue::Void)
 }
 
@@ -221,7 +179,7 @@ pub fn noop(_vm: &mut LLVMExecutor<'_>, _f: FnInfo) -> Result<ReturnValue> {
 // -------------------------------------------------------------------------------------------------
 
 /// Copy a block of memory from the source to the destination.
-pub fn llvm_memcpy(vm: &mut LLVMExecutor<'_>, f: FnInfo) -> Result<ReturnValue> {
+pub fn llvm_memcpy(vm: &mut LLVMExecutor<'_>, args: &[&Operand]) -> Result<ReturnValue> {
     // Arguments:
     // 1. Pointer to destination.
     // 2. Pointer to source.
@@ -235,18 +193,14 @@ pub fn llvm_memcpy(vm: &mut LLVMExecutor<'_>, f: FnInfo) -> Result<ReturnValue> 
     //
     // TODO: What is a `well-defined` value?
     // TODO: Check the isvolatile and the details of volatile operations.
-    assert_eq!(f.arguments.len(), 4);
+    assert_eq!(args.len(), 4);
     trace!("llvm_memcpy");
 
-    let (dst, _) = &f.arguments[0];
-    let (src, _) = &f.arguments[1];
-    let (size, _) = &f.arguments[2];
-
-    let dst = vm.state.get_expr(dst)?;
-    let src = vm.state.get_expr(src)?;
+    let dst = vm.state.get_expr(args[0])?;
+    let src = vm.state.get_expr(args[1])?;
 
     // let size = get_u64_solution_from_operand(&vm.state, size)?;
-    let size = vm.state.get_expr(size)?.get_constant().unwrap();
+    let size = vm.state.get_expr(args[2])?.get_constant().unwrap();
     let size = size as u32 * BITS_IN_BYTE;
 
     // TODO: Seems like size can be zero for zero-sized types.
@@ -260,25 +214,21 @@ pub fn llvm_memcpy(vm: &mut LLVMExecutor<'_>, f: FnInfo) -> Result<ReturnValue> 
     Ok(ReturnValue::Void)
 }
 
-pub fn llvm_memset(vm: &mut LLVMExecutor<'_>, f: FnInfo) -> Result<ReturnValue> {
+pub fn llvm_memset(vm: &mut LLVMExecutor<'_>, args: &[&Operand]) -> Result<ReturnValue> {
     // Arguments:
     // 1. Pointer to address to fill.
     // 2. Byte to to fill with.
     // 3. Number of bytes to fill.
     // 4. Indicates volatile access.
-    assert_eq!(f.arguments.len(), 4);
+    assert_eq!(args.len(), 4);
     trace!("llvm_memset");
 
-    let (dst, _) = &f.arguments[0];
-    let (value, _) = &f.arguments[1];
-    let (size, _) = &f.arguments[2];
-
-    let dst = vm.state.get_expr(dst)?;
-    let value = vm.state.get_expr(value)?;
+    let dst = vm.state.get_expr(args[0])?;
+    let value = vm.state.get_expr(args[1])?;
     assert_eq!(value.len(), BITS_IN_BYTE);
 
     // let size = get_u64_solution_from_operand(&vm.state, size)?;
-    let size = vm.state.get_expr(size)?.get_constant().unwrap();
+    let size = vm.state.get_expr(args[2])?.get_constant().unwrap();
 
     for byte in 0..size {
         let offset = vm.state.ctx.from_u64(byte, vm.project.ptr_size);
@@ -290,10 +240,10 @@ pub fn llvm_memset(vm: &mut LLVMExecutor<'_>, f: FnInfo) -> Result<ReturnValue> 
     Ok(ReturnValue::Void)
 }
 
-pub fn llvm_umax(vm: &mut LLVMExecutor<'_>, f: FnInfo) -> Result<ReturnValue> {
-    assert_eq!(f.arguments.len(), 2);
-    let lhs = &f.arguments[0].0;
-    let rhs = &f.arguments[1].0;
+pub fn llvm_umax(vm: &mut LLVMExecutor<'_>, args: &[&Operand]) -> Result<ReturnValue> {
+    assert_eq!(args.len(), 2);
+    let lhs = &args[0];
+    let rhs = &args[1];
 
     let result = binop(&vm.state, lhs, rhs, |lhs, rhs| {
         let condition = lhs.ugt(rhs);
@@ -320,13 +270,13 @@ enum BinaryOpOverflow {
 /// Binary operations that indicate whether an overflow occurred or not.
 fn binary_op_overflow(
     vm: &mut LLVMExecutor<'_>,
-    f: FnInfo,
+    args: &[&Operand],
     op: BinaryOpOverflow,
 ) -> Result<ReturnValue> {
-    assert_eq!(f.arguments.len(), 2);
+    assert_eq!(args.len(), 2);
 
-    let (lhs, _) = f.arguments.get(0).unwrap();
-    let (rhs, _) = f.arguments.get(1).unwrap();
+    let lhs = args[0];
+    let rhs = args[1];
 
     let lhs_ty = vm.state.type_of(lhs);
     let rhs_ty = vm.state.type_of(rhs);
@@ -417,38 +367,56 @@ fn binary_op_overflow(
 
 /// Signed addition on any bit width, performs a signed addition and indicates whether an overflow
 /// occurred.
-pub fn llvm_sadd_with_overflow(vm: &mut LLVMExecutor<'_>, f: FnInfo) -> Result<ReturnValue> {
-    binary_op_overflow(vm, f, BinaryOpOverflow::SAdd)
+pub fn llvm_sadd_with_overflow(
+    vm: &mut LLVMExecutor<'_>,
+    args: &[&Operand],
+) -> Result<ReturnValue> {
+    binary_op_overflow(vm, args, BinaryOpOverflow::SAdd)
 }
 
 /// Unsigned addition on any bit width, performs an unsigned addition and indicates whether an
 /// overflow occurred.
-pub fn llvm_uadd_with_overflow(vm: &mut LLVMExecutor<'_>, f: FnInfo) -> Result<ReturnValue> {
-    binary_op_overflow(vm, f, BinaryOpOverflow::UAdd)
+pub fn llvm_uadd_with_overflow(
+    vm: &mut LLVMExecutor<'_>,
+    args: &[&Operand],
+) -> Result<ReturnValue> {
+    binary_op_overflow(vm, args, BinaryOpOverflow::UAdd)
 }
 
 /// Signed subtraction on any bit width, performs a signed subtraction and indicates whether an
 /// overflow occurred.
-pub fn llvm_ssub_with_overflow(vm: &mut LLVMExecutor<'_>, f: FnInfo) -> Result<ReturnValue> {
-    binary_op_overflow(vm, f, BinaryOpOverflow::SSub)
+pub fn llvm_ssub_with_overflow(
+    vm: &mut LLVMExecutor<'_>,
+    args: &[&Operand],
+) -> Result<ReturnValue> {
+    binary_op_overflow(vm, args, BinaryOpOverflow::SSub)
 }
 
 /// Unsigned subtraction on any bit width, performs an unsigned subtraction and indicates whether an
 /// overflow occurred.
-pub fn llvm_usub_with_overflow(vm: &mut LLVMExecutor<'_>, f: FnInfo) -> Result<ReturnValue> {
-    binary_op_overflow(vm, f, BinaryOpOverflow::USub)
+pub fn llvm_usub_with_overflow(
+    vm: &mut LLVMExecutor<'_>,
+    args: &[&Operand],
+) -> Result<ReturnValue> {
+    binary_op_overflow(vm, args, BinaryOpOverflow::USub)
 }
 
 /// Signed multiplication on any bit width, performs a signed multiplication and indicates whether
 /// an overflow occurred.
-pub fn llvm_smul_with_overflow(vm: &mut LLVMExecutor<'_>, f: FnInfo) -> Result<ReturnValue> {
-    binary_op_overflow(vm, f, BinaryOpOverflow::SMul)
+pub fn llvm_smul_with_overflow(
+    vm: &mut LLVMExecutor<'_>,
+    args: &[&Operand],
+) -> Result<ReturnValue> {
+    binary_op_overflow(vm, args, BinaryOpOverflow::SMul)
 }
 
 /// Unsigned multiplication on any bit width, performs an unsigned multiplication and indicates
 /// whether an overflow occurred.
-pub fn llvm_umul_with_overflow(vm: &mut LLVMExecutor<'_>, f: FnInfo) -> Result<ReturnValue> {
-    binary_op_overflow(vm, f, BinaryOpOverflow::UMul)
+pub fn llvm_umul_with_overflow(
+    vm: &mut LLVMExecutor<'_>,
+    args: &[&Operand],
+) -> Result<ReturnValue> {
+    binary_op_overflow(vm, args, BinaryOpOverflow::UMul)
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -462,13 +430,13 @@ enum BinaryOpSaturate {
 
 fn binary_op_saturate(
     vm: &mut LLVMExecutor<'_>,
-    f: FnInfo,
+    args: &[&Operand],
     op: BinaryOpSaturate,
 ) -> Result<ReturnValue> {
-    assert_eq!(f.arguments.len(), 2);
+    assert_eq!(args.len(), 2);
 
-    let (lhs, _) = f.arguments.get(0).unwrap();
-    let (rhs, _) = f.arguments.get(1).unwrap();
+    let lhs = &args[0];
+    let rhs = &args[1];
 
     let result = binop(&vm.state, lhs, rhs, |lhs, rhs| match op {
         BinaryOpSaturate::UAdd => lhs.uadds(&rhs),
@@ -478,201 +446,193 @@ fn binary_op_saturate(
     Ok(ReturnValue::Value(result))
 }
 
-pub fn llvm_uadd_sat(vm: &mut LLVMExecutor<'_>, f: FnInfo) -> Result<ReturnValue> {
-    binary_op_saturate(vm, f, BinaryOpSaturate::UAdd)
+pub fn llvm_uadd_sat(vm: &mut LLVMExecutor<'_>, args: &[&Operand]) -> Result<ReturnValue> {
+    binary_op_saturate(vm, args, BinaryOpSaturate::UAdd)
 }
-pub fn llvm_sadd_sat(vm: &mut LLVMExecutor<'_>, f: FnInfo) -> Result<ReturnValue> {
-    binary_op_saturate(vm, f, BinaryOpSaturate::SAdd)
+pub fn llvm_sadd_sat(vm: &mut LLVMExecutor<'_>, args: &[&Operand]) -> Result<ReturnValue> {
+    binary_op_saturate(vm, args, BinaryOpSaturate::SAdd)
 }
 
 // -------------------------------------------------------------------------------------------------
 // General intrinsics
 // -------------------------------------------------------------------------------------------------
 
-pub fn llvm_expect(vm: &mut LLVMExecutor<'_>, f: FnInfo) -> Result<ReturnValue> {
-    assert_eq!(f.arguments.len(), 2);
-    let (a0, _) = f.arguments.get(0).unwrap();
-    let val = vm.state.get_expr(a0).unwrap();
-
+pub fn llvm_expect(vm: &mut LLVMExecutor<'_>, args: &[&Operand]) -> Result<ReturnValue> {
+    assert_eq!(args.len(), 2);
+    let val = vm.state.get_expr(args[0])?;
     Ok(ReturnValue::Value(val))
 }
 
-pub fn llvm_assume(vm: &mut LLVMExecutor<'_>, info: FnInfo) -> Result<ReturnValue> {
-    assert_eq!(info.arguments.len(), 1);
+pub fn llvm_assume(vm: &mut LLVMExecutor<'_>, args: &[&Operand]) -> Result<ReturnValue> {
+    assert_eq!(args.len(), 1);
 
-    let (condition, _) = &info.arguments[0];
-    let condition = vm.state.get_expr(condition)?;
+    let condition = vm.state.get_expr(args[0])?;
     vm.state.constraints.assert(&condition);
 
     Ok(ReturnValue::Void)
 }
 
-// #[cfg(test)]
-// mod tests {
-//     use crate::{LLVMExecutorError, Project, ReturnValue, Solutions, VM};
+#[cfg(test)]
+mod tests {
+    use crate::{smt::DContext, ExecutorError, Project, ReturnValue, VM};
 
-//     fn run(fn_name: &str) -> Vec<Result<Option<i64>, LLVMExecutorError>> {
-//         let path = format!("./tests/unit_tests/intrinsics.bc");
-//         let project = Project::from_path(&path).expect("Failed to created proejct");
-//         let cfg = z3::Config::new();
-//         let context = Box::new(z3::Context::new(&cfg));
-//         let context = Box::leak(context);
+    fn run(fn_name: &str) -> Vec<Result<Option<i64>, ExecutorError>> {
+        let path = format!("./tests/unit_tests/intrinsics.bc");
+        let project = Box::new(Project::from_path(&path).expect("Failed to created project"));
+        let project = Box::leak(project);
 
-//         let mut vm = VM::new(fn_name, &project, context).expect("Failed to create VM");
+        let context = Box::new(DContext::new());
+        let context = Box::leak(context);
+        let mut vm = VM::new(project, context, fn_name).expect("Failed to create VM");
 
-//         let mut path_results = Vec::new();
-//         while let Some(path_result) = vm.run() {
-//             let path_result = match path_result {
-//                 Ok(value) => match value {
-//                     ReturnValue::Value(value) => {
-//                         let sol = vm.solver.get_solutions_for_bv(&value, 1).unwrap();
-//                         match sol {
-//                             Solutions::None => panic!("No solutions"),
-//                             Solutions::Exactly(s) => Ok(Some(s[0].as_u64().unwrap() as i64)),
-//                             Solutions::AtLeast(_) => panic!("More than one solution"),
-//                         }
-//                     }
-//                     ReturnValue::Void => Ok(None),
-//                 },
-//                 Err(e) => Err(e),
-//             };
-//             path_results.push(path_result);
-//         }
+        let mut path_results = Vec::new();
+        while let Some(path_result) = vm.run() {
+            let path_result = match path_result {
+                Ok(value) => match value {
+                    ReturnValue::Value(Some(value)) => {
+                        Ok(Some(u128::from_str_radix(&value.raw, 2).unwrap() as i64))
+                    }
+                    _ => Ok(None),
+                },
+                Err(e) => Err(e),
+            };
+            path_results.push(path_result);
+        }
 
-//         println!("{path_results:x?}");
-//         path_results
-//     }
+        println!("{path_results:x?}");
+        path_results
+    }
 
-//     #[test]
-//     fn test_memcpy() {
-//         let res = run("test_memcpy");
-//         assert_eq!(res.len(), 1);
-//         assert_eq!(res[0], Ok(Some(0x6543fe671234abcd)));
-//     }
+    #[test]
+    fn test_memcpy() {
+        let res = run("test_memcpy");
+        assert_eq!(res.len(), 1);
+        assert_eq!(res[0], Ok(Some(0x6543fe671234abcd)));
+    }
 
-//     #[test]
-//     fn test_memset() {
-//         let res = run("test_memset");
-//         assert_eq!(res.len(), 1);
-//         assert_eq!(res[0], Ok(Some(-6076574517859464245i64))); // 0xababababcbcbcbcb
-//     }
+    #[test]
+    fn test_memset() {
+        let res = run("test_memset");
+        assert_eq!(res.len(), 1);
+        assert_eq!(res[0], Ok(Some(-6076574517859464245i64))); // 0xababababcbcbcbcb
+    }
 
-//     #[test]
-//     fn test_umax() {
-//         let res = run("test_umax");
-//         assert_eq!(res.len(), 1);
-//         assert_eq!(res[0], Ok(Some(0xbcef)));
-//     }
+    #[test]
+    fn test_umax() {
+        let res = run("test_umax");
+        assert_eq!(res.len(), 1);
+        assert_eq!(res[0], Ok(Some(0xbcef)));
+    }
 
-//     #[test]
-//     fn test_umax_vec() {
-//         let res = run("test_umax_vec");
-//         assert_eq!(res.len(), 1);
-//         assert_eq!(res[0], Ok(Some(0x000043210000bcef)));
-//     }
+    #[test]
+    fn test_umax_vec() {
+        let res = run("test_umax_vec");
+        assert_eq!(res.len(), 1);
+        assert_eq!(res[0], Ok(Some(0x000043210000bcef)));
+    }
 
-//     #[test]
-//     fn test_sadd_sat0() {
-//         let res = run("test_sadd_sat0");
-//         assert_eq!(res.len(), 1);
-//         assert_eq!(res[0], Ok(Some(3)));
-//     }
+    #[test]
+    fn test_sadd_sat0() {
+        let res = run("test_sadd_sat0");
+        assert_eq!(res.len(), 1);
+        assert_eq!(res[0], Ok(Some(3)));
+    }
 
-//     #[test]
-//     fn test_sadd_sat1() {
-//         let res = run("test_sadd_sat1");
-//         assert_eq!(res.len(), 1);
-//         assert_eq!(res[0], Ok(Some(7)));
-//     }
+    #[test]
+    fn test_sadd_sat1() {
+        let res = run("test_sadd_sat1");
+        assert_eq!(res.len(), 1);
+        assert_eq!(res[0], Ok(Some(7)));
+    }
 
-//     #[test]
-//     fn test_sadd_sat2() {
-//         let res = run("test_sadd_sat2");
-//         assert_eq!(res.len(), 1);
-//         assert_eq!(res[0], Ok(Some(-2)));
-//     }
+    #[test]
+    fn test_sadd_sat2() {
+        let res = run("test_sadd_sat2");
+        assert_eq!(res.len(), 1);
+        assert_eq!(res[0], Ok(Some(-2)));
+    }
 
-//     #[test]
-//     fn test_sadd_sat3() {
-//         let res = run("test_sadd_sat3");
-//         assert_eq!(res.len(), 1);
-//         assert_eq!(res[0], Ok(Some(-8)));
-//     }
+    #[test]
+    fn test_sadd_sat3() {
+        let res = run("test_sadd_sat3");
+        assert_eq!(res.len(), 1);
+        assert_eq!(res[0], Ok(Some(-8)));
+    }
 
-//     #[test]
-//     fn test_uadd_sat0() {
-//         let res = run("test_uadd_sat0");
-//         assert_eq!(res.len(), 1);
-//         assert_eq!(res[0], Ok(Some(3)));
-//     }
+    #[test]
+    fn test_uadd_sat0() {
+        let res = run("test_uadd_sat0");
+        assert_eq!(res.len(), 1);
+        assert_eq!(res[0], Ok(Some(3)));
+    }
 
-//     #[test]
-//     fn test_uadd_sat1() {
-//         let res = run("test_uadd_sat1");
-//         assert_eq!(res.len(), 1);
-//         assert_eq!(res[0], Ok(Some(11)));
-//     }
+    #[test]
+    fn test_uadd_sat1() {
+        let res = run("test_uadd_sat1");
+        assert_eq!(res.len(), 1);
+        assert_eq!(res[0], Ok(Some(11)));
+    }
 
-//     #[test]
-//     fn test_uadd_sat2() {
-//         let res = run("test_uadd_sat2");
-//         assert_eq!(res.len(), 1);
-//         assert_eq!(res[0], Ok(Some(15)));
-//     }
+    #[test]
+    fn test_uadd_sat2() {
+        let res = run("test_uadd_sat2");
+        assert_eq!(res.len(), 1);
+        assert_eq!(res[0], Ok(Some(15)));
+    }
 
-//     #[test]
-//     fn test_uadd_sat_vec() {
-//         let res = run("test_uadd_sat_vec");
-//         assert_eq!(res.len(), 1);
-//         assert_eq!(res[0], Ok(Some(0xfb3)));
-//     }
+    #[test]
+    fn test_uadd_sat_vec() {
+        let res = run("test_uadd_sat_vec");
+        assert_eq!(res.len(), 1);
+        assert_eq!(res[0], Ok(Some(0xfb3)));
+    }
 
-//     #[test]
-//     fn test_sadd_with_overflow0() {
-//         let res = run("test_sadd_with_overflow0");
-//         assert_eq!(res.len(), 1);
-//         assert_eq!(res[0], Ok(Some(0x0182)));
-//     }
+    #[test]
+    fn test_sadd_with_overflow0() {
+        let res = run("test_sadd_with_overflow0");
+        assert_eq!(res.len(), 1);
+        assert_eq!(res[0], Ok(Some(0x0182)));
+    }
 
-//     #[test]
-//     fn test_sadd_with_overflow1() {
-//         let res = run("test_sadd_with_overflow1");
-//         assert_eq!(res.len(), 1);
-//         assert_eq!(res[0], Ok(Some(0x6e)));
-//     }
+    #[test]
+    fn test_sadd_with_overflow1() {
+        let res = run("test_sadd_with_overflow1");
+        assert_eq!(res.len(), 1);
+        assert_eq!(res[0], Ok(Some(0x6e)));
+    }
 
-//     #[test]
-//     fn test_sadd_with_overflow_vec() {
-//         let res = run("test_sadd_with_overflow_vec");
-//         assert_eq!(res.len(), 1);
-//         assert_eq!(res[0], Ok(Some(0x5b07e6e82)));
-//     }
+    #[test]
+    fn test_sadd_with_overflow_vec() {
+        let res = run("test_sadd_with_overflow_vec");
+        assert_eq!(res.len(), 1);
+        assert_eq!(res[0], Ok(Some(0x5b07e6e82)));
+    }
 
-//     #[test]
-//     fn test_uadd_with_overflow0() {
-//         let res = run("test_uadd_with_overflow0");
-//         assert_eq!(res.len(), 1);
-//         assert_eq!(res[0], Ok(Some(0x0104)));
-//     }
+    #[test]
+    fn test_uadd_with_overflow0() {
+        let res = run("test_uadd_with_overflow0");
+        assert_eq!(res.len(), 1);
+        assert_eq!(res[0], Ok(Some(0x0104)));
+    }
 
-//     #[test]
-//     fn test_uadd_with_overflow1() {
-//         let res = run("test_uadd_with_overflow1");
-//         assert_eq!(res.len(), 1);
-//         assert_eq!(res[0], Ok(Some(0x00fa)));
-//     }
+    #[test]
+    fn test_uadd_with_overflow1() {
+        let res = run("test_uadd_with_overflow1");
+        assert_eq!(res.len(), 1);
+        assert_eq!(res[0], Ok(Some(0x00fa)));
+    }
 
-//     #[test]
-//     fn test_expect() {
-//         let res = run("test_expect");
-//         assert_eq!(res.len(), 1);
-//         assert_eq!(res[0], Ok(Some(100)));
-//     }
+    #[test]
+    fn test_expect() {
+        let res = run("test_expect");
+        assert_eq!(res.len(), 1);
+        assert_eq!(res[0], Ok(Some(100)));
+    }
 
-//     #[test]
-//     fn test_assume() {
-//         let res = run("test_assume");
-//         assert_eq!(res.len(), 1);
-//         assert_eq!(res[0], Ok(Some(5)));
-//     }
-// }
+    #[test]
+    fn test_assume() {
+        let res = run("test_assume");
+        assert_eq!(res.len(), 1);
+        assert_eq!(res[0], Ok(Some(5)));
+    }
+}

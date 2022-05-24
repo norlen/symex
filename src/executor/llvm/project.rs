@@ -13,8 +13,15 @@ use crate::{
 };
 use crate::{executor::llvm::Result, smt::DExpr};
 
-use super::intrinsics::{is_intrinsic, Intrinsic, Intrinsics};
-use super::LLVMExecutorError;
+use super::{
+    custom_modules::{CustomModule, RustModule},
+    hooks::Hook,
+    LLVMExecutorError,
+};
+use super::{
+    hooks::Hooks,
+    intrinsics::{is_intrinsic, Intrinsic, Intrinsics},
+};
 
 /// Handle that references a [Module].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -37,9 +44,11 @@ pub enum FunctionType<'p> {
         function: &'p Function,
         module: ModuleHandle,
     },
+
     Intrinsic(Intrinsic),
-    // /// User defined [Hook].
-    // Hook(Hook),
+
+    /// User defined [Hook].
+    Hook(Hook),
 }
 
 /// Collection of multiple [Module]s.
@@ -65,11 +74,14 @@ pub struct Project {
 
     /// Global variables that are private to this module.
     private_global_variables: HashMap<ModuleHandle, HashMap<Name, GlobalVariableHandle>>,
-    // /// Public functions from user-defined modules.
-    // custom_module_functions: HashMap<&'static str, Hook>,
 
-    // /// User defined hooks.
-    // hooks: Hooks,
+    /// Public functions from user-defined modules.
+    custom_module_functions: HashMap<&'static str, Hook>,
+
+    /// User defined hooks.
+    hooks: Hooks,
+
+    /// LLVM Instrinsics.
     intrinsics: Intrinsics,
 }
 
@@ -226,7 +238,7 @@ impl Project {
             }
         }
 
-        let project = Project {
+        let mut project = Project {
             modules,
             ptr_size,
             default_alignment: 1,
@@ -235,32 +247,32 @@ impl Project {
             private_functions,
             private_global_variables,
             intrinsics: Intrinsics::new_with_defaults(),
-            // custom_module_functions: HashMap::new(),
-            // hooks: Hooks::new(),
+            custom_module_functions: HashMap::new(),
+            hooks: Hooks::new(),
         };
-        // project.add_custom_module(RustModule {});
+        project.add_custom_module(RustModule {});
 
         Ok(project)
     }
 
-    // /// Add a [CustomModule] to the project.
-    // ///
-    // /// This adds all functions exposed in the module as public functions available in the VM.
-    // ///
-    // /// These functions have priority over functions defined in the IR, but not over hooks.
-    // /// Functions from other modules can override each other.
-    // pub fn add_custom_module(&mut self, custom_module: impl CustomModule) {
-    //     for (name, function) in custom_module.get_all_functions() {
-    //         let old_fn = self.custom_module_functions.insert(name, *function);
+    /// Add a [CustomModule] to the project.
+    ///
+    /// This adds all functions exposed in the module as public functions available in the VM.
+    ///
+    /// These functions have priority over functions defined in the IR, but not over hooks.
+    /// Functions from other modules can override each other.
+    pub fn add_custom_module(&mut self, custom_module: impl CustomModule) {
+        for (name, function) in custom_module.get_all_functions() {
+            let old_fn = self.custom_module_functions.insert(name, *function);
 
-    //         if old_fn.is_some() {
-    //             warn!(
-    //                 "Overriding function {name} defined in module {}",
-    //                 custom_module.get_name()
-    //             );
-    //         }
-    //     }
-    // }
+            if old_fn.is_some() {
+                warn!(
+                    "Overriding function {name} defined in module {}",
+                    custom_module.get_name()
+                );
+            }
+        }
+    }
 
     /// Locate an entry point.
     ///
@@ -339,18 +351,18 @@ impl Project {
         }
 
         // Check for hooks.
-        // for name in [name, &demangled_name, &demangled_name_no_hash] {
-        //     if let Some(hook) = self.hooks.get(name) {
-        //         return Ok(FunctionType::Hook(hook));
-        //     }
-        // }
+        for name in [name, &demangled_name, &demangled_name_no_hash] {
+            if let Some(hook) = self.hooks.get(name) {
+                return Ok(FunctionType::Hook(hook));
+            }
+        }
 
         // Check for custom module functions.
-        // for name in [name, &demangled_name, &demangled_name_no_hash] {
-        //     if let Some(hook) = self.custom_module_functions.get(name) {
-        //         return Ok(FunctionType::Hook(*hook));
-        //     }
-        // }
+        for name in [name, &demangled_name, &demangled_name_no_hash] {
+            if let Some(hook) = self.custom_module_functions.get(name) {
+                return Ok(FunctionType::Hook(*hook));
+            }
+        }
 
         // Check IR functions.
         if let Some((module, function)) = self.find_function(name, module_handle) {

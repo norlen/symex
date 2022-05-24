@@ -5,7 +5,6 @@ use super::{LLVMExecutor, TerminatorResult};
 use crate::executor::llvm::{
     binop, cast_to, convert_to_map, gep, icmp, FunctionType, LLVMExecutorError, Result, ReturnValue,
 };
-use crate::llvm::intrinsics::FnInfo;
 use crate::llvm::{extract_value, get_element_offset};
 use crate::memory::Memory;
 use crate::smt::{DExpr, SolverError};
@@ -256,10 +255,6 @@ impl<'p> LLVMInstruction {
         let function = e.project.get_function(&name, current_module)?;
 
         let return_value = match function {
-            // FunctionType::Hook(hook) => {
-            //     let info = FnInfo::from_invoke(instr);
-            //     hook(self, info)?
-            // }
             FunctionType::Function { function, module } => {
                 let arguments = instr
                     .arguments
@@ -269,9 +264,13 @@ impl<'p> LLVMInstruction {
 
                 e.call_fn(module, function, arguments)?
             }
+            FunctionType::Hook(hook) => {
+                let args: Vec<_> = instr.arguments.iter().map(|(op, _)| op).collect();
+                hook(e, &args)?
+            }
             FunctionType::Intrinsic(intrinsic) => {
-                let info = FnInfo::from_invoke(instr);
-                intrinsic(e, info)?
+                let args: Vec<_> = instr.arguments.iter().map(|(op, _)| op).collect();
+                intrinsic(e, &args)?
             }
         };
 
@@ -998,10 +997,6 @@ impl<'p> LLVMInstruction {
         let function = e.project.get_function(&name, current_module)?;
 
         let return_value = match function {
-            // FunctionType::Hook(hook) => {
-            //     let info = FnInfo::from_call(instr);
-            //     hook(self, info)?
-            // }
             FunctionType::Function { function, module } => {
                 let arguments = instr
                     .arguments
@@ -1011,9 +1006,13 @@ impl<'p> LLVMInstruction {
 
                 e.call_fn(module, function, arguments)?
             }
+            FunctionType::Hook(hook) => {
+                let args: Vec<_> = instr.arguments.iter().map(|(op, _)| op).collect();
+                hook(e, &args)?
+            }
             FunctionType::Intrinsic(intrinsic) => {
-                let fn_info = FnInfo::from_call(instr);
-                intrinsic(e, fn_info)?
+                let args: Vec<_> = instr.arguments.iter().map(|(op, _)| op).collect();
+                intrinsic(e, &args)?
             }
         };
 
@@ -1071,7 +1070,6 @@ mod tests {
             let path_result = match path_result {
                 Ok(value) => match value {
                     ReturnValue::Value(Some(value)) => {
-                        println!("RAW: {}, size: {}", value.raw, value.raw.len());
                         Ok(Some(u128::from_str_radix(&value.raw, 2).unwrap() as i64))
                     }
                     _ => Ok(None),

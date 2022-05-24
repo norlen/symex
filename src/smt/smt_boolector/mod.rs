@@ -1,6 +1,6 @@
 use super::{Expression, Solver, SolverContext, SolverError};
 use boolector::{
-    option::{BtorOption, NumberFormat, RewriteLevel},
+    option::{BtorOption, NumberFormat},
     Btor, BV,
 };
 use std::rc::Rc;

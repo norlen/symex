@@ -59,7 +59,7 @@ pub trait SolverContext<E: Expression> {
         assert!(bits > 1);
         let mut s = String::from("0");
         s.reserve_exact(bits as usize);
-        for _ in 0..bits {
+        for _ in 0..bits - 1 {
             s.push('1');
         }
         self.from_binary_string(&s)
@@ -71,7 +71,7 @@ pub trait SolverContext<E: Expression> {
         assert!(bits > 1);
         let mut s = String::from("1");
         s.reserve_exact(bits as usize);
-        for _ in 0..bits {
+        for _ in 0..bits - 1 {
             s.push('0');
         }
         self.from_binary_string(&s)

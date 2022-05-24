@@ -1,7 +1,9 @@
 pub mod common;
+mod custom_modules;
 mod error;
 pub mod executor;
 pub mod globals;
+mod hooks;
 pub mod instruction;
 pub mod intrinsics;
 pub mod location;

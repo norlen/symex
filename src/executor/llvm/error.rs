@@ -13,6 +13,9 @@ pub type Result<T> = std::result::Result<T, LLVMExecutorError>;
 
 #[derive(Debug, thiserror::Error)]
 pub enum LLVMExecutorError {
+    #[error("Abort {0}")]
+    Abort(i64),
+
     /// Function not found
     #[error("Function not found: {0}")]
     FunctionNotFound(String),

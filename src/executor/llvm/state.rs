@@ -84,7 +84,8 @@ impl LLVMState {
             project,
             global_references,
         };
-        // state.initialize_global_references().unwrap();
+        state.initialize_global_references().unwrap();
+
         state
     }
 

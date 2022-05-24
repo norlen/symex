@@ -61,7 +61,6 @@ where
     // that poses a problem.
     let address = address.into();
     let mut addr = state.get_expr(address).unwrap();
-    let ptr_size = addr.len();
 
     // The offsets modifies the address ptr, and this is the type of what is currently pointed to.
     let mut curr_ty = state.type_of(&address);
@@ -75,7 +74,6 @@ where
             .get_expr(index)?
             .zero_ext(state.project.ptr_size)
             .simplify();
-        println!("index: {index:?}");
 
         let (offset, ty) = state.project.byte_offset(&curr_ty, &index, &state.ctx)?;
 

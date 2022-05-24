@@ -1,7 +1,6 @@
 use crate::executor::llvm::project::Project;
 use crate::executor::vm::Path;
 use crate::executor::vm::VM;
-use crate::executor::Executor;
 use crate::smt::DExpr;
 use crate::smt::Expression;
 use crate::smt::Solutions;
@@ -20,7 +19,6 @@ use llvm_ir::Terminator;
 use llvm_ir::Type;
 use tracing::trace;
 
-use super::intrinsics::Intrinsics;
 use super::InstructionIndex;
 use super::LLVMExecutorError;
 use super::ModuleHandle;
@@ -63,7 +61,7 @@ pub struct LLVMExecutor<'vm> {
     pub project: &'static Project,
 }
 
-impl<'vm> Executor for LLVMExecutor<'vm> {}
+// impl<'vm> Executor for LLVMExecutor<'vm> {}
 
 impl<'vm> LLVMExecutor<'vm> {
     pub fn from_state(state: LLVMState, vm: &'vm mut VM, project: &'static Project) -> Self {
@@ -466,7 +464,6 @@ fn create_concrete_value_type(binary_str: &str, ty: &Type, project: &Project) ->
 
             let mut elements = Vec::new();
             for i in 0..*num_elements {
-                println!("n: {n}, i: {i}, el_size: {el_size}");
                 let high = n - i * el_size;
                 let low = n - (i + 1) * el_size;
                 let s = &binary_str[low..high];

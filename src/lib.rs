@@ -96,6 +96,7 @@
 // #![warn(rust_2018_idioms, rust_2021_compatibility)]
 //#![warn(missing_docs)]
 
+// mod environment;
 mod executor;
 mod memory;
 mod smt;

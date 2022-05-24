@@ -1,11 +1,9 @@
-use tracing::trace;
-
-use super::{
-    llvm::{project::Project, LLVMState},
-    ExecutorError,
-};
 use crate::{
-    smt::{DContext, DExpr, DSolver, Expression, SolverContext},
+    executor::{
+        llvm::{project::Project, LLVMState},
+        ExecutorError,
+    },
+    smt::{DContext, DExpr, DSolver, SolverContext},
     ConcreteValue, LLVMExecutor,
 };
 

@@ -97,12 +97,10 @@ impl ObjectMemory {
         address: &DExpr,
     ) -> Result<Option<(u64, &MemoryObject)>, MemoryError> {
         let address = self.solver.get_value(address)?;
-        println!("Address: {address:?}");
         let address = match address.get_constant() {
             Some(address) => address,
             None => return Ok(None),
         };
-        println!("Hello...");
 
         // Get the memory object with the address that is the closest below the passed address.
         for obj in self.objects.range(0..=address).rev().take(1) {
