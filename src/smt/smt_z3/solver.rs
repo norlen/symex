@@ -111,7 +111,7 @@ impl<'ctx> Solver for Z3SolverIncremental<'ctx> {
             let model = self.solver.get_model();
             let model = model.unwrap();
 
-            let e: Z3Expr = match &expr {
+            let e: Z3Expr<'ctx> = match &expr {
                 Z3Expr::Bool(b) => model.eval(b, true).unwrap().into(),
                 Z3Expr::BV(bv) => model.eval(bv, true).unwrap().into(),
             };

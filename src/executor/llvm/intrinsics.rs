@@ -474,7 +474,11 @@ pub fn llvm_assume(vm: &mut LLVMExecutor<'_>, args: &[&Operand]) -> Result<Retur
 
 #[cfg(test)]
 mod tests {
-    use crate::{smt::DContext, ExecutorError, Project, ReturnValue, VM};
+    use crate::{
+        llvm::ReturnValue,
+        smt::{DContext, Expression},
+        ExecutorError, Project, VM,
+    };
 
     fn run(fn_name: &str) -> Vec<Result<Option<i64>, ExecutorError>> {
         let path = format!("./tests/unit_tests/intrinsics.bc");
@@ -486,11 +490,16 @@ mod tests {
         let mut vm = VM::new(project, context, fn_name).expect("Failed to create VM");
 
         let mut path_results = Vec::new();
-        while let Some(path_result) = vm.run() {
+        while let Some((path_result, state)) = vm.run() {
             let path_result = match path_result {
                 Ok(value) => match value {
-                    ReturnValue::Value(Some(value)) => {
-                        Ok(Some(u128::from_str_radix(&value.raw, 2).unwrap() as i64))
+                    ReturnValue::Value(value) => {
+                        let value = state
+                            .constraints
+                            .get_value(&value)
+                            .expect("Failed to get concrete value");
+                        let binary_str = value.to_binary_string();
+                        Ok(Some(u128::from_str_radix(&binary_str, 2).unwrap() as i64))
                     }
                     _ => Ok(None),
                 },

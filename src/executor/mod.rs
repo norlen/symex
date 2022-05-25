@@ -1,19 +1,10 @@
-use crate::{
-    memory::MemoryError,
-    smt::{DContext, DExpr},
-};
-
-use super::smt::SolverError;
+use crate::{memory::MemoryError, smt::SolverError};
 
 pub mod llvm;
 pub mod vm;
 
 // Should support different executors such as for LLVM and ASM
-pub trait Executor {
-    fn assert(&self, e: &DExpr) -> Result<bool, SolverError>;
-
-    fn ctx(&self) -> &DContext;
-}
+pub trait Executor {}
 
 // Should be generic enough to support e.g. LLVM modules and ASM modules
 pub trait Module {}
@@ -30,4 +21,7 @@ pub enum ExecutorError {
 
     #[error("MemoryError")]
     MemoryError(#[from] MemoryError),
+
+    #[error("Other {0}")]
+    Other(String),
 }

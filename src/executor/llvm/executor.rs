@@ -5,18 +5,13 @@ use crate::smt::DExpr;
 use crate::smt::Expression;
 use crate::smt::Solutions;
 use crate::smt::Solver;
-use crate::ConcreteValue;
-use crate::ConcreteValueType;
 use either::Either;
 use llvm_ir::instruction::HasResult;
 use llvm_ir::instruction::InlineAssembly;
-use llvm_ir::types::NamedStructDef;
 use llvm_ir::Constant;
 use llvm_ir::Function;
 use llvm_ir::Name;
 use llvm_ir::Operand;
-use llvm_ir::Terminator;
-use llvm_ir::Type;
 use tracing::trace;
 
 use super::InstructionIndex;
@@ -75,7 +70,7 @@ impl<'vm> LLVMExecutor<'vm> {
     ///
     /// `resume_execution` instead iteratively executes until all the callsites in the stored state
     /// have been exhausted.
-    pub fn resume_execution(&mut self) -> Result<crate::executor::vm::ReturnValue> {
+    pub fn resume_execution(&mut self) -> Result<ReturnValue> {
         loop {
             // When executing a basic block we can either get a value from e.g. `ret` but we can
             // also want to resume execution for e.g. `br`.
@@ -91,33 +86,34 @@ impl<'vm> LLVMExecutor<'vm> {
             //     }
             // };
             if self.state.stack_frames.len() == 1 {
-                let result = match result {
-                    ReturnValue::Value(v) => {
-                        let v = self.state.constraints.get_value(&v).unwrap();
-                        let s = v.to_binary_string();
-                        let terminator =
-                            &self.state.stack_frames.last().unwrap().location.block.term;
-
-                        let ty = match terminator {
-                            Terminator::Ret(instr) => match &instr.return_operand {
-                                Some(op) => Some(self.state.type_of(op)),
-                                None => None,
-                            },
-                            _ => None,
-                        };
-                        let value = match ty {
-                            Some(ty) => {
-                                let size = self.project.bit_size(ty.as_ref())?;
-                                let s = format!("{s:0>size$}", size = size as usize);
-                                Some(create_concrete_value(&s, ty.as_ref(), self.project))
-                            }
-                            None => None,
-                        };
-                        crate::executor::vm::ReturnValue::Value(value)
-                    }
-                    ReturnValue::Void => crate::executor::vm::ReturnValue::Void,
-                };
                 return Ok(result);
+                // let result = match result {
+                //     ReturnValue::Value(v) => {
+                //         let v = self.state.constraints.get_value(&v).unwrap();
+                //         let s = v.to_binary_string();
+                //         let terminator =
+                //             &self.state.stack_frames.last().unwrap().location.block.term;
+
+                //         let ty = match terminator {
+                //             Terminator::Ret(instr) => match &instr.return_operand {
+                //                 Some(op) => Some(self.state.type_of(op)),
+                //                 None => None,
+                //             },
+                //             _ => None,
+                //         };
+                //         let value = match ty {
+                //             Some(ty) => {
+                //                 let size = self.project.bit_size(ty.as_ref())?;
+                //                 let s = format!("{s:0>size$}", size = size as usize);
+                //                 Some(create_concrete_value(&s, ty.as_ref(), self.project))
+                //             }
+                //             None => None,
+                //         };
+                //         crate::executor::vm::ReturnValue::Value(value)
+                //     }
+                //     ReturnValue::Void => crate::executor::vm::ReturnValue::Void,
+                // };
+                // return Ok(result);
             }
             self.state.stack_frames.pop().unwrap();
 
@@ -428,84 +424,84 @@ impl<'vm> LLVMExecutor<'vm> {
     }
 }
 
-fn create_concrete_value(binary_str: &str, ty: &Type, project: &Project) -> ConcreteValue {
-    let ty = create_concrete_value_type(binary_str, ty, project);
-    ConcreteValue {
-        raw: binary_str.to_owned(),
-        ty,
-    }
-}
+// fn create_concrete_value(binary_str: &str, ty: &Type, project: &Project) -> ConcreteValue {
+//     let ty = create_concrete_value_type(binary_str, ty, project);
+//     ConcreteValue {
+//         raw: binary_str.to_owned(),
+//         ty,
+//     }
+// }
 
-fn create_concrete_value_type(binary_str: &str, ty: &Type, project: &Project) -> ConcreteValueType {
-    let n = binary_str.len();
+// fn create_concrete_value_type(binary_str: &str, ty: &Type, project: &Project) -> ConcreteValueType {
+//     let n = binary_str.len();
 
-    use Type::*;
-    match ty {
-        IntegerType { bits } => ConcreteValueType::Value {
-            value: u128::from_str_radix(binary_str, 2).unwrap(),
-            bits: *bits,
-        },
+//     use Type::*;
+//     match ty {
+//         IntegerType { bits } => ConcreteValueType::Value {
+//             value: u128::from_str_radix(binary_str, 2).unwrap(),
+//             bits: *bits,
+//         },
 
-        PointerType { .. } => ConcreteValueType::Value {
-            value: u128::from_str_radix(binary_str, 2).unwrap(),
-            bits: project.ptr_size,
-        },
+//         PointerType { .. } => ConcreteValueType::Value {
+//             value: u128::from_str_radix(binary_str, 2).unwrap(),
+//             bits: project.ptr_size,
+//         },
 
-        VectorType {
-            element_type,
-            num_elements,
-            ..
-        }
-        | ArrayType {
-            element_type,
-            num_elements,
-        } => {
-            let el_size = project.bit_size(element_type).unwrap() as usize;
+//         VectorType {
+//             element_type,
+//             num_elements,
+//             ..
+//         }
+//         | ArrayType {
+//             element_type,
+//             num_elements,
+//         } => {
+//             let el_size = project.bit_size(element_type).unwrap() as usize;
 
-            let mut elements = Vec::new();
-            for i in 0..*num_elements {
-                let high = n - i * el_size;
-                let low = n - (i + 1) * el_size;
-                let s = &binary_str[low..high];
-                let element = create_concrete_value(s, element_type, project);
-                elements.push(element);
-            }
+//             let mut elements = Vec::new();
+//             for i in 0..*num_elements {
+//                 let high = n - i * el_size;
+//                 let low = n - (i + 1) * el_size;
+//                 let s = &binary_str[low..high];
+//                 let element = create_concrete_value(s, element_type, project);
+//                 elements.push(element);
+//             }
 
-            ConcreteValueType::Array(elements)
-        }
+//             ConcreteValueType::Array(elements)
+//         }
 
-        StructType { element_types, .. } => {
-            let mut fields = Vec::new();
-            let mut current_offset = 0;
-            for el_ty in element_types {
-                let size = project.bit_size(el_ty).unwrap() as usize;
-                let low = n - (current_offset + size);
-                let high = n - current_offset;
-                let s = &binary_str[low..high];
+//         StructType { element_types, .. } => {
+//             let mut fields = Vec::new();
+//             let mut current_offset = 0;
+//             for el_ty in element_types {
+//                 let size = project.bit_size(el_ty).unwrap() as usize;
+//                 let low = n - (current_offset + size);
+//                 let high = n - current_offset;
+//                 let s = &binary_str[low..high];
 
-                fields.push(create_concrete_value(s, el_ty, project));
-                current_offset += size;
-            }
+//                 fields.push(create_concrete_value(s, el_ty, project));
+//                 current_offset += size;
+//             }
 
-            ConcreteValueType::Struct(fields)
-        }
+//             ConcreteValueType::Struct(fields)
+//         }
 
-        NamedStructType { name } => match project.get_named_struct(name) {
-            Some(named_struct) => match named_struct {
-                NamedStructDef::Opaque => todo!(),
-                NamedStructDef::Defined(ty) => create_concrete_value_type(binary_str, ty, project),
-            },
-            None => todo!(),
-        },
+//         NamedStructType { name } => match project.get_named_struct(name) {
+//             Some(named_struct) => match named_struct {
+//                 NamedStructDef::Opaque => todo!(),
+//                 NamedStructDef::Defined(ty) => create_concrete_value_type(binary_str, ty, project),
+//             },
+//             None => todo!(),
+//         },
 
-        // TODO
-        FPType(_) => todo!(),
-        FuncType { .. } => todo!(),
-        VoidType => todo!(),
-        X86_MMXType => todo!(),
-        X86_AMXType => todo!(),
-        MetadataType => todo!(),
-        LabelType => todo!(),
-        TokenType => todo!(),
-    }
-}
+//         // TODO
+//         FPType(_) => todo!(),
+//         FuncType { .. } => todo!(),
+//         VoidType => todo!(),
+//         X86_MMXType => todo!(),
+//         X86_AMXType => todo!(),
+//         MetadataType => todo!(),
+//         LabelType => todo!(),
+//         TokenType => todo!(),
+//     }
+// }

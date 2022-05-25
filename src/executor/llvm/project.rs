@@ -75,6 +75,7 @@ pub struct Project {
     /// Global variables that are private to this module.
     private_global_variables: HashMap<ModuleHandle, HashMap<Name, GlobalVariableHandle>>,
 
+    // TODO: Move to state so if they stored anything it is properly duplicated between states.
     /// Public functions from user-defined modules.
     custom_module_functions: HashMap<&'static str, Hook>,
 

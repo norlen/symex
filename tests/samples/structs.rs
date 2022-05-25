@@ -26,14 +26,4 @@ fn foo() -> u64 {
     bar(s)
 }
 
-fn foobar() -> MyStruct {
-    let s = MyStruct {
-        a: 0,
-        b: 10,
-        c: 15,
-        d: 0,
-    };
-    s
-}
-
 fn main() {}

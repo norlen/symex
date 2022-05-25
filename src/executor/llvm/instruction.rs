@@ -14,7 +14,10 @@ pub(super) struct LLVMInstruction;
 
 impl<'p> LLVMInstruction {
     /// Process a single LLVM IR instruction.
-    pub(super) fn process_instruction(e: &mut LLVMExecutor, instr: &'p Instruction) -> Result<()> {
+    pub(super) fn process_instruction(
+        e: &mut LLVMExecutor<'p>,
+        instr: &'p Instruction,
+    ) -> Result<()> {
         match &instr {
             Instruction::Load(i) => Self::load(e, i),
             Instruction::Store(i) => Self::store(e, i),
@@ -75,7 +78,7 @@ impl<'p> LLVMInstruction {
 
     /// Process a single LLVM IR terminator instruction.
     pub(super) fn process_terminator(
-        e: &mut LLVMExecutor,
+        e: &mut LLVMExecutor<'p>,
         terminator: &Terminator,
     ) -> Result<TerminatorResult> {
         match terminator {
@@ -579,7 +582,7 @@ impl<'p> LLVMInstruction {
 
     /// Allocate memory on the stack frame of the currently executing function. The memory is
     /// automatically cleaned up when the function returns.
-    fn alloca(e: &mut LLVMExecutor, instr: &instruction::Alloca) -> Result<()> {
+    fn alloca(e: &mut LLVMExecutor<'p>, instr: &instruction::Alloca) -> Result<()> {
         debug!("{}", instr);
         let num_elements = e.state.get_expr(&instr.num_elements)?;
         let num_elements = num_elements.get_constant().unwrap();
@@ -602,7 +605,7 @@ impl<'p> LLVMInstruction {
     }
 
     /// Load reads a value from memory.
-    fn load(e: &mut LLVMExecutor, instr: &instruction::Load) -> Result<()> {
+    fn load(e: &mut LLVMExecutor<'p>, instr: &instruction::Load) -> Result<()> {
         debug!("{}", instr);
         let addr = e.state.get_expr(&instr.address)?;
 
@@ -616,7 +619,7 @@ impl<'p> LLVMInstruction {
     /// Store writes to a value to memory.
     ///
     /// Accepts a value which will be written to the passed pointer address.
-    fn store(e: &mut LLVMExecutor, instr: &instruction::Store) -> Result<()> {
+    fn store(e: &mut LLVMExecutor<'p>, instr: &instruction::Store) -> Result<()> {
         debug!("{}", instr);
 
         let value = e.state.get_expr(&instr.value)?;
@@ -625,7 +628,7 @@ impl<'p> LLVMInstruction {
         Ok(())
     }
 
-    fn fence(_e: &mut LLVMExecutor, instr: &instruction::Fence) -> Result<()> {
+    fn fence(_e: &mut LLVMExecutor<'p>, instr: &instruction::Fence) -> Result<()> {
         debug!("{}", instr);
         todo!()
     }
@@ -1054,7 +1057,11 @@ impl<'p> LLVMInstruction {
 
 #[cfg(test)]
 mod tests {
-    use crate::{smt::DContext, ExecutorError, Project, ReturnValue, VM};
+    use crate::{
+        llvm::ReturnValue,
+        smt::{DContext, Expression},
+        ExecutorError, Project, VM,
+    };
 
     fn run(fn_name: &str) -> Vec<Result<Option<i64>, ExecutorError>> {
         let path = format!("./tests/unit_tests/instructions.bc");
@@ -1066,11 +1073,16 @@ mod tests {
         let mut vm = VM::new(project, context, fn_name).expect("Failed to create VM");
 
         let mut path_results = Vec::new();
-        while let Some(path_result) = vm.run() {
+        while let Some((path_result, state)) = vm.run() {
             let path_result = match path_result {
                 Ok(value) => match value {
-                    ReturnValue::Value(Some(value)) => {
-                        Ok(Some(u128::from_str_radix(&value.raw, 2).unwrap() as i64))
+                    ReturnValue::Value(value) => {
+                        let value = state
+                            .constraints
+                            .get_value(&value)
+                            .expect("Failed to get concrete value");
+                        let binary_str = value.to_binary_string();
+                        Ok(Some(u128::from_str_radix(&binary_str, 2).unwrap() as i64))
                     }
                     _ => Ok(None),
                 },

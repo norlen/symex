@@ -18,7 +18,7 @@ use crate::{
 use super::{LLVMExecutorError, ReturnValue};
 
 /// Hook type
-pub type Hook = fn(&mut LLVMExecutor, &[&Operand]) -> Result<ReturnValue, LLVMExecutorError>;
+pub type Hook = fn(&mut LLVMExecutor<'_>, &[&Operand]) -> Result<ReturnValue, LLVMExecutorError>;
 
 pub struct Hooks {
     hooks: HashMap<String, Hook>,
@@ -54,7 +54,10 @@ impl Hooks {
     }
 }
 
-pub fn assume(vm: &mut LLVMExecutor, args: &[&Operand]) -> Result<ReturnValue, LLVMExecutorError> {
+pub fn assume(
+    vm: &mut LLVMExecutor<'_>,
+    args: &[&Operand],
+) -> Result<ReturnValue, LLVMExecutorError> {
     trace!("assume info: {:?}", args);
 
     let condition = vm.state.get_expr(args[0])?;
@@ -79,7 +82,7 @@ pub fn assume(vm: &mut LLVMExecutor, args: &[&Operand]) -> Result<ReturnValue, L
 }
 
 pub fn symbolic_no_type(
-    vm: &mut LLVMExecutor,
+    vm: &mut LLVMExecutor<'_>,
     args: &[&Operand],
 ) -> Result<ReturnValue, LLVMExecutorError> {
     trace!("symbolic_no_type args: {:?}", args);
@@ -115,7 +118,7 @@ pub fn symbolic_no_type(
 }
 
 pub fn symbolic(
-    vm: &mut LLVMExecutor,
+    vm: &mut LLVMExecutor<'_>,
     args: &[&Operand],
 ) -> Result<ReturnValue, LLVMExecutorError> {
     trace!("symbolic args: {:?}", args);
