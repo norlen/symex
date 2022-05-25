@@ -1,11 +1,12 @@
 //! Object memory
 //!
 use std::collections::BTreeMap;
-use tracing::trace;
+use tracing::{trace, warn};
 
 use crate::{
     memory::{linear_allocator::LinearAllocator, Memory, MemoryError},
     smt::{DContext, DExpr, DSolver, Expression, SolverContext},
+    LLVMExecutor, Solutions, Solver,
 };
 
 #[derive(Debug, Clone)]
@@ -53,21 +54,25 @@ impl Memory for ObjectMemory {
         Ok(addr)
     }
 
+    #[tracing::instrument(skip(self))]
     fn read(&self, addr: &DExpr, bits: u32) -> Result<DExpr, MemoryError> {
         trace!("read addr={addr:?}, bits={bits}");
         assert_eq!(addr.len(), self.ptr_size, "passed wrong sized address");
 
-        let (addr, value) = self.resolve_address(addr)?.unwrap();
+        let (addr, value) = self.resolve_address(addr)?;
         let offset = (addr - value.address) as u32 * 8;
         let val = value.bv.slice(offset, offset + bits - 1);
+
+        trace!("Return {val:?}, value: {value:x?}");
         Ok(val)
     }
 
+    #[tracing::instrument(skip(self))]
     fn write(&mut self, addr: &DExpr, value: DExpr) -> Result<(), MemoryError> {
         trace!("write addr={addr:?}, value={value:?}");
         assert_eq!(addr.len(), self.ptr_size, "passed wrong sized address");
 
-        let (addr, val) = self.resolve_address_mut(addr)?.unwrap();
+        let (addr, val) = self.resolve_address_mut(addr)?;
         let offset = (addr - val.address) * 8;
 
         if value.len() == val.size as u32 {
@@ -77,6 +82,24 @@ impl Memory for ObjectMemory {
         }
 
         Ok(())
+    }
+
+    fn resolve_addresses(&self, address: &DExpr) -> Result<Vec<DExpr>, MemoryError> {
+        // Fast path if address is a constant.
+        if let Some(_) = address.get_constant() {
+            return Ok(vec![address.clone()]);
+        }
+
+        // Otherwise, get solutions for addresses.
+        let addresses = self.solver.get_values(address, 10)?;
+        let addresses = match addresses {
+            Solutions::Exactly(s) => s,
+            Solutions::AtLeast(s) => {
+                warn!("More than 10 possible addresses, suppressing other paths");
+                s
+            }
+        };
+        Ok(addresses)
     }
 }
 
@@ -92,41 +115,30 @@ impl ObjectMemory {
         }
     }
 
-    fn resolve_address(
-        &self,
-        address: &DExpr,
-    ) -> Result<Option<(u64, &MemoryObject)>, MemoryError> {
-        let address = self.solver.get_value(address)?;
-        let address = match address.get_constant() {
-            Some(address) => address,
-            None => return Ok(None),
-        };
+    fn resolve_address(&self, address: &DExpr) -> Result<(u64, &MemoryObject), MemoryError> {
+        let address = address.get_constant().unwrap();
 
         // Get the memory object with the address that is the closest below the passed address.
         for obj in self.objects.range(0..=address).rev().take(1) {
             // TODO: Perform bounds check.
-            return Ok(Some((address, obj.1)));
+            return Ok((address, obj.1));
         }
 
-        Ok(None)
+        panic!("Memory object not found");
     }
 
     fn resolve_address_mut(
         &mut self,
         address: &DExpr,
-    ) -> Result<Option<(u64, &mut MemoryObject)>, MemoryError> {
-        let address = self.solver.get_value(address)?;
-        let address = match address.get_constant() {
-            Some(address) => address,
-            None => return Ok(None),
-        };
+    ) -> Result<(u64, &mut MemoryObject), MemoryError> {
+        let address = address.get_constant().unwrap();
 
         // Get the memory object with the address that is the closest below the passed address.
         for obj in self.objects.range_mut(0..=address).rev().take(1) {
             // TODO: Perform bounds check.
-            return Ok(Some((address, obj.1)));
+            return Ok((address, obj.1));
         }
 
-        Ok(None)
+        panic!("Memory object not found");
     }
 }

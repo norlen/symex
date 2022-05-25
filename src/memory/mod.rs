@@ -1,4 +1,7 @@
-use crate::smt::{DExpr, SolverError};
+use crate::{
+    smt::{DExpr, SolverError},
+    LLVMExecutor,
+};
 
 pub(super) mod linear_allocator;
 mod object_memory;
@@ -54,6 +57,8 @@ pub fn to_bytes(size: u64) -> Result<u64, MemoryError> {
 
 pub trait Memory {
     fn allocate(&mut self, bits: u64, align: u64) -> Result<u64, MemoryError>;
+
+    fn resolve_addresses(&self, addr: &DExpr) -> Result<Vec<DExpr>, MemoryError>;
 
     fn read(&self, addr: &DExpr, bits: u32) -> Result<DExpr, MemoryError>;
 

@@ -18,11 +18,12 @@ fn selection_sort(arr: &mut [i32]) {
     }
 }
 
-fn check() {
-    let mut arr = [0; 5];
-    for element in arr.iter_mut() {
-        symbolic(element);
-    }
+pub fn check() {
+    let mut arr = [0; 6];
+    symbolic(&mut arr);
+    // for element in arr.iter_mut() {
+    //     symbolic(element);
+    // }
 
     selection_sort(&mut arr);
 
@@ -32,10 +33,10 @@ fn check() {
 }
 
 fn main() {
-    let mut arr = [753, 532, 864, 349, 1425, 34, 65000, 64, 1034, 985];
-    selection_sort(&mut arr);
+    // let mut arr = [753, 532, 864, 349, 1425, 34, 65000, 64, 1034, 985];
+    // selection_sort(&mut arr);
 
-    for slice in arr.windows(2) {
-        assume(slice[0] <= slice[1]);
-    }
+    // for slice in arr.windows(2) {
+    //     assume(slice[0] <= slice[1]);
+    // }
 }

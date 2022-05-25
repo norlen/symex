@@ -84,7 +84,7 @@ impl LLVMState {
             project,
             global_references,
         };
-        state.initialize_global_references().unwrap();
+        // state.initialize_global_references().unwrap();
 
         state
     }
@@ -108,32 +108,5 @@ impl LLVMState {
     pub fn type_of<T: Typed>(&self, t: &T) -> TypeRef {
         let current_module = self.stack_frames.last().unwrap().location.module;
         self.project.type_of(t, current_module)
-    }
-
-    fn initialize_global_references(&mut self) -> Result<()> {
-        let public_globals = self.global_references.global_references.values();
-        let private_globals = self
-            .global_references
-            .private_global_references
-            .values()
-            .flat_map(|m| m.values());
-
-        for global in public_globals.chain(private_globals) {
-            if let GlobalReferenceKind::GlobalVariable(var) = global.kind {
-                if let Some(initializer) = &var.initializer {
-                    match self.get_expr(initializer) {
-                        Ok(value) => {
-                            let addr = self.ctx.from_u64(global.addr, self.project.ptr_size);
-                            self.memory.write(&addr, value)?;
-                        }
-                        Err(err) => {
-                            warn!("Error initializing global: {:?}", err);
-                        }
-                    }
-                }
-            }
-        }
-
-        Ok(())
     }
 }

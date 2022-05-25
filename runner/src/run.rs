@@ -1,10 +1,9 @@
 use anyhow::Result;
-use rustc_demangle::demangle;
 use std::path::Path;
-use std::time::{Duration, Instant};
-
-use crate::*;
-use x0001e::{common::SolutionVariable, ir::*, Project, ReturnValue, VM};
+use std::time::Instant;
+use tracing::Level;
+use tracing_subscriber::FmtSubscriber;
+use x0001e::{DContext, Project, VM};
 
 /// Helper to generate solutions from a list of `SolutionVariable`s.
 // fn generate_solutions<'a>(
@@ -30,26 +29,33 @@ use x0001e::{common::SolutionVariable, ir::*, Project, ReturnValue, VM};
 //     Ok(variables)
 // }
 
-/// Start running the analysis from a path to a BC file and the function to analyze.
-pub fn run(path: impl AsRef<Path>, function: &str) -> Result<()> {
-    let project = Project::from_path(path)?;
-    run_project(&project, function)
-}
-
 const SHOW_OUTPUT: bool = false;
 
-/// Start running analysis from with a given Project.
-pub fn run_project(project: &Project, function: &str) -> Result<()> {
-    let ctx = x0001e::create_ctx();
-    let mut vm = VM::new(function, project, ctx)?;
+/// Start running the analysis from a path to a BC file and the function to analyze.
+pub fn run(path: impl AsRef<Path>, function: &str) -> Result<()> {
+    // let subscriber = FmtSubscriber::builder()
+    //     .with_max_level(Level::TRACE)
+    //     .finish();
+
+    // tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
+
+    let context = Box::new(DContext::new());
+    let context = Box::leak(context);
+
+    let project = Box::new(Project::from_path(path).unwrap());
+    let project = Box::leak(project);
+
+    // let ctx = x0001e::create_ctx();
+    let mut vm = VM::new(project, context, function)?;
 
     let start = Instant::now();
 
     let mut path_num = 0;
     // Go through all paths.
-    while let Some(path_result) = vm.run() {
+    while let Some((path_result, _state)) = vm.run() {
         path_num += 1;
         println!("Result: {path_result:?}");
+        // path_result.unwrap();
 
         if !SHOW_OUTPUT {
             continue;

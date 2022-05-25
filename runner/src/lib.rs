@@ -2,15 +2,13 @@
 //!
 //!
 #![warn(missing_docs, rust_2018_idioms)]
-use x0001e::{
-    ir::{types::NamedStructDef, Type},
-    Project,
-};
+use llvm_ir::{types::NamedStructDef, Type};
+use x0001e::Project;
 
 mod display_impls;
 mod run;
 
-pub use run::{run, run_project};
+pub use run::run;
 
 /// Result for a single path of execution.
 ///

@@ -1,10 +1,12 @@
 use crate::executor::llvm::project::Project;
 use crate::executor::vm::Path;
 use crate::executor::vm::VM;
+use crate::memory::Memory;
 use crate::smt::DExpr;
 use crate::smt::Expression;
 use crate::smt::Solutions;
 use crate::smt::Solver;
+use crate::SolverContext;
 use either::Either;
 use llvm_ir::instruction::HasResult;
 use llvm_ir::instruction::InlineAssembly;
@@ -13,7 +15,9 @@ use llvm_ir::Function;
 use llvm_ir::Name;
 use llvm_ir::Operand;
 use tracing::trace;
+use tracing::warn;
 
+use super::GlobalReferenceKind;
 use super::InstructionIndex;
 use super::LLVMExecutorError;
 use super::ModuleHandle;
@@ -347,6 +351,14 @@ impl<'vm> LLVMExecutor<'vm> {
         Ok(())
     }
 
+    pub fn fork(&mut self, constraint: DExpr) -> Result<()> {
+        let forked_state = self.state.clone();
+        let path = Path::new(forked_state, Some(constraint));
+
+        self.vm.save_path(path);
+        Ok(())
+    }
+
     pub fn assign_result<I>(&mut self, instr: &I, e: DExpr) -> Result<()>
     where
         I: HasResult,
@@ -421,6 +433,34 @@ impl<'vm> LLVMExecutor<'vm> {
             function_names.push(name.to_owned());
         }
         Ok(function_names)
+    }
+
+    fn initialize_global_references(&mut self) -> Result<()> {
+        let public_globals = self.state.global_references.global_references.values();
+        let private_globals = self
+            .state
+            .global_references
+            .private_global_references
+            .values()
+            .flat_map(|m| m.values());
+
+        for global in public_globals.chain(private_globals) {
+            if let GlobalReferenceKind::GlobalVariable(var) = global.kind {
+                if let Some(initializer) = &var.initializer {
+                    match self.state.get_expr(initializer) {
+                        Ok(value) => {
+                            let addr = self.state.ctx.from_u64(global.addr, self.project.ptr_size);
+                            self.state.memory.write(&addr, value)?;
+                        }
+                        Err(err) => {
+                            warn!("Error initializing global: {:?}", err);
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(())
     }
 }
 

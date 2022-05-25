@@ -5,7 +5,7 @@ use crate::{
     },
     llvm::ReturnValue,
     smt::{DContext, DExpr, DSolver, SolverContext},
-    LLVMExecutor,
+    LLVMExecutor, Solver,
 };
 
 /// A `Path` represents a single path of execution through a program. The path is composed by the
@@ -117,6 +117,9 @@ impl VM {
             self.solver.pop();
 
             let mut executor = LLVMExecutor::from_state(path.state, self, self.project);
+            for constraint in path.constraints {
+                executor.state.constraints.assert(&constraint);
+            }
 
             let res = executor.resume_execution().map_err(|e| e.into());
             Some((res, executor.state))

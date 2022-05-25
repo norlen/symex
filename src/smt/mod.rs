@@ -303,6 +303,7 @@ pub trait ExpressionBuilder: Debug {
     }
 }
 
+#[derive(Debug)]
 pub enum Solutions<E> {
     Exactly(Vec<E>),
     AtLeast(Vec<E>),

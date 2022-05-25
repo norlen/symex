@@ -611,7 +611,19 @@ impl<'p> LLVMInstruction {
 
         let target_ty = e.state.type_of(instr);
         let target_size = e.project.bit_size(&target_ty)?;
-        let value = e.state.memory.read(&addr, target_size)?;
+
+        let addresses = e.state.memory.resolve_addresses(&addr)?;
+        for address in addresses.iter().skip(1) {
+            let constraint = addr._eq(&address);
+            e.fork(constraint)?;
+        }
+        if addresses.len() > 1 {
+            let constraint = addr._eq(&addresses[0]);
+            e.state.constraints.assert(&constraint);
+        }
+        let addr = &addresses[0];
+
+        let value = e.state.memory.read(addr, target_size)?;
         let value = value.simplify();
         e.assign_result(instr, value)
     }
@@ -621,10 +633,21 @@ impl<'p> LLVMInstruction {
     /// Accepts a value which will be written to the passed pointer address.
     fn store(e: &mut LLVMExecutor<'p>, instr: &instruction::Store) -> Result<()> {
         debug!("{}", instr);
-
         let value = e.state.get_expr(&instr.value)?;
         let addr = e.state.get_expr(&instr.address)?;
-        e.state.memory.write(&addr, value)?;
+
+        let addresses = e.state.memory.resolve_addresses(&addr)?;
+        for address in addresses.iter().skip(1) {
+            let constraint = addr._eq(&address);
+            e.fork(constraint)?;
+        }
+        if addresses.len() > 1 {
+            let constraint = addr._eq(&addresses[0]);
+            e.state.constraints.assert(&constraint);
+        }
+        let addr = &addresses[0];
+
+        e.state.memory.write(addr, value)?;
         Ok(())
     }
 
