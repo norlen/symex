@@ -26,6 +26,8 @@ pub struct StackFrame {
     pub registers: HashMap<Name, DExpr>,
 
     pub location: Location,
+
+    pub(super) basic_block_entry_count: HashMap<Name, usize>,
 }
 
 impl StackFrame {
@@ -33,6 +35,7 @@ impl StackFrame {
         Self {
             registers: HashMap::new(),
             location,
+            basic_block_entry_count: HashMap::new(),
         }
     }
 }

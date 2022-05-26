@@ -307,13 +307,18 @@ impl<'vm> LLVMExecutor<'vm> {
 
     /// Helper to update the location to another basic block inside the same function.
     pub fn branch(&mut self, target: &Name) -> Result<TerminatorResult> {
-        // self.state.current_loc.set_basic_block(target);
-        self.state
-            .stack_frames
-            .last_mut()
-            .unwrap()
-            .location
-            .set_basic_block(target);
+        let stack_frame = self.state.stack_frames.last_mut().unwrap();
+        let entry_count = stack_frame
+            .basic_block_entry_count
+            .entry(target.clone())
+            .or_default();
+        *entry_count += 1;
+
+        if *entry_count >= self.vm.cfg.max_iter_count {
+            panic!("Maximum loop bound exceeded");
+        }
+
+        stack_frame.location.set_basic_block(target);
 
         Ok(TerminatorResult::Branch)
     }
