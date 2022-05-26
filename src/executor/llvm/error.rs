@@ -1,16 +1,16 @@
-use crate::memory::MemoryError;
-use crate::smt::SolverError;
-use crate::ExecutorError;
+use crate::{memory::MemoryError, smt::SolverError, ExecutorError};
 
 pub type Result<T> = std::result::Result<T, LLVMExecutorError>;
 
-// Other errors
+// TODO: Other errors
 //
 // - Cannot take size of opaque struct.
 // - Cannot find named struct.
 // - Cannot convert operand to symbol.
 // - Global reference not found
 // - Cannot find basic block.
+// - Call depth exceeded.
+// - Iteration count exceeded.
 
 #[derive(Debug, thiserror::Error)]
 pub enum LLVMExecutorError {

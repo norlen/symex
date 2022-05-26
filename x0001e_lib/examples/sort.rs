@@ -19,7 +19,7 @@ fn selection_sort(arr: &mut [i32]) {
 }
 
 pub fn check() {
-    let mut arr = [0; 6];
+    let mut arr = [0; 5];
     symbolic(&mut arr);
     // for element in arr.iter_mut() {
     //     symbolic(element);

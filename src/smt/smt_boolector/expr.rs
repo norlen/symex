@@ -5,7 +5,7 @@ use std::{cmp::Ordering, rc::Rc};
 use super::{BoolectorSolverContext, Expression};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct BoolectorExpr(pub(super) BV<Rc<Btor>>);
+pub struct BoolectorExpr(pub(crate) BV<Rc<Btor>>);
 
 impl Expression for BoolectorExpr {
     type Context = BoolectorSolverContext;

@@ -1,7 +1,13 @@
 use crate::{memory::MemoryError, smt::SolverError};
 
+mod cfg;
 pub mod llvm;
-pub mod vm;
+mod stats;
+mod vm;
+
+pub use cfg::Config;
+pub use stats::Stats;
+pub use vm::VM;
 
 // Should support different executors such as for LLVM and ASM
 pub trait Executor {}

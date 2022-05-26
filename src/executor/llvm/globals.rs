@@ -5,8 +5,10 @@ use llvm_ir::{module::GlobalVariable, Function, Name, Type};
 use std::collections::HashMap;
 use tracing::{debug, trace};
 
-use super::{LLVMExecutorError, ModuleHandle, Project};
-use crate::memory::{Memory, ObjectMemory};
+use crate::{
+    executor::llvm::{LLVMExecutorError, ModuleHandle, Project},
+    memory::Memory,
+};
 
 /// A global [Function] or [GlobalVariable].
 ///
@@ -54,10 +56,13 @@ impl GlobalReferences {
     ///
     /// Requires access to memory so it can allocate space for the global variables and create
     /// function addresses.
-    pub fn from_project(
+    pub fn from_project<M>(
         project: &'static Project,
-        memory: &mut ObjectMemory,
-    ) -> Result<Self, LLVMExecutorError> {
+        memory: &mut M,
+    ) -> Result<Self, LLVMExecutorError>
+    where
+        M: Memory,
+    {
         let mut s = GlobalReferences {
             global_references: HashMap::new(),
             private_global_references: HashMap::new(),

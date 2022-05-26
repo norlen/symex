@@ -5,7 +5,7 @@ use boolector::{
 };
 use std::rc::Rc;
 
-mod expr;
+pub(crate) mod expr;
 mod solver;
 
 //pub(super) use builder::Z3Builder;

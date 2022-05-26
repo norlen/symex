@@ -21,10 +21,14 @@ pub enum SolverError {
     Unsat,
 }
 
+#[derive(Debug)]
+pub enum Solutions<E> {
+    Exactly(Vec<E>),
+    AtLeast(Vec<E>),
+}
+
 pub trait SolverContext<E: Expression> {
-    //type Builder: ExpressionBuilder;
     type Solver: Solver;
-    // type E: Expression;
 
     /// Create a new uninitialized expression of size `bits`.
     fn unconstrained(&self, bits: u32, name: &str) -> E;
@@ -246,67 +250,6 @@ pub trait Expression: Sized + Debug {
     fn to_binary_string(&self) -> String;
 
     fn get_ctx(&self) -> Self::Context;
-}
-
-pub trait ExpressionBuilder: Debug {
-    type E: Expression;
-
-    /// Create a new uninitialized expression of size `bits`.
-    fn unconstrained(&self, bits: u32, name: &str) -> Self::E;
-
-    fn one(&self, bits: u32) -> Self::E;
-
-    /// Create a new expression set to zero of size `bits.
-    fn zero(&self, bits: u32) -> Self::E;
-
-    /// Create a new expression from a boolean value.
-    fn from_bool(&self, value: bool) -> Self::E;
-
-    /// Create a new expression from an `u64` value of size `bits`.
-    fn from_u64(&self, value: u64, bits: u32) -> Self::E;
-
-    /// Create an expression of size `bits` from a binary string.
-    fn from_binary_string(&self, bits: &str) -> Self::E;
-
-    /// Creates an expression of size `bits` containing the maximum unsigned value.
-    fn unsigned_max(&self, bits: u32) -> Self::E {
-        let mut s = String::new();
-        s.reserve_exact(bits as usize);
-        for _ in 0..bits {
-            s.push('1');
-        }
-        self.from_binary_string(&s)
-    }
-
-    /// Create an expression of size `bits` containing the maximum signed value.
-    fn signed_max(&self, bits: u32) -> Self::E {
-        // Maximum value: 0111...1
-        assert!(bits > 1);
-        let mut s = String::from("0");
-        s.reserve_exact(bits as usize);
-        for _ in 0..bits {
-            s.push('1');
-        }
-        self.from_binary_string(&s)
-    }
-
-    /// Create an expression of size `bits` containing the minimum signed value.
-    fn signed_min(&self, bits: u32) -> Self::E {
-        // Minimum value: 1000...0
-        assert!(bits > 1);
-        let mut s = String::from("1");
-        s.reserve_exact(bits as usize);
-        for _ in 0..bits {
-            s.push('0');
-        }
-        self.from_binary_string(&s)
-    }
-}
-
-#[derive(Debug)]
-pub enum Solutions<E> {
-    Exactly(Vec<E>),
-    AtLeast(Vec<E>),
 }
 
 pub trait Solver: Debug {

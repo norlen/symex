@@ -2,12 +2,11 @@ use llvm_ir::Operand;
 use tracing::debug;
 
 use crate::{
+    executor::llvm::{LLVMExecutorError, ReturnValue},
     memory::{Memory, BITS_IN_BYTE},
     smt::{Expression, SolverContext},
     LLVMExecutor,
 };
-
-use super::{LLVMExecutorError, ReturnValue};
 
 type UserDefinedFunction = (
     &'static str,

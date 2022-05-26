@@ -1,11 +1,10 @@
-use crate::{
-    smt::{DExpr, SolverError},
-    LLVMExecutor,
-};
+use crate::smt::{DExpr, SolverError};
 
+mod array_memory;
 pub(super) mod linear_allocator;
 mod object_memory;
 
+pub use array_memory::ArrayMemory;
 pub use object_memory::ObjectMemory;
 
 /// Error representing an issue when performing memory operations.
@@ -58,7 +57,11 @@ pub fn to_bytes(size: u64) -> Result<u64, MemoryError> {
 pub trait Memory {
     fn allocate(&mut self, bits: u64, align: u64) -> Result<u64, MemoryError>;
 
-    fn resolve_addresses(&self, addr: &DExpr) -> Result<Vec<DExpr>, MemoryError>;
+    fn resolve_addresses(
+        &self,
+        addr: &DExpr,
+        upper_bound: usize,
+    ) -> Result<Vec<DExpr>, MemoryError>;
 
     fn read(&self, addr: &DExpr, bits: u32) -> Result<DExpr, MemoryError>;
 

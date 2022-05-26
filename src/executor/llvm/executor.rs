@@ -1,28 +1,22 @@
-use crate::executor::llvm::project::Project;
-use crate::executor::vm::Path;
-use crate::executor::vm::VM;
-use crate::memory::Memory;
-use crate::smt::DExpr;
-use crate::smt::Expression;
-use crate::smt::Solutions;
-use crate::smt::Solver;
-use crate::SolverContext;
 use either::Either;
-use llvm_ir::instruction::HasResult;
-use llvm_ir::instruction::InlineAssembly;
-use llvm_ir::Constant;
-use llvm_ir::Function;
-use llvm_ir::Name;
-use llvm_ir::Operand;
+use llvm_ir::{
+    instruction::{HasResult, InlineAssembly},
+    Constant, Function, Name, Operand,
+};
 use tracing::trace;
-use tracing::warn;
 
-use super::GlobalReferenceKind;
-use super::InstructionIndex;
-use super::LLVMExecutorError;
-use super::ModuleHandle;
-use super::StackFrame;
-use super::{LLVMInstruction, LLVMState, Location, Result};
+use crate::{
+    executor::{
+        llvm::{
+            project::Project, InstructionIndex, LLVMExecutorError, LLVMInstruction, LLVMState,
+            Location, ModuleHandle, Result, StackFrame,
+        },
+        vm::VM,
+    },
+    path_exploration::Path,
+    smt::{DExpr, Expression, Solutions, Solver},
+    PathExploration,
+};
 
 #[derive(Debug, Clone)]
 pub enum TerminatorResult {
@@ -269,6 +263,10 @@ impl<'vm> LLVMExecutor<'vm> {
             }
         }
 
+        if self.state.stack_frames.len() >= self.vm.cfg.max_call_depth {
+            panic!("Call depth exceeded");
+        }
+
         // Create new location at the start of function to call, and store our current
         // position in the callstack so we can return here later.
         // let mut new_location = Location::new(module, function);
@@ -346,7 +344,7 @@ impl<'vm> LLVMExecutor<'vm> {
         let forked_state = self.state.fork(jump_location);
         let path = Path::new(forked_state, constraint);
 
-        self.vm.save_path(path);
+        self.vm.paths.save_path(path);
 
         Ok(())
     }
@@ -355,7 +353,7 @@ impl<'vm> LLVMExecutor<'vm> {
         let forked_state = self.state.clone();
         let path = Path::new(forked_state, Some(constraint));
 
-        self.vm.save_path(path);
+        self.vm.paths.save_path(path);
         Ok(())
     }
 
@@ -408,7 +406,11 @@ impl<'vm> LLVMExecutor<'vm> {
             Operand::MetadataOperand => return Err(LLVMExecutorError::MalformedInstruction),
         };
 
-        let solutions = self.state.constraints.get_values(&addr, 5)?;
+        let solutions = self
+            .state
+            .constraints
+            .get_values(&addr, self.vm.cfg.max_fn_ptr_resolutions)?;
+
         let addresses = match solutions {
             // This may be a bug, in that the pointer is unconstrained.
             // however, todo and fork state
@@ -435,33 +437,33 @@ impl<'vm> LLVMExecutor<'vm> {
         Ok(function_names)
     }
 
-    fn initialize_global_references(&mut self) -> Result<()> {
-        let public_globals = self.state.global_references.global_references.values();
-        let private_globals = self
-            .state
-            .global_references
-            .private_global_references
-            .values()
-            .flat_map(|m| m.values());
+    // fn initialize_global_references(&mut self) -> Result<()> {
+    //     let public_globals = self.state.global_references.global_references.values();
+    //     let private_globals = self
+    //         .state
+    //         .global_references
+    //         .private_global_references
+    //         .values()
+    //         .flat_map(|m| m.values());
 
-        for global in public_globals.chain(private_globals) {
-            if let GlobalReferenceKind::GlobalVariable(var) = global.kind {
-                if let Some(initializer) = &var.initializer {
-                    match self.state.get_expr(initializer) {
-                        Ok(value) => {
-                            let addr = self.state.ctx.from_u64(global.addr, self.project.ptr_size);
-                            self.state.memory.write(&addr, value)?;
-                        }
-                        Err(err) => {
-                            warn!("Error initializing global: {:?}", err);
-                        }
-                    }
-                }
-            }
-        }
+    //     for global in public_globals.chain(private_globals) {
+    //         if let GlobalReferenceKind::GlobalVariable(var) = global.kind {
+    //             if let Some(initializer) = &var.initializer {
+    //                 match self.state.get_expr(initializer) {
+    //                     Ok(value) => {
+    //                         let addr = self.state.ctx.from_u64(global.addr, self.project.ptr_size);
+    //                         self.state.memory.write(&addr, value)?;
+    //                     }
+    //                     Err(err) => {
+    //                         warn!("Error initializing global: {:?}", err);
+    //                     }
+    //                 }
+    //             }
+    //         }
+    //     }
 
-        Ok(())
-    }
+    //     Ok(())
+    // }
 }
 
 // fn create_concrete_value(binary_str: &str, ty: &Type, project: &Project) -> ConcreteValue {

@@ -18,6 +18,8 @@ impl<'p> LLVMInstruction {
         e: &mut LLVMExecutor<'p>,
         instr: &'p Instruction,
     ) -> Result<()> {
+        e.vm.stats.instructions_processed += 1;
+
         match &instr {
             Instruction::Load(i) => Self::load(e, i),
             Instruction::Store(i) => Self::store(e, i),
@@ -81,6 +83,8 @@ impl<'p> LLVMInstruction {
         e: &mut LLVMExecutor<'p>,
         terminator: &Terminator,
     ) -> Result<TerminatorResult> {
+        e.vm.stats.instructions_processed += 1;
+
         match terminator {
             Terminator::Ret(i) => Self::ret(e, i),
             Terminator::Br(i) => Self::br(e, i),
@@ -139,14 +143,15 @@ impl<'p> LLVMInstruction {
         debug!("{}", instr);
 
         let cond = e.state.get_expr(&instr.condition)?.simplify();
-        if let Some(c) = cond.get_constant() {
-            // TODO: Add get_constnat_bool
-            if c > 0 {
-                return e.branch(&instr.true_dest);
+        if let Some(c) = cond.get_constant_bool() {
+            let target = if c {
+                &instr.true_dest
             } else {
-                return e.branch(&instr.false_dest);
-            }
+                &instr.false_dest
+            };
+            return e.branch(target);
         }
+
         let true_possible = e.state.constraints.is_sat_with_constraint(&cond)?;
         let false_possible = e.state.constraints.is_sat_with_constraint(&cond.not())?;
 
@@ -612,7 +617,34 @@ impl<'p> LLVMInstruction {
         let target_ty = e.state.type_of(instr);
         let target_size = e.project.bit_size(&target_ty)?;
 
-        let addresses = e.state.memory.resolve_addresses(&addr)?;
+        // ----
+        // Test: ITE resolutions, reduces amount of paths but increases expr complexity.
+        // Seems to be slower.
+
+        // let addresses = e.state.memory.resolve_addresses(&addr)?;
+        // let mut value = None;
+
+        // for address in addresses {
+        //     let read_val = e.state.memory.read(&address, target_size)?;
+
+        //     match value {
+        //         Some(v) => {
+        //             let cond = addr._eq(&address);
+        //             let new_v = cond.ite(&read_val, &v);
+        //             value = Some(new_v);
+        //         }
+        //         None => value = Some(read_val),
+        //     }
+        // }
+        // let value = value.unwrap();
+
+        // ---
+
+        let addresses = e
+            .state
+            .memory
+            .resolve_addresses(&addr, e.vm.cfg.max_memory_access_resolutions)?;
+
         for address in addresses.iter().skip(1) {
             let constraint = addr._eq(&address);
             e.fork(constraint)?;
@@ -624,6 +656,8 @@ impl<'p> LLVMInstruction {
         let addr = &addresses[0];
 
         let value = e.state.memory.read(addr, target_size)?;
+
+        // ---
         let value = value.simplify();
         e.assign_result(instr, value)
     }
@@ -636,7 +670,11 @@ impl<'p> LLVMInstruction {
         let value = e.state.get_expr(&instr.value)?;
         let addr = e.state.get_expr(&instr.address)?;
 
-        let addresses = e.state.memory.resolve_addresses(&addr)?;
+        let addresses = e
+            .state
+            .memory
+            .resolve_addresses(&addr, e.vm.cfg.max_memory_access_resolutions)?;
+
         for address in addresses.iter().skip(1) {
             let constraint = addr._eq(&address);
             e.fork(constraint)?;
@@ -940,12 +978,36 @@ impl<'p> LLVMInstruction {
         debug!("{}", instr);
 
         let condition = e.state.get_expr(&instr.condition)?;
+        let ty = e.state.type_of(&instr.condition);
+
+        // TODO: Check if better.
+        // // Fast path for constants.
+        // if let Some(condition) = condition.get_constant_bool() {
+        //     let value = if condition {
+        //         e.state.get_expr(&instr.true_value)?
+        //     } else {
+        //         e.state.get_expr(&instr.false_value)?
+        //     };
+        //     let result = match ty.as_ref() {
+        //         Type::IntegerType { bits: 1 } => value,
+        //         Type::VectorType {
+        //             element_type: _,
+        //             num_elements: _,
+        //             scalable: _,
+        //         } => {
+        //             todo!()
+        //         }
+        //         _ => return Err(LLVMExecutorError::MalformedInstruction),
+        //     };
+        //     e.assign_result(instr, result)?;
+        //     return Ok(());
+        // }
+
         let true_value = e.state.get_expr(&instr.true_value)?;
         let false_value = e.state.get_expr(&instr.false_value)?;
 
         assert_eq!(true_value.len(), false_value.len());
 
-        let ty = e.state.type_of(&instr.condition);
         let result = match ty.as_ref() {
             Type::IntegerType { bits: 1 } => condition.ite(&true_value, &false_value),
             Type::VectorType {

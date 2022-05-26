@@ -6,7 +6,7 @@ use tracing::{trace, warn};
 use crate::{
     memory::{linear_allocator::LinearAllocator, Memory, MemoryError},
     smt::{DContext, DExpr, DSolver, Expression, SolverContext},
-    LLVMExecutor, Solutions, Solver,
+    Solutions, Solver,
 };
 
 #[derive(Debug, Clone)]
@@ -84,14 +84,18 @@ impl Memory for ObjectMemory {
         Ok(())
     }
 
-    fn resolve_addresses(&self, address: &DExpr) -> Result<Vec<DExpr>, MemoryError> {
+    fn resolve_addresses(
+        &self,
+        address: &DExpr,
+        upper_bound: usize,
+    ) -> Result<Vec<DExpr>, MemoryError> {
         // Fast path if address is a constant.
         if let Some(_) = address.get_constant() {
             return Ok(vec![address.clone()]);
         }
 
         // Otherwise, get solutions for addresses.
-        let addresses = self.solver.get_values(address, 10)?;
+        let addresses = self.solver.get_values(address, upper_bound)?;
         let addresses = match addresses {
             Solutions::Exactly(s) => s,
             Solutions::AtLeast(s) => {

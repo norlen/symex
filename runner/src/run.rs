@@ -54,8 +54,13 @@ pub fn run(path: impl AsRef<Path>, function: &str) -> Result<()> {
     // Go through all paths.
     while let Some((path_result, _state)) = vm.run() {
         path_num += 1;
+        // path_result.unwrap();
         println!("Result: {path_result:?}");
         // path_result.unwrap();
+
+        if path_num % 100 == 0 {
+            println!("Path: {path_num}");
+        }
 
         if !SHOW_OUTPUT {
             continue;

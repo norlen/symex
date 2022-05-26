@@ -17,3 +17,5 @@ Cargo.lock
 !tests/unit_tests/*.ll
 
 /old
+**/flamegraph.svg
+**/perf.data**

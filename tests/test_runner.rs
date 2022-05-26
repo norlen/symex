@@ -1,6 +1,6 @@
 use std::path::Path;
-use tracing::Level;
-use tracing_subscriber::FmtSubscriber;
+// use tracing::Level;
+// use tracing_subscriber::FmtSubscriber;
 
 use x0001e::llvm::LLVMState;
 use x0001e::llvm::ReturnValue;

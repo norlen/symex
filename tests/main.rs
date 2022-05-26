@@ -1,4 +1,4 @@
-use x0001e::ExecutorError;
+// use x0001e::ExecutorError;
 
 mod test_runner;
 
@@ -72,20 +72,22 @@ fn fn_refs() {
     assert_eq!(res[1], Ok(Some(11)));
 }
 
-// Check that array indexing works.
-//
-// For typical checked array gets it will return panic on out of bounds.
-#[test]
-fn array_index1() {
-    let res = run("tests/samples/array_index.bc", "array_index::get");
-    println!("res: {res:#?}");
-    assert_eq!(res.len(), 2, "expected 2 paths");
-    assert!(res[0].is_ok());
-    // assert!(res[0].inputs[0]) <= 3);
+// This relies on the state not forking for memory accesses.
 
-    assert_eq!(res[1], Err(ExecutorError::Abort(-1)));
-    // assert!(res[1].inputs[0]) > 3);
-}
+// // Check that array indexing works.
+// //
+// // For typical checked array gets it will return panic on out of bounds.
+// #[test]
+// fn array_index1() {
+//     let res = run("tests/samples/array_index.bc", "array_index::get");
+//     println!("res: {res:#?}");
+//     assert_eq!(res.len(), 2, "expected 2 paths");
+//     assert!(res[0].is_ok());
+//     // assert!(res[0].inputs[0]) <= 3);
+
+//     assert_eq!(res[1], Err(ExecutorError::Abort(-1)));
+//     // assert!(res[1].inputs[0]) > 3);
+// }
 
 // Check that array indexing works.
 #[test]

@@ -98,57 +98,15 @@
 
 // mod environment;
 mod executor;
-mod memory;
+pub mod memory;
+mod path_exploration;
 mod smt;
 mod util;
 
 pub use executor::llvm::{project::Project, LLVMExecutor};
-pub use executor::vm::VM;
 pub use executor::*;
 pub use executor::{Executor, ExecutorError};
 pub use memory::MemoryError;
+pub use path_exploration::*;
 pub use smt::*;
 pub use util::*;
-
-// pub fn run(path: impl AsRef<Path>, function: &str) -> Result<Vec<ReturnValue>, ExecutorError> {
-//     let context = Box::new(DContext::new());
-//     let context = Box::leak(context);
-
-//     let project = Box::new(Project::from_path(path).unwrap());
-//     let project = Box::leak(project);
-
-//     let mut vm = VM::new(project, context, function).unwrap();
-
-//     let mut results = Vec::new();
-//     while let Some(r) = vm.run() {
-//         println!("result: {r:?}");
-//         results.push(r);
-//     }
-
-//     Ok(results)
-// }
-
-// // pub use solver::{Solutions, Solver, BV};
-// // pub use solver::*;
-// pub use solver_z3::{Solutions, SolverError};
-// type Solver = solver_z3::Solver<'static>;
-// type BV = solver_z3::BV<'static>;
-
-// pub use crate::{
-//     project::Project,
-//     vm::{Result, ReturnValue, VMError, VM},
-// };
-
-// pub mod ir {
-//     ///! Re-exports of `llvm-ir` types.
-//     pub use llvm_ir::types::NamedStructDef;
-//     pub use llvm_ir::*;
-// }
-
-// pub fn create_ctx() -> &'static z3::Context {
-//     let mut cfg = z3::Config::new();
-//     cfg.set_model_generation(true);
-//     let context = Box::new(z3::Context::new(&cfg));
-//     let context = Box::leak(context);
-//     context
-// }

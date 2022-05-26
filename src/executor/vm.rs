@@ -4,62 +4,20 @@ use crate::{
         ExecutorError,
     },
     llvm::ReturnValue,
-    smt::{DContext, DExpr, DSolver, SolverContext},
-    LLVMExecutor, Solver,
+    path_exploration::Path,
+    smt::{DContext, DSolver, SolverContext},
+    Config, DFSPathExploration, LLVMExecutor, PathExploration, Solver, Stats,
 };
-
-/// A `Path` represents a single path of execution through a program. The path is composed by the
-/// current execution state (`State`) and an optional constraint that will be asserted when this
-/// path begins executing.
-///
-/// A single path may produce multiple other paths when encountering branching paths of execution.
-#[derive(Debug, Clone)]
-pub struct Path {
-    /// The state to use when resuming execution.
-    ///
-    /// The location in the state should be where to resume execution at.
-    pub state: LLVMState,
-
-    /// Constraints to add before starting execution on this path.
-    pub constraints: Vec<DExpr>,
-}
-
-impl Path {
-    pub fn new(state: LLVMState, constraint: Option<DExpr>) -> Self {
-        let constraints = match constraint {
-            Some(c) => vec![c],
-            None => vec![],
-        };
-
-        Self { state, constraints }
-    }
-}
-
-// #[derive(Debug)]
-// pub struct DFSPathExploration {
-//     paths: Mutex<Vec<Path>>,
-// }
-
-// impl DFSPathExploration {
-//     pub fn new() -> Self {
-//         Self {
-//             paths: Mutex::new(Vec::new()),
-//         }
-//     }
-
-//     pub fn store(&mut self, path: Path) {
-//         let paths = self.paths.get_mut().unwrap();
-//         paths.push(path);
-//     }
-// }
 
 #[derive(Debug)]
 pub struct VM {
     project: &'static Project,
 
-    // paths: DFSPathExploration,
-    paths: Vec<Path>,
-    solver: DSolver,
+    pub(crate) paths: DFSPathExploration,
+
+    pub cfg: Config,
+
+    pub stats: Stats,
     // inputs: Vec<DExpr>,
 }
 
@@ -77,7 +35,7 @@ impl VM {
     ) -> Result<Self, ExecutorError> {
         let (module, function) = project.find_entry_function(fn_name).unwrap();
         let solver = DSolver::new(ctx);
-        let mut state = LLVMState::new(ctx, project, solver.clone(), module, function);
+        let mut state = LLVMState::new(ctx, project, solver, module, function);
 
         // Setup initial parameters.
         let mut inputs = Vec::new();
@@ -101,21 +59,19 @@ impl VM {
 
         let mut vm = Self {
             project,
-            // paths: DFSPathExploration::new(),
-            paths: Vec::new(),
-            solver,
+            paths: DFSPathExploration::new(),
+            cfg: Config::new(),
+            stats: Stats::new(),
             // inputs,
         };
         let path = Path::new(state, None);
-        vm.save_path(path);
+        vm.paths.save_path(path);
 
         Ok(vm)
     }
 
     pub fn run(&mut self) -> Option<(Result<ReturnValue, ExecutorError>, LLVMState)> {
-        if let Some(path) = self.paths.pop() {
-            self.solver.pop();
-
+        if let Some(path) = self.paths.get_path() {
             let mut executor = LLVMExecutor::from_state(path.state, self, self.project);
             for constraint in path.constraints {
                 executor.state.constraints.assert(&constraint);
@@ -126,10 +82,5 @@ impl VM {
         } else {
             None
         }
-    }
-
-    pub fn save_path(&mut self, path: Path) {
-        self.solver.push();
-        self.paths.push(path);
     }
 }

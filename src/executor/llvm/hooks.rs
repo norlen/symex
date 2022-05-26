@@ -10,12 +10,11 @@ use tracing::trace;
 // This would require a general purpose project as well though.
 
 use crate::{
+    executor::llvm::{LLVMExecutorError, ReturnValue},
     memory::Memory,
     smt::{Expression, Solutions, Solver, SolverContext},
     LLVMExecutor,
 };
-
-use super::{LLVMExecutorError, ReturnValue};
 
 /// Hook type
 pub type Hook = fn(&mut LLVMExecutor<'_>, &[&Operand]) -> Result<ReturnValue, LLVMExecutorError>;
