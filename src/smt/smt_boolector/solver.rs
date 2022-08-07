@@ -4,9 +4,8 @@ use boolector::{
 };
 use std::rc::Rc;
 
-use crate::smt::{Expression, Solutions};
-
 use super::{BoolectorExpr, BoolectorSolverContext, Solver, SolverError};
+use crate::smt::{Expression, Solutions};
 
 #[derive(Debug, Clone)]
 pub struct BoolectorIncrementalSolver {

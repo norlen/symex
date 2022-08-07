@@ -23,10 +23,10 @@ impl Default for Config {
 impl Config {
     pub fn new() -> Self {
         Self {
-            max_call_depth: 10,
-            max_iter_count: 10,
-            max_fn_ptr_resolutions: 10,
-            max_memory_access_resolutions: 10,
+            max_call_depth: 100,
+            max_iter_count: 100,
+            max_fn_ptr_resolutions: 20,
+            max_memory_access_resolutions: 20,
         }
     }
 }

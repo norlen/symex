@@ -1,13 +1,17 @@
-use std::rc::Rc;
-
-use boolector::Btor;
+//! Theories-of-array memory.
+//!
+//! This memory model uses theories-of-arrays and supports arbitrary read and writes with symbolic
+//! values. It uses a linear address space which is byte addressable. A single write will split
+//! the symbolic value into byte sized chunks, and write each individually into memory. A read will
+//! concatenate multiple bytes into a single large symbol.
+//!
+//! The concatenation on reads will generate more complex expressions compared to other memory
+//! models, and in general this memory model is slower compared to e.g. object memory. However,
+//! it may provide better performance in certain situations.
 use tracing::trace;
 
-use crate::{
-    smt_boolector::expr::BoolectorExpr, DContext, DExpr, Expression, MemoryError, SolverContext,
-};
-
 use super::{linear_allocator::LinearAllocator, Memory, BITS_IN_BYTE};
+use crate::{Array, DArray, DContext, DExpr, Expression, MemoryError, SolverContext};
 
 /// Allocations and backing memory store.
 ///
@@ -27,18 +31,14 @@ pub struct ArrayMemory {
     /// Size of a pointer.
     ptr_size: u32,
 
-    // /// The actual memory. Stores all values written to memory.
-    memory: boolector::Array<Rc<Btor>>,
+    /// The actual memory. Stores all values written to memory.
+    memory: DArray,
 }
 
 impl Memory for ArrayMemory {
     #[tracing::instrument(skip(self))]
     fn allocate(&mut self, bits: u64, align: u64) -> Result<u64, MemoryError> {
         let (addr, _) = self.allocator.get_address(bits, align)?;
-        // debug!(
-        //     "allocate addr: {addr:x}, bytes: {bytes}, allocation_id: {}",
-        //     self.next_allocation_id
-        // );
         Ok(addr)
     }
 
@@ -70,7 +70,7 @@ impl Memory for ArrayMemory {
 impl ArrayMemory {
     /// Creates a new memory containing only uninitialized memory.
     pub fn new(ctx: DContext, ptr_size: u32) -> Self {
-        let memory = boolector::Array::new(ctx.ctx.clone(), ptr_size, BITS_IN_BYTE, Some("memory"));
+        let memory = DArray::new(&ctx, ptr_size as usize, BITS_IN_BYTE as usize, "memory");
 
         Self {
             ctx,
@@ -82,13 +82,12 @@ impl ArrayMemory {
 
     /// Reads an u8 from the given address.
     fn read_u8(&self, addr: &DExpr) -> DExpr {
-        let value = self.memory.read(&addr.0);
-        BoolectorExpr(value)
+        self.memory.read(addr)
     }
 
     /// Writes an u8 value to the given address.
-    fn write_u8(&mut self, addr: &DExpr, val: &DExpr) {
-        self.memory = self.memory.write(&addr.0, &val.0);
+    fn write_u8(&mut self, addr: &DExpr, val: DExpr) {
+        self.memory.write(addr, val);
     }
 
     /// Reads `bits` from `addr.
@@ -141,7 +140,7 @@ impl ArrayMemory {
 
             let offset = self.ctx.from_u64(n as u64, ptr_size);
             let addr = addr.add(&offset);
-            self.write_u8(&addr, &byte);
+            self.write_u8(&addr, byte);
         }
 
         Ok(())

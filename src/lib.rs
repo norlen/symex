@@ -100,6 +100,7 @@
 mod executor;
 pub mod memory;
 mod path_exploration;
+mod run;
 mod smt;
 mod util;
 
@@ -108,5 +109,6 @@ pub use executor::*;
 pub use executor::{Executor, ExecutorError};
 pub use memory::MemoryError;
 pub use path_exploration::*;
+pub use run::*;
 pub use smt::*;
 pub use util::*;

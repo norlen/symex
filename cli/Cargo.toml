@@ -16,5 +16,5 @@ log = "0.4.16"
 regex = "1.5.5"
 rustc_version = "0.4.0"
 rustc-demangle = "0.1.21"
-runner = { path = "../runner", version = "1.0" }
+x0001e = { path = "../", version = "1.0" }
 colored = "2.0.0"

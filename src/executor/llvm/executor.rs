@@ -31,6 +31,8 @@ pub enum TerminatorResult {
 //
 // Should exist support for:
 // - Suspend this path, to be resumed (think BFS)
+// - Probably abort(0) as well, for success cases
+// - Should probably change value to option, with None being void
 // - ...
 
 #[derive(Debug, PartialEq, Eq)]

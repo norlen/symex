@@ -22,9 +22,9 @@ impl<'ctx> From<Bool<'ctx>> for Z3Expr<'ctx> {
 }
 
 impl<'ctx> Z3Expr<'ctx> {
-    pub(super) fn to_bool(self) -> Bool<'ctx> {
+    pub(super) fn coerce_bool(&self) -> Bool<'ctx> {
         match self {
-            Z3Expr::Bool(b) => b,
+            Z3Expr::Bool(b) => b.clone(),
             Z3Expr::BV(bv) => {
                 let t = BV::from_u64(bv.get_ctx(), 1, bv.get_size());
                 bv._eq(&t)
@@ -32,24 +32,10 @@ impl<'ctx> Z3Expr<'ctx> {
         }
     }
 
-    pub(super) fn to_bv(self) -> Z3Expr<'ctx> {
+    pub(super) fn coerce_bv(&self) -> BV<'ctx> {
         match self {
-            Z3Expr::Bool(b) => bool_to_bv(b).into(),
-            Z3Expr::BV(_) => self,
-        }
-    }
-
-    pub(super) fn as_bool(&self) -> &Bool<'ctx> {
-        match self {
-            Z3Expr::Bool(b) => b,
-            Z3Expr::BV(_) => panic!("not a bool"),
-        }
-    }
-
-    pub(super) fn as_bv(&self) -> &BV<'ctx> {
-        match self {
-            Z3Expr::Bool(_) => panic!("not a bv"),
-            Z3Expr::BV(bv) => bv,
+            Z3Expr::Bool(b) => bool_to_bv(b),
+            Z3Expr::BV(bv) => bv.clone(),
         }
     }
 }
@@ -84,7 +70,7 @@ impl<'ctx> Expression for Z3Expr<'ctx> {
     fn sign_ext(&self, width: u32) -> Self {
         assert!(self.len() <= width);
         match self.len().cmp(&width) {
-            Ordering::Less => self.as_bv().sign_ext(width - self.len()).into(),
+            Ordering::Less => self.coerce_bv().sign_ext(width - self.len()).into(),
             Ordering::Equal => self.clone(),
             Ordering::Greater => unreachable!(),
         }
@@ -101,8 +87,8 @@ impl<'ctx> Expression for Z3Expr<'ctx> {
     fn _eq(&self, other: &Self) -> Self {
         assert_eq!(self.len(), other.len());
         match self {
-            Z3Expr::Bool(b) => b._eq(&other.as_bool()).into(),
-            Z3Expr::BV(bv) => bv._eq(&other.as_bv()).into(),
+            Z3Expr::Bool(b) => b._eq(&other.coerce_bool()).into(),
+            Z3Expr::BV(bv) => bv._eq(&other.coerce_bv()).into(),
         }
     }
 
@@ -113,94 +99,94 @@ impl<'ctx> Expression for Z3Expr<'ctx> {
 
     fn ugt(&self, other: &Self) -> Self {
         assert_eq!(self.len(), other.len());
-        self.as_bv().bvugt(&other.as_bv()).into()
+        self.coerce_bv().bvugt(&other.coerce_bv()).into()
     }
 
     fn ugte(&self, other: &Self) -> Self {
         assert_eq!(self.len(), other.len());
-        self.as_bv().bvuge(&other.as_bv()).into()
+        self.coerce_bv().bvuge(&other.coerce_bv()).into()
     }
 
     fn ult(&self, other: &Self) -> Self {
         assert_eq!(self.len(), other.len());
-        self.as_bv().bvult(&other.as_bv()).into()
+        self.coerce_bv().bvult(&other.coerce_bv()).into()
     }
 
     fn ulte(&self, other: &Self) -> Self {
         assert_eq!(self.len(), other.len());
-        self.as_bv().bvule(&other.as_bv()).into()
+        self.coerce_bv().bvule(&other.coerce_bv()).into()
     }
 
     fn sgt(&self, other: &Self) -> Self {
         assert_eq!(self.len(), other.len());
-        self.as_bv().bvsgt(&other.as_bv()).into()
+        self.coerce_bv().bvsgt(&other.coerce_bv()).into()
     }
 
     fn sgte(&self, other: &Self) -> Self {
         assert_eq!(self.len(), other.len());
-        self.as_bv().bvsge(&other.as_bv()).into()
+        self.coerce_bv().bvsge(&other.coerce_bv()).into()
     }
 
     fn slt(&self, other: &Self) -> Self {
         assert_eq!(self.len(), other.len());
-        self.as_bv().bvslt(&other.as_bv()).into()
+        self.coerce_bv().bvslt(&other.coerce_bv()).into()
     }
 
     fn slte(&self, other: &Self) -> Self {
         assert_eq!(self.len(), other.len());
-        self.as_bv().bvsle(&other.as_bv()).into()
+        self.coerce_bv().bvsle(&other.coerce_bv()).into()
     }
 
     fn add(&self, other: &Self) -> Self {
         assert_eq!(self.len(), other.len());
-        self.as_bv().bvadd(&other.as_bv()).into()
+        self.coerce_bv().bvadd(&other.coerce_bv()).into()
     }
 
     fn sub(&self, other: &Self) -> Self {
         assert_eq!(self.len(), other.len());
-        self.as_bv().bvsub(&other.as_bv()).into()
+        self.coerce_bv().bvsub(&other.coerce_bv()).into()
     }
 
     fn mul(&self, other: &Self) -> Self {
         assert_eq!(self.len(), other.len());
-        self.as_bv().bvmul(&other.as_bv()).into()
+        self.coerce_bv().bvmul(&other.coerce_bv()).into()
     }
 
     fn udiv(&self, other: &Self) -> Self {
         assert_eq!(self.len(), other.len());
-        self.as_bv().bvudiv(&other.as_bv()).into()
+        self.coerce_bv().bvudiv(&other.coerce_bv()).into()
     }
 
     fn sdiv(&self, other: &Self) -> Self {
         assert_eq!(self.len(), other.len());
-        self.as_bv().bvsdiv(&other.as_bv()).into()
+        self.coerce_bv().bvsdiv(&other.coerce_bv()).into()
     }
 
     fn urem(&self, other: &Self) -> Self {
         assert_eq!(self.len(), other.len());
-        self.as_bv().bvurem(&other.as_bv()).into()
+        self.coerce_bv().bvurem(&other.coerce_bv()).into()
     }
 
     fn srem(&self, other: &Self) -> Self {
         assert_eq!(self.len(), other.len());
-        self.as_bv().bvsrem(&other.as_bv()).into()
+        self.coerce_bv().bvsrem(&other.coerce_bv()).into()
     }
 
     fn not(&self) -> Self {
-        self.clone().to_bool().not().into()
+        self.clone().coerce_bool().not().into()
     }
 
     fn and(&self, other: &Self) -> Self {
         match self {
-            Z3Expr::Bool(b) => Bool::and(b.get_ctx(), &[b, other.as_bool()]).into(),
-            Z3Expr::BV(bv) => bv.bvand(&other.as_bv()).into(),
+            Z3Expr::Bool(b) => Bool::and(b.get_ctx(), &[b, &other.coerce_bool()]).into(),
+            Z3Expr::BV(bv) => bv.bvand(&other.coerce_bv()).into(),
         }
     }
 
     fn or(&self, other: &Self) -> Self {
         match self {
-            Z3Expr::Bool(b) => Bool::or(b.get_ctx(), &[b, other.as_bool()]).into(),
-            Z3Expr::BV(bv) => bv.bvor(&other.as_bv()).into(),
+            Z3Expr::Bool(b) => Bool::or(b.get_ctx(), &[b, &other.coerce_bool()]).into(),
+            Z3Expr::BV(bv) => bv.bvor(&other.coerce_bv()).into(),
         }
     }
 
@@ -224,82 +210,93 @@ impl<'ctx> Expression for Z3Expr<'ctx> {
     }
 
     fn sll(&self, other: &Self) -> Self {
-        self.as_bv().bvshl(&other.as_bv()).into()
+        self.coerce_bv().bvshl(&other.coerce_bv()).into()
     }
 
     fn srl(&self, other: &Self) -> Self {
-        self.as_bv().bvlshr(&other.as_bv()).into()
+        self.coerce_bv().bvlshr(&other.coerce_bv()).into()
     }
 
     fn sra(&self, other: &Self) -> Self {
-        self.as_bv().bvashr(&other.as_bv()).into()
+        self.coerce_bv().bvashr(&other.coerce_bv()).into()
     }
 
-    fn ite(&self, then_bv: &Self, else_bv: &Self) -> Self {
+    fn ite(&self, then_expr: &Self, else_expr: &Self) -> Self {
         assert_eq!(self.len(), 1);
-        let s = self.clone().to_bool();
 
-        match then_bv {
-            Z3Expr::Bool(_) => s.ite(then_bv.as_bool(), else_bv.as_bool()).into(),
-            Z3Expr::BV(_) => s.ite(then_bv.as_bv(), else_bv.as_bv()).into(),
+        let condition = self.clone().coerce_bool();
+        match then_expr {
+            Z3Expr::Bool(then) => condition.ite(then, &else_expr.coerce_bool()).into(),
+            Z3Expr::BV(then) => condition.ite(then, &else_expr.coerce_bv()).into(),
         }
     }
 
     fn concat(&self, other: &Self) -> Self {
-        let s = self.clone().to_bv();
-        let o = other.clone().to_bv();
-        // s.concat(&o).into()
-        // self.concat(&other).into()
-        s.as_bv().concat(&o.as_bv()).into()
+        let lhs = self.coerce_bv();
+        let rhs = other.coerce_bv();
+        lhs.concat(&rhs).into()
     }
 
     fn slice(&self, low: u32, high: u32) -> Self {
-        assert!(low <= high);
-        assert!(high <= self.len());
-        self.as_bv().extract(high, low).into()
+        assert!(low <= high && high <= self.len());
+        self.coerce_bv().extract(high, low).into()
     }
 
     fn uaddo(&self, other: &Self) -> Self {
         assert_eq!(self.len(), other.len());
-        bool_to_bv(self.as_bv().bvadd_no_overflow(other.as_bv(), false)).into()
+        let res = self
+            .coerce_bv()
+            .bvadd_no_overflow(&other.coerce_bv(), false)
+            .not();
+        bool_to_bv(&res).into()
     }
 
     fn saddo(&self, other: &Self) -> Self {
         assert_eq!(self.len(), other.len());
-        bool_to_bv(self.as_bv().bvadd_no_overflow(other.as_bv(), true)).into()
+        let lhs = self.coerce_bv();
+        let rhs = other.coerce_bv();
+
+        // Check both under- and overflow.
+        let overflow = lhs.bvadd_no_overflow(&rhs, true).not();
+        let underflow = lhs.bvadd_no_underflow(&rhs).not();
+        let res = Bool::or(self.get_ctx().ctx, &[&overflow, &underflow]).simplify();
+        bool_to_bv(&res).into()
     }
 
     fn usubo(&self, other: &Self) -> Self {
         assert_eq!(self.len(), other.len());
-        bool_to_bv(self.as_bv().bvsub_no_underflow(other.as_bv(), false)).into()
+        let res = self
+            .coerce_bv()
+            .bvsub_no_underflow(&other.coerce_bv(), false)
+            .not();
+        bool_to_bv(&res).into()
     }
 
     fn ssubo(&self, other: &Self) -> Self {
         assert_eq!(self.len(), other.len());
-        bool_to_bv(self.as_bv().bvsub_no_underflow(other.as_bv(), true)).into()
+        let res = self
+            .coerce_bv()
+            .bvsub_no_underflow(&other.coerce_bv(), true)
+            .not();
+        bool_to_bv(&res).into()
     }
 
     fn umulo(&self, other: &Self) -> Self {
         assert_eq!(self.len(), other.len());
-        bool_to_bv(self.as_bv().bvmul_no_overflow(other.as_bv(), false)).into()
+        let res = self
+            .coerce_bv()
+            .bvmul_no_overflow(&other.coerce_bv(), false)
+            .not();
+        bool_to_bv(&res).into()
     }
 
     fn smulo(&self, other: &Self) -> Self {
         assert_eq!(self.len(), other.len());
-        bool_to_bv(self.as_bv().bvmul_no_overflow(other.as_bv(), true)).into()
-    }
-
-    fn uadds(&self, other: &Self) -> Self {
-        assert_eq!(self.len(), other.len());
-        // self.as_bv().bvadd
-        // temp
-        BV::from_u64(self.as_bv().get_ctx(), 0, 1).into()
-    }
-
-    fn sadds(&self, other: &Self) -> Self {
-        assert_eq!(self.len(), other.len());
-        // temp
-        BV::from_u64(self.as_bv().get_ctx(), 0, 1).into()
+        let res = self
+            .coerce_bv()
+            .bvmul_no_overflow(&other.coerce_bv(), true)
+            .not();
+        bool_to_bv(&res).into()
     }
 
     fn simplify(self) -> Self {
@@ -350,7 +347,7 @@ impl<'ctx> Expression for Z3Expr<'ctx> {
     }
 }
 
-fn bool_to_bv<'ctx>(b: Bool<'ctx>) -> BV<'ctx> {
+fn bool_to_bv<'ctx>(b: &Bool<'ctx>) -> BV<'ctx> {
     let zero = BV::from_u64(b.get_ctx(), 0, 1);
     let one = BV::from_u64(b.get_ctx(), 1, 1);
     b.ite(&one, &zero)

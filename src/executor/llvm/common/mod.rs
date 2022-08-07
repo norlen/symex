@@ -1,4 +1,9 @@
-use llvm_ir::{types::Typed, Constant, ConstantRef, Operand};
+use llvm_ir::{
+    types::{NamedStructDef, Typed},
+    Constant, ConstantRef, Operand, Type,
+};
+
+use crate::{ExpressionType, Project};
 
 use super::Result;
 
@@ -96,5 +101,56 @@ impl ToValue<u64> for Constant {
             Constant::Int { value, .. } => Ok(*value),
             _ => todo!(),
         }
+    }
+}
+
+/// Convert a type to an [ExpressionType]
+pub fn type_to_expr_type(ty: &Type, project: &Project) -> ExpressionType {
+    match ty {
+        Type::VoidType => todo!(),
+
+        Type::IntegerType { bits } => ExpressionType::Integer(*bits),
+
+        // May want to support a specific pointer type in the ExpressionType, but not sure if that
+        // is universal or not. So let's treat this just as an integer.
+        Type::PointerType { .. } => ExpressionType::Integer(project.ptr_size),
+        Type::FPType(ty) => ExpressionType::Float(fp_size_in_bits(ty) as u32),
+
+        Type::FuncType { .. } => todo!(),
+
+        Type::ArrayType {
+            element_type,
+            num_elements,
+        }
+        | Type::VectorType {
+            element_type,
+            num_elements,
+            scalable: _,
+        } => {
+            let ty = type_to_expr_type(element_type, project);
+            ExpressionType::Array(ty.into(), *num_elements as u32)
+        }
+
+        Type::StructType {
+            element_types,
+            is_packed: _,
+        } => {
+            let fields = element_types
+                .iter()
+                .map(|ty| type_to_expr_type(ty, project))
+                .collect();
+            ExpressionType::Struct(fields)
+        }
+
+        Type::NamedStructType { name } => match project.get_named_struct(name).unwrap() {
+            NamedStructDef::Opaque => todo!(),
+            NamedStructDef::Defined(ty) => type_to_expr_type(ty, project),
+        },
+
+        Type::X86_MMXType => todo!(),
+        Type::X86_AMXType => todo!(),
+        Type::MetadataType => todo!(),
+        Type::LabelType => todo!(),
+        Type::TokenType => todo!(),
     }
 }

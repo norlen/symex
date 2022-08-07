@@ -8,6 +8,8 @@ use crate::smt::DContext;
 use crate::smt::DExpr;
 use crate::smt::DSolver;
 use crate::smt::SolverContext;
+use crate::Array;
+use crate::Variable;
 use llvm_ir::types::Typed;
 use llvm_ir::Function;
 use llvm_ir::Name;
@@ -50,9 +52,10 @@ pub struct LLVMState {
 
     pub constraints: DSolver,
 
-    pub marked_symbolic: Vec<DExpr>,
+    pub marked_symbolic: Vec<Variable>,
 
-    pub memory: ObjectMemory,
+    // pub memory: ObjectMemory,
+    pub memory: ArrayMemory,
 
     pub stack_frames: Vec<StackFrame>,
 
@@ -73,8 +76,9 @@ impl LLVMState {
         module: ModuleHandle,
         function: &'static Function,
     ) -> Self {
-        // let mut memory = ArrayMemory::new(ctx.clone(), project.ptr_size);
-        let mut memory = ObjectMemory::new(ctx, project.ptr_size, constraints.clone());
+        let mut memory = ArrayMemory::new(ctx.clone(), project.ptr_size);
+        // let mut memory = ObjectMemory::new(ctx, project.ptr_size, constraints.clone());
+
         let global_references = GlobalReferences::from_project(project, &mut memory).unwrap();
 
         let location = Location::new(module, function);

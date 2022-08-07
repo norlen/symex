@@ -10,6 +10,7 @@ enum E {
 fn check() -> bool {
     let mut e = E::A;
     symbolic(&mut e);
+    //assume(e.is_valid());
     match e {
         E::A | E::B(_) => true,
         E::C(_) => false,

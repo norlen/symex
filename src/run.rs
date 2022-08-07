@@ -1,80 +1,112 @@
-use anyhow::Result;
-use std::path::Path;
-use std::time::Instant;
-use tracing::Level;
-use tracing_subscriber::FmtSubscriber;
-use x0001e::{DContext, Project, VM};
+use std::{path::Path, time::Instant};
 
-/// Helper to generate solutions from a list of `SolutionVariable`s.
-// fn generate_solutions<'a>(
-//     symbols: impl Iterator<Item = &'a SolutionVariable>,
-//     cache: &mut SolutionGenerator,
-//     project: &Project,
-// ) -> Result<Vec<Variable>> {
-//     let mut variables = Vec::new();
+use crate::{
+    llvm::LLVMState, DContext, ErrorReason, ExecutorError, PathResult, PathStatus, Project,
+    Variable, VM,
+};
 
-//     for symbol in symbols {
-//         let name = Some(symbol.name.clone());
-//         let value = cache.get_solution(&symbol.value)?;
+fn get_values<'a, I>(vars: I, state: &LLVMState) -> Result<Vec<Variable>, ExecutorError>
+where
+    I: Iterator<Item = &'a Variable>,
+{
+    let mut results = Vec::new();
+    for var in vars {
+        let constant = state.constraints.get_value(&var.value)?;
+        let var = Variable {
+            name: var.name.clone(),
+            value: constant,
+            ty: var.ty.clone(),
+        };
+        results.push(var);
+    }
 
-//         let value = match &symbol.ty {
-//             Some(ty) => ConcreteValue::from_binary_str(value.as_01x_str(), ty.as_ref(), project),
-//             None => ConcreteValue::Unknown(value.as_01x_str().to_owned()),
-//         };
+    Ok(results)
+}
 
-//         let variable = Variable { name, value };
-//         variables.push(variable);
-//     }
+pub struct RunConfig {
+    pub solve_inputs: bool,
 
-//     Ok(variables)
-// }
+    pub solve_symbolics: bool,
 
-const SHOW_OUTPUT: bool = false;
+    pub solve_output: bool,
 
-/// Start running the analysis from a path to a BC file and the function to analyze.
-pub fn run(path: impl AsRef<Path>, function: &str) -> Result<()> {
-    // let subscriber = FmtSubscriber::builder()
-    //     .with_max_level(Level::TRACE)
-    //     .finish();
+    pub solve_for: SolveFor,
+}
 
-    // tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
+pub enum SolveFor {
+    All,
+    Error,
+    Success,
+}
 
+pub fn run<P, S>(path: P, function: S, cfg: &RunConfig) -> Result<Vec<PathResult>, ExecutorError>
+where
+    P: AsRef<Path>,
+    S: AsRef<str>,
+{
     let context = Box::new(DContext::new());
     let context = Box::leak(context);
 
     let project = Box::new(Project::from_path(path).unwrap());
     let project = Box::leak(project);
 
-    // let ctx = x0001e::create_ctx();
-    let mut vm = VM::new(project, context, function)?;
+    let mut vm = VM::new(project, context, function.as_ref())?;
 
     let start = Instant::now();
 
-    let mut path_num = 0;
     // Go through all paths.
-    while let Some((path_result, _state)) = vm.run() {
+
+    let mut results = Vec::new();
+    let mut path_num = 0;
+    while let Some((path_result, state)) = vm.run() {
         path_num += 1;
-        // path_result.unwrap();
-        println!("Result: {path_result:?}");
-        // path_result.unwrap();
+        // TODO: Cache for solutions.
 
-        if path_num % 100 == 0 {
-            println!("Path: {path_num}");
-        }
+        let should_solve = match cfg.solve_for {
+            SolveFor::All => true,
+            SolveFor::Error => matches!(path_result, Err(_)),
+            SolveFor::Success => matches!(path_result, Ok(_)),
+        };
 
-        if !SHOW_OUTPUT {
-            continue;
-        }
+        let inputs = if should_solve && cfg.solve_inputs {
+            get_values(vm.inputs.iter(), &state)?
+        } else {
+            vec![]
+        };
 
-        // Cache for solutions.
-        //
-        // Solutions cannot be cached between paths, so instantiate a new one for each path.
-        // let mut cache = SolutionGenerator::new(vm.solver.clone())?;
+        let symbolics = if should_solve && cfg.solve_symbolics {
+            get_values(state.marked_symbolic.iter(), &state)?
+        } else {
+            vec![]
+        };
 
-        // let inputs = generate_solutions(vm.parameters.iter(), &mut cache, project)?;
-        // let symbolics = generate_solutions(vm.state.symbols.iter(), &mut cache, project)?;
-        // let mut inputs = vec![];
-        // let mut symbolics = vec![];
+        let result = match path_result {
+            Ok(v) => PathStatus::Ok(match v {
+                crate::llvm::ReturnValue::Value(v) => Some(Variable {
+                    name: Some("output".to_string()),
+                    value: if should_solve && cfg.solve_output {
+                        state.constraints.get_value(&v)?
+                    } else {
+                        v
+                    },
+                    ty: crate::ExpressionType::Unknown,
+                }),
+                crate::llvm::ReturnValue::Void => None,
+            }),
+            Err(e) => PathStatus::Failed(ErrorReason {
+                error_message: format!("{e}"),
+                error_location: None,
+                stack_trace: vec![],
+            }),
+        };
+
+        let result = PathResult {
+            path: path_num,
+            result,
+            inputs,
+            symbolics,
+        };
+        results.push(result);
 
         // let result = match path_result {
         //     Ok(return_value) => {
@@ -159,6 +191,10 @@ pub fn run(path: impl AsRef<Path>, function: &str) -> Result<()> {
     }
     let duration = start.elapsed();
     println!("Paths: {path_num}, took: {duration:?}");
+    println!(
+        "Instructions processed: {}",
+        vm.stats.instructions_processed
+    );
 
-    Ok(())
+    Ok(results)
 }

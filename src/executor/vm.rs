@@ -3,10 +3,10 @@ use crate::{
         llvm::{project::Project, LLVMState},
         ExecutorError,
     },
-    llvm::ReturnValue,
+    llvm::{type_to_expr_type, ReturnValue},
     path_exploration::Path,
     smt::{DContext, DSolver, SolverContext},
-    Config, DFSPathExploration, LLVMExecutor, PathExploration, Solver, Stats,
+    Config, DFSPathExploration, LLVMExecutor, PathExploration, Solver, Stats, Variable,
 };
 
 #[derive(Debug)]
@@ -18,7 +18,8 @@ pub struct VM {
     pub cfg: Config,
 
     pub stats: Stats,
-    // inputs: Vec<DExpr>,
+
+    pub inputs: Vec<Variable>,
 }
 
 // #[derive(Debug, Clone)]
@@ -47,7 +48,11 @@ impl VM {
             let s = Box::leak(s);
 
             let input = ctx.unconstrained(size as u32, s);
-            inputs.push(input.clone());
+            inputs.push(Variable {
+                name: Some(param.name.to_string()),
+                value: input.clone(),
+                ty: type_to_expr_type(param.ty.as_ref(), project),
+            });
 
             state
                 .stack_frames
@@ -62,7 +67,7 @@ impl VM {
             paths: DFSPathExploration::new(),
             cfg: Config::new(),
             stats: Stats::new(),
-            // inputs,
+            inputs,
         };
         let path = Path::new(state, None);
         vm.paths.save_path(path);

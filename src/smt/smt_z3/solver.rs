@@ -4,9 +4,8 @@ use z3::{
     SatResult,
 };
 
-use crate::smt::{Expression, Solutions};
-
 use super::{Solver, SolverError, Z3Expr, Z3SolverContext};
+use crate::smt::{Expression, Solutions};
 
 #[derive(Debug, Clone)]
 pub struct Z3SolverIncremental<'ctx> {
@@ -40,7 +39,6 @@ impl<'ctx> Z3SolverIncremental<'ctx> {
             Z3Expr::Bool(b) => model.eval(b, true).unwrap().into(),
             Z3Expr::BV(bv) => model.eval(bv, true).unwrap().into(),
         };
-
         Ok(e)
     }
 
@@ -64,7 +62,7 @@ impl<'ctx> Solver for Z3SolverIncremental<'ctx> {
     fn is_sat_with_constraint(&self, constraint: &Self::E) -> Result<bool, SolverError> {
         // Assume the constraint, will be forgotten after the next call to `is_sat`.
         // constraint.0.assume();
-        let b = constraint.clone().to_bool();
+        let b = constraint.clone().coerce_bool();
         let sat_result = self.solver.check_assumptions(&[b]);
         self.check_sat_result(sat_result)
     }
@@ -72,7 +70,8 @@ impl<'ctx> Solver for Z3SolverIncremental<'ctx> {
     fn is_sat_with_constraints(&self, constraints: &[Self::E]) -> Result<bool, SolverError> {
         let bools = constraints
             .iter()
-            .map(|c| c.as_bool().clone())
+            .cloned()
+            .map(|c| c.coerce_bool())
             .collect::<Vec<Bool<'_>>>();
 
         let sat_result = self.solver.check_assumptions(&bools);

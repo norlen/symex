@@ -11,9 +11,10 @@ use tracing::trace;
 
 use crate::{
     executor::llvm::{LLVMExecutorError, ReturnValue},
+    llvm::type_to_expr_type,
     memory::Memory,
     smt::{Expression, Solutions, Solver, SolverContext},
-    LLVMExecutor,
+    ExpressionType, LLVMExecutor, Variable,
 };
 
 /// Hook type
@@ -104,14 +105,14 @@ pub fn symbolic_no_type(
     let new_value = vm.state.ctx.unconstrained(concrete_size as u32, &name);
 
     let addr = vm.state.get_expr(addr)?;
-    vm.state.memory.write(&addr, new_value)?;
+    vm.state.memory.write(&addr, new_value.clone())?;
 
-    // let solution_var = SolutionVariable {
-    //     name,
-    //     value,
-    //     ty: None,
-    // };
-    // vm.state.symbols.push(solution_var);
+    let var = Variable {
+        name: None,
+        value: new_value,
+        ty: ExpressionType::Unknown,
+    };
+    vm.state.marked_symbolic.push(var);
 
     Ok(ReturnValue::Void)
 }
@@ -133,12 +134,12 @@ pub fn symbolic(
         let name = get_operand_name(&addr);
         let new_value = vm.state.ctx.unconstrained(size, &name);
 
-        // let solution_var = SolutionVariable {
-        //     name,
-        //     value: new_symbol.clone(),
-        //     ty: Some(inner_ty.clone()),
-        // };
-        // vm.state.symbols.push(solution_var);
+        let var = Variable {
+            name: Some(name),
+            value: new_value.clone(),
+            ty: type_to_expr_type(inner_ty.as_ref(), vm.project),
+        };
+        vm.state.marked_symbolic.push(var);
 
         let addr = vm.state.get_expr(addr)?;
         vm.state.memory.write(&addr, new_value)?;

@@ -2,6 +2,7 @@ use anyhow::{anyhow, Result};
 use clap::Parser;
 use log::debug;
 use std::{fs, path::PathBuf};
+use x0001e::RunConfig;
 
 const BINARY_NAME: &str = "x0001e";
 
@@ -90,7 +91,18 @@ fn run_rs(args: Args) -> Result<()> {
     };
     let fn_name = format!("{}::{fn_name}", opts.get_module_name()?);
     debug!("Starting analysis on target: {target_path:?}, function: {fn_name}");
-    runner::run(&target_path, &fn_name)
+
+    let cfg = RunConfig {
+        solve_inputs: true,
+        solve_symbolics: true,
+        solve_output: true,
+        solve_for: x0001e::SolveFor::All,
+    };
+
+    let results = x0001e::run(&target_path, &fn_name, &cfg)?;
+    // println!("results: {results:#?}");
+
+    Ok(())
 }
 
 fn settings_from_args(opts: &Args) -> Settings {
@@ -143,7 +155,8 @@ fn run_c(args: ClangArgs) -> Result<()> {
         "Starting analysis on target: {:?}, function: {fn_name}",
         opts.out_path
     );
-    runner::run(&opts.out_path, &fn_name)
+    todo!()
+    // runner::run(&opts.out_path, &fn_name)
 }
 
 fn clang_settings_from_args(opts: &ClangArgs) -> build_c::Settings {

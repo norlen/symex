@@ -1,15 +1,13 @@
 use z3::{
-    ast::{Bool, BV},
+    ast::{Ast, Bool, BV},
     Context,
 };
 
 use super::{Expression, Solver, SolverContext, SolverError};
 
-//mod builder;
 mod expr;
 mod solver;
 
-//pub(super) use builder::Z3Builder;
 pub(super) use expr::Z3Expr;
 pub(super) use solver::Z3SolverIncremental;
 
@@ -19,9 +17,7 @@ pub struct Z3SolverContext<'ctx> {
 }
 
 impl<'ctx> SolverContext<Z3Expr<'ctx>> for Z3SolverContext<'ctx> {
-    //type Builder = Z3Builder<'static>;
     type Solver = Z3SolverIncremental<'ctx>;
-    // type E = Z3Expr<'static>;
 
     fn unconstrained(&self, bits: u32, name: &str) -> Z3Expr<'ctx> {
         BV::new_const(self.ctx, name, bits).into()
@@ -44,7 +40,23 @@ impl<'ctx> SolverContext<Z3Expr<'ctx>> for Z3SolverContext<'ctx> {
     }
 
     fn from_binary_string(&self, bits: &str) -> Z3Expr<'ctx> {
-        BV::fresh_const(self.ctx, bits, bits.len() as u32).into()
+        // TODO: Clean up this code.
+        let mut res: Option<BV<'ctx>> = None;
+        let mut curr = 0;
+        while curr < bits.len() {
+            let upper_bound = std::cmp::min(bits.len(), curr + 64);
+            let v = &bits[curr..upper_bound];
+            let v = i64::from_str_radix(v, 2).unwrap();
+            let width = upper_bound - curr;
+            let v = BV::from_i64(self.ctx, v, width as u32);
+            match res {
+                Some(c) => res = Some(c.concat(&v)),
+                None => res = Some(v),
+            }
+            curr = upper_bound;
+        }
+        let res = res.unwrap().simplify();
+        Z3Expr::BV(res)
     }
 }
 
@@ -55,5 +67,36 @@ impl<'ctx> Z3SolverContext<'ctx> {
         let ctx = Box::leak(ctx);
 
         Self { ctx }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Z3Array<'ctx>(z3::ast::Array<'ctx>);
+
+impl<'ctx> super::Array for Z3Array<'ctx> {
+    type Expression = Z3Expr<'ctx>;
+
+    type Context = Z3SolverContext<'ctx>;
+
+    fn new(ctx: &Self::Context, index_size: usize, element_size: usize, name: &str) -> Self {
+        let index_sort = z3::Sort::bitvector(&ctx.ctx, index_size as u32);
+        let element_sort = z3::Sort::bitvector(&ctx.ctx, element_size as u32);
+        let arr = z3::ast::Array::new_const(&ctx.ctx, name, &index_sort, &element_sort);
+        Self(arr)
+    }
+
+    fn read(&self, index: &Self::Expression) -> Self::Expression {
+        let index = index.coerce_bv();
+        if let Some(bv) = self.0.select(&index).as_bv() {
+            Z3Expr::BV(bv)
+        } else {
+            panic!();
+        }
+    }
+
+    fn write(&mut self, index: &Self::Expression, value: Self::Expression) {
+        let index = index.coerce_bv();
+        let value = value.coerce_bv();
+        self.0 = self.0.store(&index, &value);
     }
 }

@@ -2,23 +2,10 @@ use std::path::Path;
 // use tracing::Level;
 // use tracing_subscriber::FmtSubscriber;
 
-use x0001e::llvm::LLVMState;
-use x0001e::llvm::ReturnValue;
-use x0001e::ConcreteValue;
-use x0001e::DExpr;
-use x0001e::ExecutorError;
-use x0001e::Project;
-use x0001e::VM;
-use x0001e::{DContext, Expression};
-
-#[derive(Debug)]
-pub struct PathResult {
-    pub result: Result<Option<ConcreteValue>, ExecutorError>,
-
-    pub inputs: Vec<ConcreteValue>,
-
-    pub symbolics: Vec<ConcreteValue>,
-}
+use x0001e::{
+    llvm::{LLVMState, ReturnValue},
+    DContext, DExpr, ExecutorError, Expression, Project, VM,
+};
 
 fn get_u128_value(expr: DExpr, state: &LLVMState) -> u128 {
     let value = state

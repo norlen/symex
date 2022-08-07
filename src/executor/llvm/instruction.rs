@@ -621,7 +621,10 @@ impl<'p> LLVMInstruction {
         // Test: ITE resolutions, reduces amount of paths but increases expr complexity.
         // Seems to be slower.
 
-        // let addresses = e.state.memory.resolve_addresses(&addr)?;
+        // let addresses = e
+        //     .state
+        //     .memory
+        //     .resolve_addresses(&addr, e.vm.cfg.max_memory_access_resolutions)?;
         // let mut value = None;
 
         // for address in addresses {

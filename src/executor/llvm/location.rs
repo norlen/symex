@@ -1,7 +1,6 @@
 use llvm_ir::{BasicBlock, DebugLoc, Function, HasDebugLoc, Name};
 
-use crate::executor::llvm::project::ModuleHandle;
-use crate::executor::llvm::Result;
+use crate::executor::llvm::{project::ModuleHandle, Result};
 
 // TODO:
 // - Remove `source_loc` and add function for that instead.

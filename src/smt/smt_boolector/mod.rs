@@ -8,7 +8,6 @@ use std::rc::Rc;
 pub(crate) mod expr;
 mod solver;
 
-//pub(super) use builder::Z3Builder;
 pub(super) use expr::BoolectorExpr;
 pub(super) use solver::BoolectorIncrementalSolver;
 
@@ -52,17 +51,35 @@ impl BoolectorSolverContext {
         ctx.set_opt(BtorOption::Incremental(true));
         ctx.set_opt(BtorOption::PrettyPrint(true));
         ctx.set_opt(BtorOption::OutputNumberFormat(NumberFormat::Hexadecimal));
-        // ctx.set_opt(BtorOption::RewriteLevel(RewriteLevel::Full));
-        // ctx.set_opt(BtorOption::SkeletonPreproc(true));
-        // ctx.set_opt(BtorOption::Ackermann(true));
-        // ctx.set_opt(BtorOption::BetaReduce(true));
-        // ctx.set_opt(BtorOption::EliminateSlices(true));
-        // ctx.set_opt(BtorOption::VariableSubst(true));
-        // ctx.set_opt(BtorOption::MergeLambdas(true));
-        // ctx.set_opt(BtorOption::ExtractLambdas(true));
-        // ctx.set_opt(BtorOption::Normalize(true));
-        // ctx.set_opt(BtorOption::NormalizeAdd(true));
 
         Self { ctx }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct BoolectorArray(pub(super) boolector::Array<Rc<Btor>>);
+
+impl super::Array for BoolectorArray {
+    type Expression = BoolectorExpr;
+
+    type Context = BoolectorSolverContext;
+
+    fn new(ctx: &Self::Context, index_size: usize, element_size: usize, name: &str) -> Self {
+        let memory = boolector::Array::new(
+            ctx.ctx.clone(),
+            index_size as u32,
+            element_size as u32,
+            Some(name),
+        );
+
+        Self(memory)
+    }
+
+    fn read(&self, index: &Self::Expression) -> Self::Expression {
+        BoolectorExpr(self.0.read(&index.0))
+    }
+
+    fn write(&mut self, index: &Self::Expression, value: Self::Expression) {
+        self.0 = self.0.write(&index.0, &value.0)
     }
 }

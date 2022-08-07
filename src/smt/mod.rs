@@ -4,13 +4,15 @@ use thiserror::Error;
 pub mod smt_boolector;
 pub mod smt_z3;
 
-// pub type DExpr = smt_z3::Z3Expr<'static>;
-// pub type DSolver = smt_z3::Z3SolverIncremental<'static>;
-// pub type DContext = smt_z3::Z3SolverContext<'static>;
+pub type DExpr = smt_z3::Z3Expr<'static>;
+pub type DSolver = smt_z3::Z3SolverIncremental<'static>;
+pub type DContext = smt_z3::Z3SolverContext<'static>;
+pub type DArray = smt_z3::Z3Array<'static>;
 
-pub type DExpr = smt_boolector::BoolectorExpr;
-pub type DSolver = smt_boolector::BoolectorIncrementalSolver;
-pub type DContext = smt_boolector::BoolectorSolverContext;
+// pub type DExpr = smt_boolector::BoolectorExpr;
+// pub type DSolver = smt_boolector::BoolectorIncrementalSolver;
+// pub type DContext = smt_boolector::BoolectorSolverContext;
+// pub type DArray = smt_boolector::BoolectorArray;
 
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum SolverError {
@@ -82,7 +84,21 @@ pub trait SolverContext<E: Expression> {
     }
 }
 
-pub trait Expression: Sized + Debug {
+pub trait Array: Sized + Clone + Debug {
+    type Expression: Expression;
+    type Context: SolverContext<Self::Expression>;
+
+    /// Create a new array where index has size `index_size` and each element has size `element_size`.
+    fn new(ctx: &Self::Context, index_size: usize, element_size: usize, name: &str) -> Self;
+
+    /// Return value with specific index.
+    fn read(&self, index: &Self::Expression) -> Self::Expression;
+
+    /// Write value to index.
+    fn write(&mut self, index: &Self::Expression, value: Self::Expression);
+}
+
+pub trait Expression: Sized + Clone + Debug {
     type Context: SolverContext<Self>;
 
     /// Returns the bit width of the [Expression].
@@ -214,8 +230,8 @@ pub trait Expression: Sized + Debug {
     fn uadds(&self, other: &Self) -> Self {
         assert_eq!(self.len(), other.len());
 
-        let result = self.add(other);
-        let overflow = self.uaddo(other);
+        let result = self.add(other).simplify();
+        let overflow = self.uaddo(other).simplify();
         let saturated = self.get_ctx().unsigned_max(self.len());
 
         overflow.ite(&saturated, &result)
@@ -229,16 +245,18 @@ pub trait Expression: Sized + Debug {
         assert_eq!(self.len(), other.len());
         let width = self.len();
 
-        let result = self.add(other);
-        let overflow = self.saddo(other);
+        let result = self.add(other).simplify();
+        let overflow = self.saddo(other).simplify();
 
         let min = self.get_ctx().signed_min(width);
         let max = self.get_ctx().signed_max(width);
 
-        // Check the sign bit.
-        let is_negative = self.slice(self.len() - 1, self.len() - 1);
+        // Check the sign bit if max or min should be given on overflow.
+        let is_negative = self.slice(self.len() - 1, self.len() - 1).simplify();
 
-        overflow.ite(&is_negative.ite(&min, &max), &result)
+        overflow
+            .ite(&is_negative.ite(&min, &max), &result)
+            .simplify()
     }
 
     fn simplify(self) -> Self;

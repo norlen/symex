@@ -3,10 +3,11 @@
 //! Constant operands are especially annoying, as they can contain many of the regular instructions.
 use llvm_ir::{Constant, ConstantRef, IntPredicate, Operand, Type};
 
-use super::ToValue;
-use super::{convert_to_map, gep};
-use crate::executor::llvm::{LLVMExecutorError, LLVMState, Result};
-use crate::smt::{DExpr, Expression, SolverContext};
+use super::{convert_to_map, gep, ToValue};
+use crate::{
+    executor::llvm::{LLVMExecutorError, LLVMState, Result},
+    smt::{DExpr, Expression, SolverContext},
+};
 
 /// Convert an operand to an expression.
 pub fn operand_to_expr(state: &LLVMState, operand: &Operand) -> Result<DExpr> {
