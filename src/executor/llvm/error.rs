@@ -1,4 +1,4 @@
-use crate::{memory::MemoryError, smt::SolverError, ExecutorError};
+use crate::{core::memory::MemoryError, core::smt::SolverError, ExecutorError};
 
 pub type Result<T> = std::result::Result<T, LLVMExecutorError>;
 

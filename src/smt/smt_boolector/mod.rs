@@ -1,13 +1,15 @@
-use super::{Expression, Solver, SolverContext, SolverError};
 use boolector::{
     option::{BtorOption, NumberFormat},
     Btor, BV,
 };
 use std::rc::Rc;
 
-pub(crate) mod expr;
+use crate::core::smt::{self, SolverContext};
+
+mod expr;
 mod solver;
 
+// Re-exports.
 pub(super) use expr::BoolectorExpr;
 pub(super) use solver::BoolectorIncrementalSolver;
 
@@ -59,7 +61,7 @@ impl BoolectorSolverContext {
 #[derive(Debug, Clone)]
 pub struct BoolectorArray(pub(super) boolector::Array<Rc<Btor>>);
 
-impl super::Array for BoolectorArray {
+impl smt::Array for BoolectorArray {
     type Expression = BoolectorExpr;
 
     type Context = BoolectorSolverContext;

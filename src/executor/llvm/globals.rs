@@ -6,8 +6,8 @@ use std::collections::HashMap;
 use tracing::{debug, trace};
 
 use crate::{
+    core::memory::Memory,
     executor::llvm::{LLVMExecutorError, ModuleHandle, Project},
-    memory::Memory,
 };
 
 /// A global [Function] or [GlobalVariable].

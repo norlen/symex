@@ -2,7 +2,8 @@
 use boolector::{Btor, BV};
 use std::{cmp::Ordering, rc::Rc};
 
-use super::{BoolectorSolverContext, Expression};
+use super::BoolectorSolverContext;
+use crate::core::smt::Expression;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BoolectorExpr(pub(crate) BV<Rc<Btor>>);

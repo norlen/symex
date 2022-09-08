@@ -2,9 +2,9 @@ use llvm_ir::Operand;
 use tracing::debug;
 
 use crate::{
+    core::memory::{Memory, BITS_IN_BYTE},
+    core::smt::{Expression, SolverContext},
     executor::llvm::{LLVMExecutorError, ReturnValue},
-    memory::{Memory, BITS_IN_BYTE},
-    smt::{Expression, SolverContext},
     LLVMExecutor,
 };
 

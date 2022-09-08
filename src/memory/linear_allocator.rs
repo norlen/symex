@@ -3,7 +3,7 @@
 //!
 use tracing::debug;
 
-use crate::memory::{MemoryError, BITS_IN_BYTE};
+use crate::core::memory::{MemoryError, BITS_IN_BYTE};
 
 /// Simple bump allocator that starts allocating addresses at `LinearAllocator::ALLOC_START`
 #[derive(Debug, Clone, Default)]

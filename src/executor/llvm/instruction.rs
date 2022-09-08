@@ -6,9 +6,13 @@ use crate::executor::llvm::{
     binop, cast_to, convert_to_map, gep, icmp, FunctionType, LLVMExecutorError, Result, ReturnValue,
 };
 use crate::llvm::{extract_value, get_element_offset};
-use crate::memory::Memory;
-use crate::smt::{DExpr, SolverError};
-use crate::smt::{Expression, Solver, SolverContext};
+use crate::{
+    core::{
+        memory::Memory,
+        smt::{Expression, Solver, SolverContext, SolverError},
+    },
+    smt::DExpr,
+};
 
 pub(super) struct LLVMInstruction;
 
@@ -1146,9 +1150,7 @@ impl<'p> LLVMInstruction {
 #[cfg(test)]
 mod tests {
     use crate::{
-        llvm::ReturnValue,
-        smt::{DContext, Expression},
-        ExecutorError, Project, VM,
+        core::smt::Expression, llvm::ReturnValue, smt::DContext, ExecutorError, Project, VM,
     };
 
     fn run(fn_name: &str) -> Vec<Result<Option<i64>, ExecutorError>> {

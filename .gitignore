@@ -19,3 +19,5 @@ Cargo.lock
 /old
 **/flamegraph.svg
 **/perf.data**
+
+crates/

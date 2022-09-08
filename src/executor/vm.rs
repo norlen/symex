@@ -1,12 +1,13 @@
 use crate::{
+    core::smt::{Solver, SolverContext},
     executor::{
         llvm::{project::Project, LLVMState},
         ExecutorError,
     },
     llvm::{type_to_expr_type, ReturnValue},
     path_exploration::Path,
-    smt::{DContext, DSolver, SolverContext},
-    Config, DFSPathExploration, LLVMExecutor, PathExploration, Solver, Stats, Variable,
+    smt::{DContext, DSolver},
+    Config, DFSPathExploration, LLVMExecutor, PathExploration, Stats, Variable,
 };
 
 #[derive(Debug)]

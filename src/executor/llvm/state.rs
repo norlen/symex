@@ -1,26 +1,20 @@
-use crate::executor::llvm::common::Op;
-use crate::executor::llvm::project::ModuleHandle;
-use crate::executor::llvm::project::Project;
-use crate::memory::ArrayMemory;
-use crate::memory::Memory;
-use crate::memory::ObjectMemory;
-use crate::smt::DContext;
-use crate::smt::DExpr;
-use crate::smt::DSolver;
-use crate::smt::SolverContext;
-use crate::Array;
-use crate::Variable;
-use llvm_ir::types::Typed;
-use llvm_ir::Function;
-use llvm_ir::Name;
-use llvm_ir::TypeRef;
+use llvm_ir::{types::Typed, Function, Name, TypeRef};
 use std::collections::HashMap;
 use tracing::warn;
 
-use super::const_to_expr;
-use super::operand_to_expr;
-use super::GlobalReferenceKind;
-use super::GlobalReferences;
+use crate::memory::ArrayMemory;
+// use crate::memory::ObjectMemory;
+use crate::{
+    core::{memory::Memory, smt::SolverContext},
+    executor::llvm::{
+        common::Op,
+        project::{ModuleHandle, Project},
+    },
+    smt::{DContext, DExpr, DSolver},
+    Variable,
+};
+
+use super::{const_to_expr, operand_to_expr, GlobalReferenceKind, GlobalReferences};
 pub use super::{Location, Result};
 
 #[derive(Debug, Clone)]

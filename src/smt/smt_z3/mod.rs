@@ -3,11 +3,12 @@ use z3::{
     Context,
 };
 
-use super::{Expression, Solver, SolverContext, SolverError};
+use crate::core::smt::{self, SolverContext};
 
 mod expr;
 mod solver;
 
+// Re-exports
 pub(super) use expr::Z3Expr;
 pub(super) use solver::Z3SolverIncremental;
 
@@ -73,7 +74,7 @@ impl<'ctx> Z3SolverContext<'ctx> {
 #[derive(Debug, Clone)]
 pub struct Z3Array<'ctx>(z3::ast::Array<'ctx>);
 
-impl<'ctx> super::Array for Z3Array<'ctx> {
+impl<'ctx> smt::Array for Z3Array<'ctx> {
     type Expression = Z3Expr<'ctx>;
 
     type Context = Z3SolverContext<'ctx>;

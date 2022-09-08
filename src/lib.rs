@@ -97,6 +97,7 @@
 //#![warn(missing_docs)]
 
 // mod environment;
+pub mod core;
 mod executor;
 pub mod memory;
 mod path_exploration;
@@ -107,7 +108,6 @@ mod util;
 pub use executor::llvm::{project::Project, LLVMExecutor};
 pub use executor::*;
 pub use executor::{Executor, ExecutorError};
-pub use memory::MemoryError;
 pub use path_exploration::*;
 pub use run::*;
 pub use smt::*;

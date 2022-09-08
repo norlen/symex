@@ -74,9 +74,12 @@ use std::collections::HashMap;
 use tracing::{trace, warn};
 
 use crate::{
+    core::{
+        memory::{Memory, BITS_IN_BYTE},
+        smt::{Expression, Solver, SolverContext},
+    },
     executor::llvm::{common::binop, LLVMExecutor, LLVMExecutorError, Result, ReturnValue},
-    memory::{Memory, BITS_IN_BYTE},
-    smt::{DExpr, Expression, Solver, SolverContext},
+    smt::DExpr,
 };
 
 /// Check if the given name is an LLVM intrinsic.
@@ -475,9 +478,7 @@ pub fn llvm_assume(vm: &mut LLVMExecutor<'_>, args: &[&Operand]) -> Result<Retur
 #[cfg(test)]
 mod tests {
     use crate::{
-        llvm::ReturnValue,
-        smt::{DContext, Expression},
-        ExecutorError, Project, VM,
+        core::smt::Expression, llvm::ReturnValue, smt::DContext, ExecutorError, Project, VM,
     };
 
     fn run(fn_name: &str) -> Vec<Result<Option<i64>, ExecutorError>> {

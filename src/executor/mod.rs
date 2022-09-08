@@ -1,4 +1,4 @@
-use crate::{memory::MemoryError, smt::SolverError};
+use crate::core::{memory::MemoryError, smt::SolverError};
 
 mod cfg;
 pub mod llvm;

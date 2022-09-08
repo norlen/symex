@@ -10,10 +10,10 @@ use tracing::trace;
 // This would require a general purpose project as well though.
 
 use crate::{
+    core::memory::Memory,
+    core::smt::{Expression, Solutions, Solver, SolverContext},
     executor::llvm::{LLVMExecutorError, ReturnValue},
     llvm::type_to_expr_type,
-    memory::Memory,
-    smt::{Expression, Solutions, Solver, SolverContext},
     ExpressionType, LLVMExecutor, Variable,
 };
 

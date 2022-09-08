@@ -10,8 +10,14 @@
 //! it may provide better performance in certain situations.
 use tracing::trace;
 
-use super::{linear_allocator::LinearAllocator, Memory, BITS_IN_BYTE};
-use crate::{Array, DArray, DContext, DExpr, Expression, MemoryError, SolverContext};
+use crate::{
+    core::{
+        memory::{Memory, MemoryError, BITS_IN_BYTE},
+        smt::{Array, Expression, SolverContext},
+    },
+    memory::linear_allocator::LinearAllocator,
+    smt::{DArray, DContext, DExpr},
+};
 
 /// Allocations and backing memory store.
 ///

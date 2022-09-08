@@ -4,9 +4,12 @@ use std::collections::BTreeMap;
 use tracing::{trace, warn};
 
 use crate::{
-    memory::{linear_allocator::LinearAllocator, Memory, MemoryError},
-    smt::{DContext, DExpr, DSolver, Expression, SolverContext},
-    Solutions, Solver,
+    core::{
+        memory::{Memory, MemoryError},
+        smt::{Expression, Solutions, Solver, SolverContext},
+    },
+    memory::linear_allocator::LinearAllocator,
+    smt::{DContext, DExpr, DSolver},
 };
 
 #[derive(Debug, Clone)]

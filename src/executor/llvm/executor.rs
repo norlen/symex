@@ -6,6 +6,7 @@ use llvm_ir::{
 use tracing::trace;
 
 use crate::{
+    core::smt::{Expression, Solutions, Solver},
     executor::{
         llvm::{
             project::Project, InstructionIndex, LLVMExecutorError, LLVMInstruction, LLVMState,
@@ -14,7 +15,7 @@ use crate::{
         vm::VM,
     },
     path_exploration::Path,
-    smt::{DExpr, Expression, Solutions, Solver},
+    smt::DExpr,
     PathExploration,
 };
 

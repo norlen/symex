@@ -1,9 +1,6 @@
 use llvm_ir::types::{FPType, NamedStructDef, Type, TypeRef};
 
-use crate::executor::llvm::project::Project;
-use crate::executor::llvm::{LLVMExecutorError, Result};
-use crate::memory::to_bytes;
-use crate::smt::{DContext, DExpr, Expression, SolverContext};
+use crate::{executor::llvm::{project::Project, LLVMExecutorError, Result}, core::{memory::to_bytes, smt::{ Expression, SolverContext}}, smt::{DContext, DExpr}};
 
 /// Calculates the size of the type in bits.
 pub fn size_in_bits(ty: &Type, project: &Project) -> Option<u64> {

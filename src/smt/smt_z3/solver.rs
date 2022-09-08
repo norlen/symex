@@ -4,8 +4,8 @@ use z3::{
     SatResult,
 };
 
-use super::{Solver, SolverError, Z3Expr, Z3SolverContext};
-use crate::smt::{Expression, Solutions};
+use super::{Z3Expr, Z3SolverContext};
+use crate::core::smt::{Expression, Solutions, Solver, SolverError};
 
 #[derive(Debug, Clone)]
 pub struct Z3SolverIncremental<'ctx> {

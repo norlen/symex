@@ -1,7 +1,8 @@
 use std::cmp::Ordering;
 use z3::ast::{Ast, Bool, BV};
 
-use super::{Expression, Z3SolverContext};
+use super::Z3SolverContext;
+use crate::core::smt::Expression;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Z3Expr<'ctx> {

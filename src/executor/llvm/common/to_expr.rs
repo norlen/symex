@@ -5,8 +5,9 @@ use llvm_ir::{Constant, ConstantRef, IntPredicate, Operand, Type};
 
 use super::{convert_to_map, gep, ToValue};
 use crate::{
+    core::smt::{Expression, SolverContext},
     executor::llvm::{LLVMExecutorError, LLVMState, Result},
-    smt::{DExpr, Expression, SolverContext},
+    smt::DExpr,
 };
 
 /// Convert an operand to an expression.
