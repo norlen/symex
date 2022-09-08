@@ -1,9 +1,7 @@
 use crate::{
+    core::executor::ExecutorError,
     core::smt::{Solver, SolverContext},
-    executor::{
-        llvm::{project::Project, LLVMState},
-        ExecutorError,
-    },
+    executor::llvm::{project::Project, LLVMState},
     llvm::{type_to_expr_type, ReturnValue},
     path_exploration::Path,
     smt::{DContext, DSolver},

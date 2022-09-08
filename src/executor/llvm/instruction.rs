@@ -1150,7 +1150,10 @@ impl<'p> LLVMInstruction {
 #[cfg(test)]
 mod tests {
     use crate::{
-        core::smt::Expression, llvm::ReturnValue, smt::DContext, ExecutorError, Project, VM,
+        core::{executor::ExecutorError, smt::Expression},
+        llvm::ReturnValue,
+        smt::DContext,
+        Project, VM,
     };
 
     fn run(fn_name: &str) -> Vec<Result<Option<i64>, ExecutorError>> {

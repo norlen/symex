@@ -1,8 +1,8 @@
 use std::{path::Path, time::Instant};
 
 use crate::{
-    llvm::LLVMState, DContext, ErrorReason, ExecutorError, PathResult, PathStatus, Project,
-    Variable, VM,
+    core::executor::ExecutorError, llvm::LLVMState, DContext, ErrorReason, PathResult, PathStatus,
+    Project, Variable, VM,
 };
 
 fn get_values<'a, I>(vars: I, state: &LLVMState) -> Result<Vec<Variable>, ExecutorError>

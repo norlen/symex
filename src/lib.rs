@@ -106,8 +106,8 @@ mod smt;
 mod util;
 
 pub use executor::llvm::{project::Project, LLVMExecutor};
+// pub use executor::Executor;
 pub use executor::*;
-pub use executor::{Executor, ExecutorError};
 pub use path_exploration::*;
 pub use run::*;
 pub use smt::*;

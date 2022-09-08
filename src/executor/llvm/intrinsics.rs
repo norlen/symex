@@ -478,7 +478,10 @@ pub fn llvm_assume(vm: &mut LLVMExecutor<'_>, args: &[&Operand]) -> Result<Retur
 #[cfg(test)]
 mod tests {
     use crate::{
-        core::smt::Expression, llvm::ReturnValue, smt::DContext, ExecutorError, Project, VM,
+        core::{executor::ExecutorError, smt::Expression},
+        llvm::ReturnValue,
+        smt::DContext,
+        Project, VM,
     };
 
     fn run(fn_name: &str) -> Vec<Result<Option<i64>, ExecutorError>> {

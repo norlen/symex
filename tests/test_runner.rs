@@ -3,9 +3,9 @@ use std::path::Path;
 // use tracing_subscriber::FmtSubscriber;
 
 use x0001e::{
-    core::smt::Expression,
+    core::{executor::ExecutorError, smt::Expression},
     llvm::{LLVMState, ReturnValue},
-    DContext, DExpr, ExecutorError, Project, VM,
+    DContext, DExpr, Project, VM,
 };
 
 fn get_u128_value(expr: DExpr, state: &LLVMState) -> u128 {
