@@ -1,7 +1,5 @@
 #![allow(dead_code)]
 
-use valid_derive::*;
-
 trait Valid {
     fn is_valid(&self) -> bool;
 }
