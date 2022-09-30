@@ -8,19 +8,18 @@ use std::{collections::HashMap, fs, path::Path};
 use tracing::warn;
 
 use crate::{
-    executor::llvm::common::{get_bit_offset, get_byte_offset, size_in_bits, size_in_bytes},
-    smt::DContext,
+    executor::llvm::{
+        common::{get_bit_offset, get_byte_offset, size_in_bits, size_in_bytes},
+        Result,
+    },
+    smt::{DContext, DExpr},
 };
-use crate::{executor::llvm::Result, smt::DExpr};
 
 use super::{
     custom_modules::{CustomModule, RustModule},
-    hooks::Hook,
-    LLVMExecutorError,
-};
-use super::{
-    hooks::Hooks,
+    hooks::{Hook, Hooks},
     intrinsics::{is_intrinsic, Intrinsic, Intrinsics},
+    LLVMExecutorError,
 };
 
 /// Handle that references a [Module].

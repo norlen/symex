@@ -77,45 +77,13 @@ impl<'vm> LLVMExecutor<'vm> {
             // also want to resume execution for e.g. `br`.
             let result = self.execute_function()?;
 
-            // let stack_frame = match self.state.stack_frames.pop() {
-            //     Some(stack_frame) => stack_frame,
-            //     None => {
-            //         // If we don't have any callstacks to pop, we're done. So return the result to the
-            //         // caller and let them explore more paths if they want.
-            //         // return Ok(result);
-            //         return Ok(());
-            //     }
-            // };
+            // If we returned to the top-level function, i.e. the initial stack frame then execution
+            // is done. Keep the stack frame intact so variables can be checked.
             if self.state.stack_frames.len() == 1 {
                 return Ok(result);
-                // let result = match result {
-                //     ReturnValue::Value(v) => {
-                //         let v = self.state.constraints.get_value(&v).unwrap();
-                //         let s = v.to_binary_string();
-                //         let terminator =
-                //             &self.state.stack_frames.last().unwrap().location.block.term;
-
-                //         let ty = match terminator {
-                //             Terminator::Ret(instr) => match &instr.return_operand {
-                //                 Some(op) => Some(self.state.type_of(op)),
-                //                 None => None,
-                //             },
-                //             _ => None,
-                //         };
-                //         let value = match ty {
-                //             Some(ty) => {
-                //                 let size = self.project.bit_size(ty.as_ref())?;
-                //                 let s = format!("{s:0>size$}", size = size as usize);
-                //                 Some(create_concrete_value(&s, ty.as_ref(), self.project))
-                //             }
-                //             None => None,
-                //         };
-                //         crate::executor::vm::ReturnValue::Value(value)
-                //     }
-                //     ReturnValue::Void => crate::executor::vm::ReturnValue::Void,
-                // };
-                // return Ok(result);
             }
+
+            // Remove stack frame from where we returned from.
             self.state.stack_frames.pop().unwrap();
 
             let location = &self.state.stack_frames.last().unwrap().location;
@@ -187,17 +155,8 @@ impl<'vm> LLVMExecutor<'vm> {
     /// hits a terminator. This can either be a value, or a variant denoting a branch has occurred
     /// and that the callee should call this function again to resume execution in that basic block.
     fn execute_basic_block(&mut self) -> Result<TerminatorResult> {
-        // let stack_frame = self.state.stack_frames.last_mut().unwrap();
-        // let location = &mut stack_frame.location;
-
-        // debug!(
-        //     "function {}, block: {}",
-        //     location.func.name, location.block.name
-        // );
-
-        // TODO: fix this shit. Cannot borrow from self multiple times, is the biggest issue with
-        // storing a ref to the location.
-
+        // TODO: This is a bit messy, but cannot store a reference to the stack frame since that
+        // will trigger multiple borrows from self.
         let offset_into_block = self
             .state
             .stack_frames
@@ -270,15 +229,7 @@ impl<'vm> LLVMExecutor<'vm> {
             panic!("Call depth exceeded");
         }
 
-        // Create new location at the start of function to call, and store our current
-        // position in the callstack so we can return here later.
-        // let mut new_location = Location::new(module, function);
-        // std::mem::swap(&mut new_location, &mut self.state.current_loc);
-
-        // let callsite = match call {
-        //     Call::Call(call) => Callsite::from_call(new_location, call),
-        //     Call::Invoke(invoke) => Callsite::from_invoke(new_location, invoke),
-        // };
+        // Create new stack frame for our branch location.
         let new_location = Location::new(module, function);
         let mut stack_frame = StackFrame::new(new_location);
 
@@ -287,22 +238,12 @@ impl<'vm> LLVMExecutor<'vm> {
             stack_frame.registers.insert(param.name.clone(), arg);
         }
 
-        // self.state.callstack.push(callsite);
-
-        // Create a new variable scope for the function we're about to call.
-        // self.state.vars.enter_scope();
-
-        self.state.stack_frames.push(stack_frame);
-
-        // Update our current location and start executing the the new function's basic block.
+        // Push the newly created stack frame, execution will resume from this location.
         //
-        // Don't really have to care about errors, since if an error occurs the path is dead.
+        // We can return early on errors without having to clear the stack frames since once a path
+        // encounters an error the path will never be resumed again.
+        self.state.stack_frames.push(stack_frame);
         let return_value = self.execute_function()?;
-
-        // Restore callsite.
-        // let callsite = self.state.callstack.pop().unwrap();
-        // self.state.current_loc = callsite.location;
-
         self.state.stack_frames.pop();
 
         Ok(return_value)
@@ -311,6 +252,7 @@ impl<'vm> LLVMExecutor<'vm> {
     /// Helper to update the location to another basic block inside the same function.
     pub fn branch(&mut self, target: &Name) -> Result<TerminatorResult> {
         let stack_frame = self.state.stack_frames.last_mut().unwrap();
+
         let entry_count = stack_frame
             .basic_block_entry_count
             .entry(target.clone())
@@ -334,21 +276,9 @@ impl<'vm> LLVMExecutor<'vm> {
             constraint
         );
 
-        // Create a new context-level, this is so the backtracking point has
-        // a valid solver when we resume execution (I think).
-        // self.state.solver.push();
+        let current_location = self.state.stack_frames.last().unwrap().location.clone();
+        let jump_location = Location::jump_bb(current_location, bb_label)?;
 
-        // Location where we resume the execution at.
-        // let jump_location = Location::jump_bb(self.state.current_loc.clone(), bb_label).unwrap();
-
-        // let path = Path::new_with_constraint(self.state.clone(), jump_location, constraint);
-        // self.backtracking_paths.push(path);
-
-        let jump_location = Location::jump_bb(
-            self.state.stack_frames.last().unwrap().location.clone(),
-            bb_label,
-        )
-        .unwrap();
         let forked_state = self.state.fork(jump_location);
         let path = Path::new(forked_state, constraint);
 
@@ -382,11 +312,7 @@ impl<'vm> LLVMExecutor<'vm> {
         Ok(())
     }
 
-    // pub fn type_of<T: Typed>(&self, t: &T) -> TypeRef {
-    //     // self.project.type_of(t, self.current_loc.module)
-    //     todo!()
-    // }
-
+    /// Resolves a call operand to a list of function names.
     pub fn resolve_function(
         &mut self,
         function: &Either<InlineAssembly, Operand>,
@@ -408,20 +334,19 @@ impl<'vm> LLVMExecutor<'vm> {
             }
         }
 
-        let addr = match operand {
-            Operand::LocalOperand { .. } => self.state.get_expr(operand)?,
-            Operand::ConstantOperand(_) => self.state.get_expr(operand)?,
-            Operand::MetadataOperand => return Err(LLVMExecutorError::MalformedInstruction),
-        };
+        // TODO: May just want to concretize here and fork, the resuming operation at this location.
+        // changing to only return a single function name.
 
+        // Concretize the jump address.
+        let addr = self.state.get_expr(operand)?;
         let solutions = self
             .state
             .constraints
             .get_values(&addr, self.vm.cfg.max_fn_ptr_resolutions)?;
 
+        // Return an error if the maximum amount of address resolutions is exceeded, otherwise
+        // for state for each address.
         let addresses = match solutions {
-            // This may be a bug, in that the pointer is unconstrained.
-            // however, todo and fork state
             Solutions::AtLeast(_) => panic!("Too many solutions for function pointer"),
             Solutions::Exactly(s) => s,
         };
@@ -430,6 +355,7 @@ impl<'vm> LLVMExecutor<'vm> {
         for addr in addresses {
             // Should always fit, only 32-bit and 64-bit should be supported.
             let addr = addr.get_constant().unwrap();
+
             let current_module = self.state.stack_frames.last().unwrap().location.module;
 
             let name = self
@@ -444,34 +370,6 @@ impl<'vm> LLVMExecutor<'vm> {
         }
         Ok(function_names)
     }
-
-    // fn initialize_global_references(&mut self) -> Result<()> {
-    //     let public_globals = self.state.global_references.global_references.values();
-    //     let private_globals = self
-    //         .state
-    //         .global_references
-    //         .private_global_references
-    //         .values()
-    //         .flat_map(|m| m.values());
-
-    //     for global in public_globals.chain(private_globals) {
-    //         if let GlobalReferenceKind::GlobalVariable(var) = global.kind {
-    //             if let Some(initializer) = &var.initializer {
-    //                 match self.state.get_expr(initializer) {
-    //                     Ok(value) => {
-    //                         let addr = self.state.ctx.from_u64(global.addr, self.project.ptr_size);
-    //                         self.state.memory.write(&addr, value)?;
-    //                     }
-    //                     Err(err) => {
-    //                         warn!("Error initializing global: {:?}", err);
-    //                     }
-    //                 }
-    //             }
-    //         }
-    //     }
-
-    //     Ok(())
-    // }
 }
 
 // fn create_concrete_value(binary_str: &str, ty: &Type, project: &Project) -> ConcreteValue {

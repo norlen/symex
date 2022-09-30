@@ -80,8 +80,8 @@ impl Location {
         }
     }
 
-    /// Changes the location to another basic block, this also resets the
-    /// [`InstructionIndex`] to `NotStarted`.
+    /// Changes the location to another basic block, this also resets the [`InstructionIndex`] to
+    /// `NotStarted`.
     pub fn jump_bb(location: Location, block_label: &Name) -> Result<Self> {
         let block = location
             .func
@@ -99,8 +99,8 @@ impl Location {
         })
     }
 
-    /// Increase the current instruction index by one. The `NotStarted` variant
-    /// is treated the same as `Instruction(0)`.
+    /// Increase the current instruction index by one. The `NotStarted` variant is treated the same
+    /// as `Instruction(0)`.
     ///
     /// # Panic
     ///

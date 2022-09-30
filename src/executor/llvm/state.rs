@@ -4,6 +4,8 @@ use tracing::warn;
 
 use crate::memory::ArrayMemory;
 // use crate::memory::ObjectMemory;
+
+use super::{const_to_expr, operand_to_expr, GlobalReferenceKind, GlobalReferences};
 use crate::{
     core::{memory::Memory, smt::SolverContext},
     executor::llvm::{
@@ -14,15 +16,20 @@ use crate::{
     Variable,
 };
 
-use super::{const_to_expr, operand_to_expr, GlobalReferenceKind, GlobalReferences};
 pub use super::{Location, Result};
 
+/// Stack frame keeps track of information related to a specific stack frame.
 #[derive(Debug, Clone)]
 pub struct StackFrame {
+    /// Variables created in a specific stack frame.
     pub registers: HashMap<Name, DExpr>,
 
+    /// Location to start or resume execution at in this stack frame.
     pub location: Location,
 
+    /// Keeps track of the number of times a basic block has been branched to.
+    ///
+    /// Can be used to check for exceeded iteration counts.
     pub(super) basic_block_entry_count: HashMap<Name, usize>,
 }
 
@@ -42,10 +49,13 @@ impl StackFrame {
 
 #[derive(Debug, Clone)]
 pub struct LLVMState {
+    /// SMT Context.
     pub ctx: &'static DContext,
 
+    /// The path condition, holds all the saved constraints.
     pub constraints: DSolver,
 
+    /// List of variables marked as symbolic.
     pub marked_symbolic: Vec<Variable>,
 
     // pub memory: ObjectMemory,
@@ -92,12 +102,14 @@ impl LLVMState {
         state
     }
 
+    /// Fork the current state replacing the current executing location with the passed location.
     pub fn fork(&self, location: Location) -> Self {
         let mut new_state = self.clone();
         new_state.stack_frames.last_mut().unwrap().location = location;
         new_state
     }
 
+    /// Retrieves or creates an [Expr] from an [Operand] or [Constant].
     pub fn get_expr<'b, T>(&self, op: T) -> Result<DExpr>
     where
         T: Into<Op<'b>>,

@@ -2,15 +2,16 @@ use llvm_ir::{instruction, terminator, Instruction, Terminator, Type};
 use tracing::{debug, trace, warn};
 
 use super::{LLVMExecutor, TerminatorResult};
-use crate::executor::llvm::{
-    binop, cast_to, convert_to_map, gep, icmp, FunctionType, LLVMExecutorError, Result, ReturnValue,
-};
-use crate::llvm::{extract_value, get_element_offset};
 use crate::{
     core::{
         memory::Memory,
         smt::{Expression, Solver, SolverContext, SolverError},
     },
+    executor::llvm::{
+        binop, cast_to, convert_to_map, gep, icmp, FunctionType, LLVMExecutorError, Result,
+        ReturnValue,
+    },
+    llvm::{extract_value, get_element_offset},
     smt::DExpr,
 };
 
@@ -263,6 +264,7 @@ impl<'p> LLVMInstruction {
         if function_names.len() > 1 {
             panic!("Multiple symblic function pointers not supported yet");
         }
+
         let name = function_names.first().unwrap();
         let function = e.project.get_function(&name, current_module)?;
 
@@ -1081,7 +1083,6 @@ impl<'p> LLVMInstruction {
     fn call(e: &mut LLVMExecutor<'p>, instr: &instruction::Call) -> Result<()> {
         debug!("{}", instr);
 
-        // let current_module = e.state.current_loc.module;
         let current_module = e.state.stack_frames.last().unwrap().location.module;
         let function_names = e.resolve_function(&instr.function)?;
         debug!("resolved functions: {:?}", function_names);
