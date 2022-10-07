@@ -5,9 +5,6 @@ use super::{memory::MemoryError, smt::SolverError};
 // Should support different executors such as for LLVM and ASM
 pub trait Executor {}
 
-// Should be generic enough to support e.g. LLVM modules and ASM modules
-pub trait Module {}
-
 // Indiviual errors from the specific executors should be converted to this more general error
 
 #[derive(Debug, thiserror::Error, PartialEq)]

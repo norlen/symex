@@ -3,12 +3,6 @@
 Cargo.lock
 .vscode
 
-# Misc
-.z3-trace
-**/_check
-/perf
-/dbg
-
 # Generated IR files
 *.bc
 *.ll
@@ -16,8 +10,10 @@ Cargo.lock
 # Keep hand written .ll files for unit tests.
 !tests/unit_tests/*.ll
 
-/old
+# Misc
+.z3-trace
 **/flamegraph.svg
 **/perf.data**
-
-crates/
+/perf
+/dbg
+/misc

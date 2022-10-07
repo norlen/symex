@@ -1,4 +1,3 @@
-mod armv6m;
 mod cfg;
 pub mod llvm;
 mod stats;

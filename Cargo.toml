@@ -10,12 +10,19 @@ either = "1.8.0"
 llvm-ir = { version = "0.8.2", features = ["llvm-14"] }
 env_logger = "0.9.1"
 rustc-demangle = "0.1.21"
-boolector = { version = "0.4.3", features = ["vendor-lgl"] }
-z3 = { version = "0.11.2", features = ["static-link-z3"] }
+boolector = { version = "0.4.3", features = ["vendor-lgl"], optional = true }
+z3 = { version = "0.11.2", features = ["static-link-z3"], optional = true }
 radix_trie = "0.2.1"
 rand = "0.8.5"
 tracing = "0.1.36"
 tracing-subscriber = "0.3.15"
+object = "0.29.0"
+num_enum = "0.5.7"
+
+[features]
+default = ["boolector", "z3"]
+boolector = ["dep:boolector"]
+z3 = ["dep:z3"]
 
 [workspace]
 members = ["cli", "valid_derive", "x0001e_lib"]
