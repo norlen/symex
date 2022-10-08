@@ -49,6 +49,15 @@ To compile and run the example `examples/rust_simple` using the cargo subcommand
 This will display the results of the analysis of the example, showing all the paths it took and
 concrete values for all inputs and output.
 
+### Making tests work
+
+The tests make use of compiled LLVM IR files which are not tracked by git. To make the tests work
+run
+
+```shell
+> ./scripts/compile_tests.sh
+```
+
 ## Known issues
 
 Sometimes when running examples the runner may give
