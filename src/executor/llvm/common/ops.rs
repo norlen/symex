@@ -1,3 +1,8 @@
+/// Ops contain helper function for shared or just moved functionality for instructions.
+///
+/// A lot of functionality is shared between different instructions, and instructions and how
+/// constants are handled as well. This module contain helpers which allows for a lot of
+/// functionality to be shared between different instructions.
 use llvm_ir::{IntPredicate, Operand, Type};
 use tracing::error;
 
@@ -45,6 +50,8 @@ pub(crate) fn extract_value(
     Ok(value)
 }
 
+/// Getelementptr calculates to offset from a base address to an index into an array, or the address
+/// to a specific field in a struct.
 pub(crate) fn gep<'p, T, I>(
     state: &LLVMState,
     address: T,

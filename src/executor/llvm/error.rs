@@ -1,4 +1,4 @@
-use crate::core::{executor::ExecutorError, memory::MemoryError, smt::SolverError};
+use crate::core::{executor::VMError, memory::MemoryError, smt::SolverError};
 
 pub type Result<T> = std::result::Result<T, LLVMExecutorError>;
 
@@ -53,14 +53,14 @@ pub enum LLVMExecutorError {
     SolverError(#[from] SolverError),
 }
 
-impl Into<ExecutorError> for LLVMExecutorError {
-    fn into(self) -> ExecutorError {
+impl Into<VMError> for LLVMExecutorError {
+    fn into(self) -> VMError {
         use LLVMExecutorError::*;
         match self {
-            Abort(i) => ExecutorError::Abort(i),
-            MemoryError(e) => ExecutorError::MemoryError(e),
-            SolverError(e) => ExecutorError::SolverError(e),
-            _ => ExecutorError::Other(format!("{self}")),
+            Abort(i) => VMError::Abort(i),
+            MemoryError(e) => VMError::MemoryError(e),
+            SolverError(e) => VMError::SolverError(e),
+            _ => VMError::Other(format!("{self}")),
         }
     }
 }

@@ -99,9 +99,7 @@ fn run_rs(args: Args) -> Result<()> {
         solve_for: x0001e::SolveFor::All,
     };
 
-    let results = x0001e::run(&target_path, &fn_name, &cfg)?;
-    // println!("results: {results:#?}");
-
+    x0001e::run(&target_path, &fn_name, &cfg)?;
     Ok(())
 }
 

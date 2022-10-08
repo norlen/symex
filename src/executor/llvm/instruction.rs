@@ -749,8 +749,8 @@ impl<'p> LLVMInstruction {
             Min => lhs.slte(&rhs).ite(&lhs, &rhs),
             UMax => lhs.ugte(&rhs).ite(&lhs, &rhs),
             UMin => lhs.ulte(&rhs).ite(&lhs, &rhs),
-            FAdd => todo!(),
-            FSub => todo!(),
+            FAdd => todo!(), // not supported.
+            FSub => todo!(), // not supported.
         };
         e.state.memory.write(&addr, result)?;
 
@@ -1151,13 +1151,13 @@ impl<'p> LLVMInstruction {
 #[cfg(test)]
 mod tests {
     use crate::{
-        core::{executor::ExecutorError, smt::Expression},
+        core::{executor::VMError, smt::Expression},
         llvm::ReturnValue,
         smt::DContext,
         Project, VM,
     };
 
-    fn run(fn_name: &str) -> Vec<Result<Option<i64>, ExecutorError>> {
+    fn run(fn_name: &str) -> Vec<Result<Option<i64>, VMError>> {
         let path = format!("./tests/unit_tests/instructions.bc");
         let project = Box::new(Project::from_path(&path).expect("Failed to created project"));
         let project = Box::leak(project);

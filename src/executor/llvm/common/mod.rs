@@ -1,3 +1,4 @@
+//! Common functionality shared over different parts of the LLVM executor.
 use llvm_ir::{
     types::{NamedStructDef, Typed},
     Constant, ConstantRef, Operand, Type,
@@ -79,16 +80,6 @@ pub trait ToValue<T> {
     fn to_value(&self) -> Result<T>;
 }
 
-// impl ToValue<u64> for Operand {
-//     fn to_value(&self) -> Result<u64> {
-//         match self {
-//             Operand::LocalOperand { .. } => panic!("Cannot get constant from operand"),
-//             Operand::ConstantOperand(constant) => constant.to_value(),
-//             Operand::MetadataOperand => Err(LLVMExecutorError::MalformedInstruction),
-//         }
-//     }
-// }
-
 impl ToValue<u64> for ConstantRef {
     fn to_value(&self) -> Result<u64> {
         self.as_ref().to_value()
@@ -104,17 +95,17 @@ impl ToValue<u64> for Constant {
     }
 }
 
-/// Convert a type to an [ExpressionType]
+/// Converts an LLVM [Type] to a generic [ExpressionType].
 pub fn type_to_expr_type(ty: &Type, project: &Project) -> ExpressionType {
     match ty {
         Type::VoidType => todo!(),
 
-        Type::IntegerType { bits } => ExpressionType::Integer(*bits),
+        Type::IntegerType { bits } => ExpressionType::Integer(*bits as usize),
 
         // May want to support a specific pointer type in the ExpressionType, but not sure if that
         // is universal or not. So let's treat this just as an integer.
-        Type::PointerType { .. } => ExpressionType::Integer(project.ptr_size),
-        Type::FPType(ty) => ExpressionType::Float(fp_size_in_bits(ty) as u32),
+        Type::PointerType { .. } => ExpressionType::Integer(project.ptr_size as usize),
+        Type::FPType(ty) => ExpressionType::Float(fp_size_in_bits(ty) as usize),
 
         Type::FuncType { .. } => todo!(),
 
@@ -128,7 +119,7 @@ pub fn type_to_expr_type(ty: &Type, project: &Project) -> ExpressionType {
             scalable: _,
         } => {
             let ty = type_to_expr_type(element_type, project);
-            ExpressionType::Array(ty.into(), *num_elements as u32)
+            ExpressionType::Array(ty.into(), *num_elements)
         }
 
         Type::StructType {

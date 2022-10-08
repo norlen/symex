@@ -3,7 +3,7 @@ use std::path::Path;
 // use tracing_subscriber::FmtSubscriber;
 
 use x0001e::{
-    core::{executor::ExecutorError, smt::Expression},
+    core::{executor::VMError, smt::Expression},
     llvm::{LLVMState, ReturnValue},
     DContext, DExpr, Project, VM,
 };
@@ -18,7 +18,7 @@ fn get_u128_value(expr: DExpr, state: &LLVMState) -> u128 {
     u128::from_str_radix(&binary_str, 2).unwrap()
 }
 
-pub fn run(path: impl AsRef<Path>, function: &str) -> Vec<Result<Option<u128>, ExecutorError>> {
+pub fn run(path: impl AsRef<Path>, function: &str) -> Vec<Result<Option<u128>, VMError>> {
     // let subscriber = FmtSubscriber::builder()
     //     .with_max_level(Level::TRACE)
     //     .finish();

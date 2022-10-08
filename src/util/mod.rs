@@ -1,4 +1,8 @@
-use crate::DExpr;
+use colored::*;
+use core::fmt::{self, Write};
+use indenter::indented;
+
+use crate::{core::smt::Expression, smt::DExpr};
 
 /// Result for a single path of execution.
 ///
@@ -22,6 +26,65 @@ pub struct PathResult {
 
     /// Variables explicitly marked as symbolic.
     pub symbolics: Vec<Variable>,
+}
+
+impl fmt::Display for PathResult {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(
+            f,
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ PATH {} ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+            self.path
+        )?;
+
+        match &self.result {
+            PathStatus::Ok(None) => {
+                writeln!(f, "{}: returned void", "Success".green())?;
+            }
+            PathStatus::Ok(Some(value)) => {
+                writeln!(f, "{}: returned {}", "Success".green(), value)?;
+            }
+            PathStatus::Failed(err) => {
+                writeln!(f, "{}: {}", "Error".red(), err.error_message)?;
+                if let Some(error_location) = &err.error_location {
+                    writeln!(indented(f), "at {error_location}\n")?;
+                }
+
+                writeln!(f, "Stacktrace:")?;
+                for (n, line) in err.stack_trace.iter().enumerate() {
+                    writeln!(f, "{n:4}: {}", line.function_name)?;
+                    if let Some(line) = &line.line {
+                        writeln!(indented(f), "at {line}")?;
+                    }
+                }
+            }
+        }
+
+        if !self.symbolics.is_empty() {
+            writeln!(f, "\nSymbolic:")?;
+            for value in self.symbolics.iter() {
+                let name = if let Some(name) = value.name.as_ref() {
+                    name
+                } else {
+                    "_"
+                };
+                writeln!(indented(f), "{name}: {}", value)?;
+                // if matches!(value.value, ConcreteValue::Struct { .. }) {
+                //     writeln!(f, "{name:>4}: ")?;
+                //     writeln!(f, "{}", value.value)?;
+                // } else {
+                //     writeln!(f, "{name:>4}: {}", value.value)?;
+                // }
+            }
+        }
+
+        if !self.inputs.is_empty() {
+            writeln!(f, "\nInputs:")?;
+            for (n, value) in self.inputs.iter().enumerate() {
+                writeln!(indented(f), "{n}: {}", value)?;
+            }
+        }
+        Ok(())
+    }
 }
 
 /// Status of the path.
@@ -64,7 +127,10 @@ pub struct LineTrace {
     pub line: Option<String>,
 }
 
-/// A concrete solution to a symbol.
+/// Symbolic variable that should be able to be displayed to an end user.
+///
+/// Variable can be things such as inputs, variables marked as symbolic and outputs. To show this
+/// to an end user, the variable must have been solved before trying to show it.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Variable {
     /// `name` is the source name of the variable, if it exists.
@@ -79,18 +145,30 @@ pub struct Variable {
     pub ty: ExpressionType,
 }
 
+impl fmt::Display for Variable {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let raw = self.value.to_binary_string();
+        match self.ty.to_typed_variable(&raw) {
+            Some(typed_variable) => {
+                write!(f, "{typed_variable}")
+            }
+            None => write!(f, "{raw} (unknown)"),
+        }
+    }
+}
+
 /// Type information for a an expression. This should be generic enough for all kinds of executor
 /// to support.
 #[derive(Debug, Clone, PartialEq)]
 pub enum ExpressionType {
     /// Integer value of a certain size in bits.
-    Integer(u32),
+    Integer(usize),
 
     /// Floating point of a certain size in bits.
-    Float(u32),
+    Float(usize),
 
     /// Array or vector of a certain type with a specific number of values.
-    Array(Box<ExpressionType>, u32),
+    Array(Box<ExpressionType>, usize),
 
     /// Structure
     Struct(Vec<ExpressionType>),
@@ -99,80 +177,161 @@ pub enum ExpressionType {
     Unknown,
 }
 
-// /// A concrete value from an expression.
-// ///
-// /// Used to display concrete values to the end-user.
-// #[derive(Debug, Clone, PartialEq)]
-// pub struct ConcreteValue {
-//     pub raw: String,
+impl ExpressionType {
+    fn size_in_bits(&self) -> Option<usize> {
+        match self {
+            ExpressionType::Integer(bits) => Some(*bits),
+            ExpressionType::Float(bits) => Some(*bits),
+            ExpressionType::Array(e, n) => {
+                let element_size = e.size_in_bits()?;
+                Some(*n * element_size)
+            }
+            ExpressionType::Struct(elements) => {
+                let mut size_in_bits = 0;
+                for element in elements.iter() {
+                    size_in_bits += element.size_in_bits()?;
+                }
+                Some(size_in_bits)
+            }
+            ExpressionType::Unknown => None,
+        }
+    }
 
-//     pub ty: ConcreteValueType,
-// }
+    fn to_typed_variable<'a>(&self, raw: &'a str) -> Option<TypedVariable<'a>> {
+        match self {
+            ExpressionType::Integer(bits) => {
+                assert!(raw.len() == *bits);
+                Some(TypedVariable::Integer(raw, *bits))
+            }
+            ExpressionType::Float(bits) => Some(TypedVariable::Float(raw, *bits)),
+            ExpressionType::Array(ty, num_elements) => {
+                let size = ty.size_in_bits()?;
+                let mut vars = Vec::with_capacity(*num_elements);
+                for i in 0..*num_elements {
+                    let start = i * size;
+                    let end = (i + 1) * size;
+                    let e = ty.to_typed_variable(&raw[start..end])?;
+                    vars.push(e);
+                }
+                Some(TypedVariable::Array(vars))
+            }
+            ExpressionType::Struct(fields) => {
+                let mut elements = Vec::with_capacity(fields.len());
+                let mut offset = 0;
+                for field in fields.iter() {
+                    let size = field.size_in_bits()?;
+                    let (start, end) = (offset, offset + size);
 
-// #[derive(Debug, Clone, PartialEq)]
-// pub enum ConcreteValueType {
-//     /// Integer value of size.
-//     ///
-//     /// Note that values are always treated as unsigned integers.
-//     Value {
-//         /// The integer value.
-//         value: u128,
-//         /// Size in bits of the integer value.
-//         bits: u32,
-//     },
+                    let element = field.to_typed_variable(&raw[start..end])?;
+                    elements.push(element);
 
-//     /// Array or vector of values
-//     Array(Vec<ConcreteValue>),
+                    offset += size;
+                }
+                Some(TypedVariable::Struct(elements))
+            }
+            ExpressionType::Unknown => None,
+        }
+    }
+}
 
-//     /// Structure with fields.
-//     Struct(Vec<ConcreteValue>),
+/// Helper for displaying a [Variable].
+#[derive(Debug, Clone)]
+enum TypedVariable<'a> {
+    /// Integer value of a certain size in bits.
+    Integer(&'a str, usize),
 
-//     /// Value of unknown type.
-//     Unknown(String),
-// }
+    /// Floating point of a certain size in bits.
+    Float(&'a str, usize),
 
-// impl fmt::Display for ConcreteValue {
-//     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-//         use ConcreteValueType::*;
+    /// Array or vector of a certain type with a specific number of values.
+    Array(Vec<TypedVariable<'a>>),
 
-//         match &self.ty {
-//             Value { value, bits } => {
-//                 let bits_str = if *bits == 1 { "bit" } else { "bits" };
-//                 match *bits % 8 {
-//                     0 => {
-//                         let width = (*bits / 4) as usize + 2;
-//                         write!(f, "{value:#0width$x} ({bits}-{bits_str})")
-//                     }
-//                     _ => {
-//                         let width = *bits as usize + 2;
-//                         write!(f, "{value:#0width$b} ({bits}-{bits_str})")
-//                     }
-//                 }
-//             }
-//             Array(elements) => {
-//                 let elements = elements
-//                     .iter()
-//                     .map(|e| format!("{e}"))
-//                     .reduce(|acc, s| format!("{acc}, {s}"));
+    /// Structure
+    Struct(Vec<TypedVariable<'a>>),
+}
 
-//                 match elements {
-//                     Some(elements) => write!(f, "[{elements}]"),
-//                     None => write!(f, "[]"),
-//                 }
-//             }
-//             Struct(fields) => match fields.len() {
-//                 0 => {
-//                     write!(f, "Struct {{}}")
-//                 }
-//                 _ => {
-//                     writeln!(f, "Struct {{")?;
-//                     for field in fields {
-//                         writeln!(f, "{field}")?;
-//                     }
-//                     write!(f, "}}")
-//                 }
-//             },
-//             Unknown(bits) => write!(f, "Unknown: {bits}"),
-//         }
-//     }
-// }
+impl<'a> fmt::Display for TypedVariable<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        use TypedVariable::*;
+
+        match self {
+            Integer(value, bits) => {
+                let bits_str = if *bits == 1 { "bit" } else { "bits" };
+                let value = u128::from_str_radix(value, 2).unwrap();
+
+                const BITS_IN_BYTES: usize = 8;
+                const BITS_PER_HEX_CHAR: usize = 4;
+                match *bits % BITS_IN_BYTES {
+                    0 => {
+                        // Get number of hex chars and add two for "0x" start.
+                        let width = *bits / BITS_PER_HEX_CHAR + 2;
+                        write!(f, "{value:#0width$x} ({bits}-{bits_str})")
+                    }
+                    _ => {
+                        // Add two to number of bits for "0b" start.
+                        let width = *bits + 2;
+                        write!(f, "{value:#0width$b} ({bits}-{bits_str})")
+                    }
+                }
+            }
+            Float(value, bits) => match bits {
+                32 => {
+                    let value = u32::from_str_radix(value, 2).unwrap();
+                    let value = f32::from_bits(value);
+                    write!(f, "{value} (f32)")
+                }
+                64 => {
+                    let value = u64::from_str_radix(value, 2).unwrap();
+                    let value = f64::from_bits(value);
+                    write!(f, "{value} (f64)")
+                }
+                _ => {
+                    write!(f, "{value} (float)")
+                }
+            },
+            Array(elements) => {
+                let elements = elements
+                    .iter()
+                    .map(|e| format!("{e}"))
+                    .reduce(|acc, s| format!("{acc}, {s}"));
+
+                match elements {
+                    Some(elements) => write!(f, "[{elements}]"),
+                    None => write!(f, "[]"),
+                }
+            }
+            Struct(elements) => match elements.len() {
+                0 => {
+                    write!(f, "Struct {{}}")
+                }
+                _ => {
+                    writeln!(f, "Struct {{")?;
+                    for element in elements {
+                        writeln!(indented(f), "{element}")?;
+                    }
+                    write!(f, "}}")
+                }
+            },
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::TypedVariable;
+
+    #[test]
+    fn i64_works() {
+        // 123_456 = 0b0001_1110_0010_0100_0000 = 0x1e240
+        let typed_variable = TypedVariable::Integer("00011110001001000000", 64);
+        let s = format!("{typed_variable}");
+        assert_eq!(s, "0x000000000001e240 (64-bits)");
+    }
+
+    #[test]
+    fn i1_works() {
+        let typed_variable = TypedVariable::Integer("1", 1);
+        let s = format!("{typed_variable}");
+        assert_eq!(s, "0b1 (1-bit)");
+    }
+}

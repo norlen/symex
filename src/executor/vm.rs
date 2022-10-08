@@ -1,5 +1,5 @@
 use crate::{
-    core::executor::ExecutorError,
+    core::executor::VMError,
     core::smt::{Solver, SolverContext},
     executor::llvm::{project::Project, LLVMState},
     llvm::{type_to_expr_type, ReturnValue},
@@ -21,18 +21,12 @@ pub struct VM {
     pub inputs: Vec<Variable>,
 }
 
-// #[derive(Debug, Clone)]
-// pub enum ReturnValue {
-//     Value(Option<DExpr>),
-//     Void,
-// }
-
 impl VM {
     pub fn new(
         project: &'static Project,
         ctx: &'static DContext,
         fn_name: &str,
-    ) -> Result<Self, ExecutorError> {
+    ) -> Result<Self, VMError> {
         let (module, function) = project.find_entry_function(fn_name).unwrap();
         let solver = DSolver::new(ctx);
         let mut state = LLVMState::new(ctx, project, solver, module, function);
@@ -74,7 +68,7 @@ impl VM {
         Ok(vm)
     }
 
-    pub fn run(&mut self) -> Option<(Result<ReturnValue, ExecutorError>, LLVMState)> {
+    pub fn run(&mut self) -> Option<(Result<ReturnValue, VMError>, LLVMState)> {
         if let Some(path) = self.paths.get_path() {
             let mut executor = LLVMExecutor::from_state(path.state, self, self.project);
             for constraint in path.constraints {

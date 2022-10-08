@@ -1,5 +1,11 @@
-#[inline(never)]
-pub fn foo(x: i32, y: i32) -> i32 {
+//! Simple example showcasing what symbolic execution can do.
+//!
+//! ```shell
+//! cargo x0001e --example initial --function foo
+//! ```
+#![allow(dead_code)]
+
+fn foo(x: i32, y: i32) -> i32 {
     if x > 5 && x + y == 100 {
         if x * y == 1875 {
             panic!();
@@ -7,11 +13,8 @@ pub fn foo(x: i32, y: i32) -> i32 {
             5
         }
     } else {
-        //3
         x / y
     }
 }
 
-fn main() {
-    println!("{}", foo(1, 1));
-}
+fn main() {}

@@ -1,4 +1,4 @@
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Config {
     /// Maximum call stack depth.
     pub max_call_depth: usize,
@@ -23,10 +23,10 @@ impl Default for Config {
 impl Config {
     pub fn new() -> Self {
         Self {
-            max_call_depth: 100,
-            max_iter_count: 100,
-            max_fn_ptr_resolutions: 20,
-            max_memory_access_resolutions: 20,
+            max_call_depth: 1000,
+            max_iter_count: 1000,
+            max_fn_ptr_resolutions: 1,
+            max_memory_access_resolutions: 100,
         }
     }
 }

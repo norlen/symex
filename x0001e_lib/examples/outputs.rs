@@ -1,4 +1,8 @@
-//! Run example with `cargo run -p cli -- --example outputs --function foobar`
+//! Example showcasing how the output type reconstruction.
+//!
+//! ```shell
+//! cargo x0001e --example outputs --function foo
+//! ```
 #![allow(dead_code)]
 use x0001e_lib::symbolic;
 

@@ -224,7 +224,9 @@ impl Expression for BoolectorExpr {
     fn to_binary_string(&self) -> String {
         // TODO: Check if there's a better way to get the an underlying string.
         if self.len() <= 64 {
-            format!("{:b}", self.get_constant().unwrap())
+            let width = self.len() as usize;
+            // If we for some reason get less binary digits, pad the start with zeroes.
+            format!("{:0width$b}", self.get_constant().unwrap())
         } else {
             let upper = self.slice(64, self.len() - 1).to_binary_string();
             let lower = self.slice(0, 63).to_binary_string();

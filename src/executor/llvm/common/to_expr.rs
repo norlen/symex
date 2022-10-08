@@ -462,5 +462,5 @@ mod tests {
     // TODO: Quite hard to setup tests, as the constants are not self-contained. They need access
     // to the state since they can have global references.
     //
-    // Could create a sample file with a lot of constants, and try to evaluate those.
+    // NOTE: Could create a sample file with a lot of constants, and try to evaluate those.
 }
