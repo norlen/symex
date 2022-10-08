@@ -1,4 +1,12 @@
-//! Run example with `cargo run -p cli -- --example callstack --function foobar`
+//!
+//!
+//! ```shell
+//! cargo symex --example generics
+//! ```
+//!
+//! ```shell
+//! cargo symex --example generics --function foo
+//! ```
 #![allow(dead_code, non_snake_case)]
 
 fn foo<'a, T>(b: bool, t1: &'a mut T, t2: &'a mut T) -> &'a T

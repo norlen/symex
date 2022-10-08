@@ -1,3 +1,8 @@
+//!
+//!
+//! ```shell
+//! cargo symex --example structured_size --function FN
+//! ```
 #![allow(dead_code)]
 
 struct A {

@@ -20,7 +20,19 @@
 //! the valid variants.
 #![allow(dead_code)]
 use symex_lib::{assume, symbolic};
+use valid_derive::Validate;
 
+trait Valid {
+    fn is_valid(&self) -> bool;
+}
+
+impl<T> Valid for &T {
+    fn is_valid(&self) -> bool {
+        true
+    }
+}
+
+#[derive(Validate)]
 enum E {
     A,
     B(u8),
@@ -29,22 +41,30 @@ enum E {
 
 fn check() -> bool {
     let mut e = E::A;
+
+    // This will mark everything as symbolic, including the variant (`A`, `B`, or `C`).
     symbolic(&mut e);
-    //assume(e.is_valid());
+
     match e {
         E::A | E::B(_) => true,
         E::C(_) => false,
     }
 }
 
-// fn check_valid() -> bool {
-//     let mut e = E::A;
-//     symbolic(&mut e);
-//     assume(e.is_valid());
-//     match e {
-//         E::A | E::B(_) => true,
-//         E::C(_) => false,
-//     }
-// }
+fn check_valid() -> bool {
+    let mut e = E::A;
+
+    // This will mark everything as symbolic, including the variant (`A`, `B`, or `C`).
+    symbolic(&mut e);
+
+    // But this will supress the invalid variants, so for the sake of the analysis `e` can only be
+    // `A`, `B`, or `C`.
+    assume(e.is_valid());
+
+    match e {
+        E::A | E::B(_) => true,
+        E::C(_) => false,
+    }
+}
 
 fn main() {}

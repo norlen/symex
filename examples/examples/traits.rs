@@ -1,3 +1,8 @@
+//! Example which just shows that traits work properly.
+//!
+//! ```shell
+//! cargo symex --example traits --function check
+//! ```
 #![allow(dead_code)]
 
 trait Random {

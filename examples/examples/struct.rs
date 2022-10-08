@@ -1,3 +1,8 @@
+//!
+//!
+//! ```shell
+//! cargo symex --example struct --function FN
+//! ```
 #![allow(dead_code)]
 use symex_lib::{assume, symbolic};
 

@@ -1,4 +1,8 @@
-//! Run example with `cargo run -p cli -- --example callstack --function foobar`
+//!
+//!
+//! ```shell
+//! cargo symex --example structured --function FN
+//! ```
 #![allow(dead_code, unreachable_patterns)]
 use symex_lib::{assume, symbolic};
 
