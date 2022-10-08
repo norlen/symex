@@ -1,6 +1,6 @@
 //! Run example with `cargo run -p cli -- --example callstack --function foobar`
 #![allow(dead_code, unreachable_patterns)]
-use x0001e_lib::{assume, symbolic};
+use symex_lib::{assume, symbolic};
 
 pub fn foo() -> u8 {
     let mut a: bool = false;

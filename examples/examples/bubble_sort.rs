@@ -3,7 +3,7 @@
 //! This example is a degenerate case which is hard to analyze, so expect running times to be high.
 //!
 //! ```shell
-//! cargo x0001e --example bubble_sort --function bubble_sort
+//! cargo symex --example bubble_sort --function bubble_sort
 //! ```
 #![allow(dead_code)]
 

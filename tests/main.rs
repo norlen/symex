@@ -1,5 +1,3 @@
-// use x0001e::ExecutorError;
-
 mod test_runner;
 
 use test_runner::run;

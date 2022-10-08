@@ -1,0 +1,10 @@
+[package]
+name = "examples"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+symex_lib = { path = "../crates/symex_lib", version = "1.0" }
+valid_derive = { path = "../crates/valid_derive", version = "1.0" }

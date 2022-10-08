@@ -108,7 +108,7 @@ impl Project {
     /// # Example
     ///
     /// ```rust
-    /// # use x0001e::Project;
+    /// # use symex::Project;
     /// #
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let project = Project::from_folder("tests/doc_tests/")?;
@@ -137,7 +137,7 @@ impl Project {
     /// # Example
     ///
     /// ```rust
-    /// # use x0001e::Project;
+    /// # use symex::Project;
     /// #
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let project = Project::from_path("tests/doc_tests/test.bc")?;
@@ -284,7 +284,7 @@ impl Project {
     /// # Example
     ///
     /// ```rust
-    /// # use x0001e::Project;
+    /// # use symex::Project;
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let project = Project::from_path("tests/doc_tests/test.bc")?;
     /// let (module, function) = project.find_entry_function("test::main")?;
@@ -323,7 +323,7 @@ impl Project {
     /// # Example
     ///
     /// ```ignore
-    /// # use x0001e::{Project, project::ModuleHandle};
+    /// # use symex::{Project, project::ModuleHandle};
     /// #
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// #   let project = Project::from_path("tests/doc_tests/test.bc")?;

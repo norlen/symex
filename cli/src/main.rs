@@ -2,9 +2,9 @@ use anyhow::{anyhow, Result};
 use clap::Parser;
 use log::debug;
 use std::{fs, path::PathBuf};
-use x0001e::RunConfig;
+use symex::RunConfig;
 
-const BINARY_NAME: &str = "x0001e";
+const BINARY_NAME: &str = "symex";
 
 mod args;
 mod build;
@@ -96,10 +96,10 @@ fn run_rs(args: Args) -> Result<()> {
         solve_inputs: true,
         solve_symbolics: true,
         solve_output: true,
-        solve_for: x0001e::SolveFor::All,
+        solve_for: symex::SolveFor::All,
     };
 
-    x0001e::run(&target_path, &fn_name, &cfg)?;
+    symex::run(&target_path, &fn_name, &cfg)?;
     Ok(())
 }
 

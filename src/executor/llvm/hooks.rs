@@ -36,8 +36,8 @@ impl Hooks {
             hooks: HashMap::new(),
         };
 
-        hooks.add("x0001e_lib::assume", assume);
-        hooks.add("x0001e_lib::symbolic", symbolic);
+        hooks.add("symex_lib::assume", assume);
+        hooks.add("symex_lib::symbolic", symbolic);
         hooks.add("assume", assume);
         hooks.add("symbolic", symbolic_no_type);
 

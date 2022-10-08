@@ -6,7 +6,7 @@
 /// # Example
 ///
 /// ```rust
-/// # use x0001e::assume;
+/// # use symex_lib::assume;
 /// fn foo(var: i32) -> i32 {
 ///     // Will add a constraint to the solver for the passed condition.
 ///     assume(var >= 0);
@@ -18,7 +18,7 @@
 /// ```
 #[inline(never)]
 pub fn assume(condition: bool) {
-    unsafe { x0001e_assume(condition as u8) }
+    unsafe { symex_assume(condition as u8) }
 }
 
 /// Creates a new symbolic value for `value`. This removes all constraints.
@@ -30,7 +30,7 @@ pub fn assume(condition: bool) {
 /// # Example
 ///
 /// ```rust
-/// # use x0001e::symbolic;
+/// # use symex_lib::symbolic;
 /// fn foo() {
 ///     // This will create a symbol with the constraint that x is 0.
 ///     let mut x = 0;
@@ -47,7 +47,7 @@ pub fn symbolic<T>(value: &mut T) {
     unsafe {
         let size = std::mem::size_of_val(value);
         let ptr = std::mem::transmute(value);
-        x0001e_symbolic(ptr, size as u64);
+        symex_symbolic(ptr, size as u64);
     }
 }
 
@@ -55,13 +55,13 @@ pub fn symbolic<T>(value: &mut T) {
 extern "C" {
     #![allow(dead_code)]
 
-    fn x0001e_assume(condition: u8);
+    fn symex_assume(condition: u8);
 
-    fn x0001e_symbolic(ptr: *mut std::ffi::c_void, size: u64);
+    fn symex_symbolic(ptr: *mut std::ffi::c_void, size: u64);
 
     // // Implemented as hook `hooks::assume`.
-    // fn x0001e_assume(condition: bool);
+    // fn symex_assume(condition: bool);
 
     // // Implemented as hook `hooks::symbolic`.
-    // fn x0001e_symbolic(ptr: *mut std::ffi::c_void, size: usize);
+    // fn symex_symbolic(ptr: *mut std::ffi::c_void, size: usize);
 }

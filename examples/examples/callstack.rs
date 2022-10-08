@@ -1,7 +1,7 @@
 //! Example showcasing error output.
 //!
 //! ```shell
-//! cargo x0001e --example callstack --function foobar
+//! cargo symex --example callstack --function foobar
 //! ```
 //!
 //! Should output something along the lines of
@@ -24,7 +24,7 @@
 //!
 //! # More ...
 //! ```
-use x0001e_lib::{assume, symbolic};
+use symex_lib::{assume, symbolic};
 
 fn bar(x: i64, y: i64) -> i64 {
     //!Assume these are not too big, otherwise it catches overflow as well (at least in debug)

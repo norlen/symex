@@ -23,7 +23,7 @@
 //! Code to analyze the function can be written as
 //!
 //! ```ignore
-//! use x0001e::{Project, ReturnValue, VM};
+//! use symex::{Project, ReturnValue, VM};
 //!
 //! fn main() -> Result<(), Box<dyn std::error::Error>> {
 //!     let project = Project::from_path("tests/doc_tests/test.bc")?;

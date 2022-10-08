@@ -2,12 +2,12 @@
 //!
 //! Only inserting a single element won't trigger a re-allocation of the backing `Vec`.
 //! ```shell
-//! cargo x0001e --example allocations --function no_realloc
+//! cargo symex --example allocations --function no_realloc
 //! ```
 //!
 //! This will trigger a re-allocation of the backing `Vec`.
 //! ```shell
-//! cargo x0001e --example allocations --function check_val
+//! cargo symex --example allocations --function check_val
 //! ```
 #![allow(dead_code)]
 

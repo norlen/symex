@@ -1,5 +1,5 @@
 [package]
-name = "x0001e"
+name = "symex"
 version = "1.0.0"
 edition = "2021"
 
@@ -21,14 +21,13 @@ num_enum = "0.5.7"
 indenter = "0.3"
 colored = "2.0.0"
 
-# TODO: put optional=true on deps when uncommenting this.
-# [features]
-# default = ["boolector"]
-# boolector = ["dep:boolector"]
-# z3 = ["dep:z3"]
-
 [workspace]
-members = ["cli", "valid_derive", "x0001e_lib"]
+members = [
+    "cli",
+    "examples",
+    "crates/symex_lib",
+    "crates/valid_derive",
+]
 
 [profile.release]
 debug = true

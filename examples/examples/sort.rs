@@ -1,5 +1,5 @@
 #![allow(dead_code)]
-use x0001e_lib::{assume, symbolic};
+use symex_lib::{assume, symbolic};
 
 fn selection_sort(arr: &mut [i32]) {
     let n = arr.len();

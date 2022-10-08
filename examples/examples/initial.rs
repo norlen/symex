@@ -1,7 +1,7 @@
 //! Simple example showcasing what symbolic execution can do.
 //!
 //! ```shell
-//! cargo x0001e --example initial --function foo
+//! cargo symex --example initial --function foo
 //! ```
 #![allow(dead_code)]
 

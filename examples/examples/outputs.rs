@@ -1,10 +1,10 @@
 //! Example showcasing how the output type reconstruction.
 //!
 //! ```shell
-//! cargo x0001e --example outputs --function foo
+//! cargo symex --example outputs --function foo
 //! ```
 #![allow(dead_code)]
-use x0001e_lib::symbolic;
+use symex_lib::symbolic;
 
 struct MyStruct {
     a: i32,
