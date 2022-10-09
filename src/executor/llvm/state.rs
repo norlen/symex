@@ -2,8 +2,8 @@ use llvm_ir::{types::Typed, Function, Name, TypeRef};
 use std::collections::HashMap;
 use tracing::warn;
 
-use crate::memory::ArrayMemory;
-// use crate::memory::ObjectMemory;
+// use crate::memory::ArrayMemory;
+use crate::memory::ObjectMemory;
 
 use super::{const_to_expr, operand_to_expr, GlobalReferenceKind, GlobalReferences};
 use crate::{
@@ -58,9 +58,8 @@ pub struct LLVMState {
     /// List of variables marked as symbolic.
     pub marked_symbolic: Vec<Variable>,
 
-    // pub memory: ObjectMemory,
-    pub memory: ArrayMemory,
-
+    pub memory: ObjectMemory,
+    // pub memory: ArrayMemory,
     pub stack_frames: Vec<StackFrame>,
 
     // Check if I should have this here, or maybe just pass the executor instead
@@ -80,8 +79,8 @@ impl LLVMState {
         module: ModuleHandle,
         function: &'static Function,
     ) -> Self {
-        let mut memory = ArrayMemory::new(ctx.clone(), project.ptr_size);
-        // let mut memory = ObjectMemory::new(ctx, project.ptr_size, constraints.clone());
+        // let mut memory = ArrayMemory::new(ctx.clone(), project.ptr_size);
+        let mut memory = ObjectMemory::new(ctx, project.ptr_size, constraints.clone());
 
         let global_references = GlobalReferences::from_project(project, &mut memory).unwrap();
 

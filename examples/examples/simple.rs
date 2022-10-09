@@ -1,4 +1,4 @@
-//!
+//! Simple example.
 //!
 //! ```shell
 //! cargo symex --example simple --function rust_simple_test

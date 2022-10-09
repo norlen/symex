@@ -1,7 +1,8 @@
-//!
-//!
 //! ```shell
-//! cargo symex --example structured --function FN
+//! cargo symex --example structured --function foo
+//! cargo symex --example structured --function bar
+//! cargo symex --example structured --function baz
+//! cargo symex --example structured --function bad
 //! ```
 #![allow(dead_code, unreachable_patterns)]
 use symex_lib::{assume, symbolic};

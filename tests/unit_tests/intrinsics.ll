@@ -10,14 +10,6 @@ target triple = "x86_64-pc-linux-gnu"
 ; memcpy
 declare void @llvm.memcpy.p0i8.p0i8.i32(i8* %dst, i8* %src, i32 %len, i1 %isvolatile)
 
-; memset
-declare void @llvm.memset.p0i8.i32(i8* %dest, i8 %val, i32 %len, i1 %isvolatile)
-
-; umax
-declare i32 @llvm.umax.i32(i32, i32)
-declare <2 x i32> @llvm.umax.v2i32(<2 x i32>, <2 x i32>)
-
-
 define dso_local [4 x i16] @test_memcpy() #0 {
     %1 = alloca [4 x i16], align 4
     %2 = alloca [4 x i16], align 4
@@ -35,6 +27,57 @@ define dso_local [4 x i16] @test_memcpy() #0 {
     ;   -> 0x6543fe671234abcd
 }
 
+; memmove
+declare void @llvm.memmove.p0i8.p0i8.i32(i8* %dst, i8* %src, i32 %len, i1 %isvolatile)
+
+define dso_local [4 x i16] @test_memmove() #0 {
+    %1 = alloca [4 x i16], align 4
+    %2 = alloca [4 x i16], align 4
+    store [4 x i16] [i16 u0xabcd, i16 u0x1234, i16 u0x5667, i16 u0xbebe], [4 x i16]* %1
+    ; [0xcd, 0xab, 0x34, 0x12, 0x67, 0x56, 0xbe, 0xbe]
+    store [4 x i16] [i16 6, i16 7, i16 u0xfecb, i16 u0x6543], [4 x i16]* %2
+    ; [0x06, 0x00, 0x07, 0x00, 0xcb, 0xfe, 0x43, 0x65]
+    
+    %src = bitcast [4 x i16]* %1 to i8*
+    %dst = bitcast [4 x i16]* %2 to i8*
+    ; copy 2,5 elements so 0xabcd, 0x1234, 0x67
+    call void @llvm.memmove.p0i8.p0i8.i32(i8* %dst, i8* %src, i32 5, i1 0)
+
+    %ret = load [4 x i16], [4 x i16]* %2
+    ret [4 x i16] %ret
+    ; expect [0xcd, 0xab, 0x34, 0x12, 0x67, 0xfe, 0x43, 0x65]
+    ;   -> 0x6543fe671234abcd
+}
+
+define dso_local [4 x i16] @test_memmove_overlapping() #0 {
+    %1 = alloca [4 x i16], align 4
+    store [4 x i16] [i16 u0xabcd, i16 u0x1234, i16 u0x5667, i16 u0xbebe], [4 x i16]* %1
+    
+    %src = bitcast [4 x i16]* %1 to i8*
+
+    %dsti64 = ptrtoint [4 x i16]* %1 to i64
+    %dstadd = add i64 %dsti64, 3
+    %dst = inttoptr i64 %dstadd to i8*
+
+    ; move over 5 i8s where the array is
+    ; [0xcd, 0xab, 0x34, 0x12, 0x67, 0x56, 0xbe, 0xbe]
+    ;  ^                 ^
+    ;  |                 |
+    ; src               dst
+    ;
+    ; yielding
+    ; [0xcd, 0xab, 0x34, 0xcd, 0xab, 0x34, 0xcd, 0xab]
+    call void @llvm.memmove.p0i8.p0i8.i32(i8* %dst, i8* %src, i32 5, i1 0)
+    
+    %ret = load [4 x i16], [4 x i16]* %1
+    ret [4 x i16] %ret
+    ; expect [0xcd, 0xab, 0x34, 0xcd, 0xab, 0x34, 0xcd, 0xab]
+    ;   -> 0xabcd34abcd34abcd
+}
+
+; memset
+declare void @llvm.memset.p0i8.i32(i8* %dest, i8 %val, i32 %len, i1 %isvolatile)
+
 define dso_local [8 x i8] @test_memset() #0 {
     %1 = alloca [8 x i8], align 4
     %2 = bitcast [8 x i8]* %1 to i8*
@@ -43,6 +86,10 @@ define dso_local [8 x i8] @test_memset() #0 {
     %3 = load [8 x i8], [8 x i8]* %1
     ret [8 x i8] %3 ; expect 0xababababcbcbcbcb
 }
+
+; umax
+declare i32 @llvm.umax.i32(i32, i32)
+declare <2 x i32> @llvm.umax.v2i32(<2 x i32>, <2 x i32>)
 
 define dso_local i32 @test_umax() #0 {
     %1 = add i32 0, u0xabcd

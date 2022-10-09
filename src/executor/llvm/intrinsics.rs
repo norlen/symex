@@ -124,6 +124,7 @@ impl Intrinsics {
 
         // Add variable intrinsics.
         s.add_variable("llvm.memcpy.", llvm_memcpy);
+        s.add_variable("llvm.memmove.", llvm_memmove);
         s.add_variable("llvm.memset.", llvm_memset);
         s.add_variable("llvm.umax.", llvm_umax);
 
@@ -238,6 +239,34 @@ pub fn llvm_memset(vm: &mut LLVMExecutor<'_>, args: &[&Operand]) -> Result<Retur
         let addr = dst.add(&offset);
 
         vm.state.memory.write(&addr, value.clone())?;
+    }
+
+    Ok(ReturnValue::Void)
+}
+
+/// Intrisic to move memory from source to destination.
+///
+/// Similar to `llvm_memcpy` but `llvm_memmove` allows the two memory locations to overlap.
+pub fn llvm_memmove(vm: &mut LLVMExecutor<'_>, args: &[&Operand]) -> Result<ReturnValue> {
+    // Arguments: ptr <dest>, ptr <src>, i32 <len> (bytes), i1 <isvolatile>
+    let dst = vm.state.get_expr(args[0])?;
+    let src = vm.state.get_expr(args[1])?;
+    let len = vm.state.get_expr(args[2])?;
+
+    // If len is constant, simplify the procedure.
+    if let Some(len) = len.get_constant() {
+        // TODO: Not sure about the exact semantics when the locations overlap. So copy the bytes
+        // one by one for now.
+        for i in 0..len {
+            let increment = vm.state.ctx.from_u64(i, vm.project.ptr_size);
+            let src_addr = src.add(&increment);
+            let dst_addr = dst.add(&increment);
+
+            let value = vm.state.memory.read(&src_addr, BITS_IN_BYTE)?;
+            vm.state.memory.write(&dst_addr, value)?;
+        }
+    } else {
+        todo!("symbolic length in llvm.memmove.*");
     }
 
     Ok(ReturnValue::Void)
@@ -521,6 +550,20 @@ mod tests {
         let res = run("test_memcpy");
         assert_eq!(res.len(), 1);
         assert_eq!(res[0], Ok(Some(0x6543fe671234abcd)));
+    }
+
+    #[test]
+    fn test_memmove() {
+        let res = run("test_memmove");
+        assert_eq!(res.len(), 1);
+        assert_eq!(res[0], Ok(Some(0x6543fe671234abcd)));
+    }
+
+    #[test]
+    fn test_memmove_overlapping() {
+        let res = run("test_memmove_overlapping");
+        assert_eq!(res.len(), 1);
+        assert_eq!(res[0], Ok(Some(0xabcd34abcd34abcd_u64 as i64)));
     }
 
     #[test]

@@ -29,6 +29,8 @@ It can be installed with
 > cargo install --path cli
 ```
 
+For usage instructions see `cargo symex --help`.
+
 ## Getting started
 
 Check out the examples contained in `examles/examples`. These can either be run with the cargo
@@ -70,7 +72,7 @@ error: could not copy "<project_dir>/target/debug/examples/<some_file>.ll" to "<
 error: could not compile `examples` due to 2 previous errors
 ```
 
-Until the is fixed it can remedied by running `cargo clean` and trying again.
+Until the issue is fixed it can remedied by running `cargo clean` and trying again.
 
 ## License
 

@@ -205,28 +205,35 @@ impl ExpressionType {
             }
             ExpressionType::Float(bits) => Some(TypedVariable::Float(raw, *bits)),
             ExpressionType::Array(ty, num_elements) => {
-                let size = ty.size_in_bits()?;
                 let mut vars = Vec::with_capacity(*num_elements);
-                for i in 0..*num_elements {
+                let size = ty.size_in_bits()?;
+
+                // Reverse the order, as elements begin at the end.
+                for i in (0..*num_elements).rev() {
                     let start = i * size;
                     let end = (i + 1) * size;
                     let e = ty.to_typed_variable(&raw[start..end])?;
                     vars.push(e);
                 }
+
                 Some(TypedVariable::Array(vars))
             }
             ExpressionType::Struct(fields) => {
                 let mut elements = Vec::with_capacity(fields.len());
-                let mut offset = 0;
+
+                // First field is located at the end of the raw string.
+                let mut offset = raw.len();
+
                 for field in fields.iter() {
                     let size = field.size_in_bits()?;
-                    let (start, end) = (offset, offset + size);
+                    let (start, end) = (offset - size, offset);
 
                     let element = field.to_typed_variable(&raw[start..end])?;
                     elements.push(element);
 
-                    offset += size;
+                    offset -= size;
                 }
+
                 Some(TypedVariable::Struct(elements))
             }
             ExpressionType::Unknown => None,

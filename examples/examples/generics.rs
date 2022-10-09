@@ -1,13 +1,35 @@
-//!
+//! Showcasing generics.
 //!
 //! ```shell
 //! cargo symex --example generics
 //! ```
 //!
+//! Note that this won't work
+//!
 //! ```shell
 //! cargo symex --example generics --function foo
 //! ```
+//!
+//! Since Rust performs monomorphization the compiler will generate two functions `generics::foo`,
+//! where only the mangled name is different.
 #![allow(dead_code, non_snake_case)]
+
+trait MySelf {
+    fn my_self(&mut self) {}
+}
+
+struct A;
+struct B {
+    b: bool,
+}
+
+impl MySelf for A {}
+
+impl MySelf for B {
+    fn my_self(&mut self) {
+        self.b = !self.b;
+    }
+}
 
 fn foo<'a, T>(b: bool, t1: &'a mut T, t2: &'a mut T) -> &'a T
 where
@@ -40,25 +62,6 @@ fn foo_O() {
 
     for i in &mut arr {
         i.my_self();
-    }
-}
-
-fn x() {}
-
-trait MySelf {
-    fn my_self(&mut self) {}
-}
-
-struct A;
-struct B {
-    b: bool,
-}
-
-impl MySelf for A {}
-
-impl MySelf for B {
-    fn my_self(&mut self) {
-        self.b = !self.b;
     }
 }
 
