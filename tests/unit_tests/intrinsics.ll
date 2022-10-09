@@ -2,6 +2,11 @@
 target datalayout = "e-m:e-p270:32:32-p271:32:32-p272:64:64-i64:64-f80:128-n8:16:32:64-S128"
 target triple = "x86_64-pc-linux-gnu"
 
+; Copy over symex_lib::assume declaration from a generated ll.
+declare void @_ZN9symex_lib6assume17hfd5bf6c9c604b625E(i1 zeroext) unnamed_addr #1
+
+; symex_lib::symbolic for i32.
+declare void @_ZN9symex_lib8symbolic17h692d82273b6bba04E(i32* align 4) unnamed_addr #1
 
 ; --------------------------------------------------------------------------------------------------
 ; Standard C/C++ intrinsics
@@ -33,10 +38,12 @@ declare void @llvm.memmove.p0i8.p0i8.i32(i8* %dst, i8* %src, i32 %len, i1 %isvol
 define dso_local [4 x i16] @test_memmove() #0 {
     %1 = alloca [4 x i16], align 4
     %2 = alloca [4 x i16], align 4
-    store [4 x i16] [i16 u0xabcd, i16 u0x1234, i16 u0x5667, i16 u0xbebe], [4 x i16]* %1
+
     ; [0xcd, 0xab, 0x34, 0x12, 0x67, 0x56, 0xbe, 0xbe]
-    store [4 x i16] [i16 6, i16 7, i16 u0xfecb, i16 u0x6543], [4 x i16]* %2
+    store [4 x i16] [i16 u0xabcd, i16 u0x1234, i16 u0x5667, i16 u0xbebe], [4 x i16]* %1
+
     ; [0x06, 0x00, 0x07, 0x00, 0xcb, 0xfe, 0x43, 0x65]
+    store [4 x i16] [i16 6, i16 7, i16 u0xfecb, i16 u0x6543], [4 x i16]* %2
     
     %src = bitcast [4 x i16]* %1 to i8*
     %dst = bitcast [4 x i16]* %2 to i8*
@@ -73,6 +80,45 @@ define dso_local [4 x i16] @test_memmove_overlapping() #0 {
     ret [4 x i16] %ret
     ; expect [0xcd, 0xab, 0x34, 0xcd, 0xab, 0x34, 0xcd, 0xab]
     ;   -> 0xabcd34abcd34abcd
+}
+
+define dso_local [4 x i16] @test_memmove_symbolic_len() #0 {
+    %1 = alloca [4 x i16], align 4
+    %2 = alloca [4 x i16], align 4
+    %len_local = alloca i32, align 4
+
+    ; [0xcd, 0xab, 0x34, 0x12, 0x67, 0x56, 0xbe, 0xbe]
+    store [4 x i16] [i16 u0xabcd, i16 u0x1234, i16 u0x5667, i16 u0xbebe], [4 x i16]* %1
+
+    ; [0x06, 0x00, 0x07, 0x00, 0xcb, 0xfe, 0x43, 0x65]
+    store [4 x i16] [i16 6, i16 7, i16 u0xfecb, i16 u0x6543], [4 x i16]* %2
+
+    ; setup symbolic len, but constrain to [3, 4].
+    call void @_ZN9symex_lib8symbolic17h692d82273b6bba04E(i32* align 4 %len_local)
+    %len = load i32, i32* %len_local
+    %c0 = icmp uge i32 %len, 3
+    %c1 = icmp ule i32 %len, 4
+    %cond = and i1 %c0, %c1
+    call void @_ZN9symex_lib6assume17hfd5bf6c9c604b625E(i1 zeroext %cond)
+    
+    %src = bitcast [4 x i16]* %1 to i8*
+    %dst = bitcast [4 x i16]* %2 to i8*
+    ; copy over 3 or 4 elements.
+    call void @llvm.memmove.p0i8.p0i8.i32(i8* %dst, i8* %src, i32 %len, i1 0)
+
+    ; overwrite last two 1i6 in dest with len.
+    %el_addr = getelementptr inbounds [4 x i16], [4 x i16]* %2, i64 0, i32 2
+    %el_addr_i32 = bitcast i16* %el_addr to i32*
+    store i32 %len, i32* %el_addr_i32
+
+    %ret = load [4 x i16], [4 x i16]* %2
+    ret [4 x i16] %ret
+    ; for len := 3
+    ; expect [0xcd, 0xab, 0x34, 0x00, 0x00, 0x00, 0x00, 0x03]
+    ;   -> 0x000000030034abcd
+    ; for len := 4
+    ; expect [0xcd, 0xab, 0x34, 0x12, 0x00, 0x00, 0x00, 0x04]
+    ;   -> 0x000000041234abcd
 }
 
 ; memset

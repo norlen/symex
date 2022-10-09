@@ -148,30 +148,32 @@ impl<'p> LLVMInstruction {
         debug!("{}", instr);
 
         let cond = e.state.get_expr(&instr.condition)?.simplify();
-        if let Some(c) = cond.get_constant_bool() {
-            let target = if c {
-                &instr.true_dest
-            } else {
-                &instr.false_dest
-            };
-            return e.branch(target);
-        }
-
-        let true_possible = e.state.constraints.is_sat_with_constraint(&cond)?;
-        let false_possible = e.state.constraints.is_sat_with_constraint(&cond.not())?;
-
-        let target = match (true_possible, false_possible) {
-            (true, true) => {
-                // Explore `true` path, and save `false` path for later.
-                e.save_path(&instr.false_dest, Some(cond.not()))?;
-                e.state.constraints.assert(&cond);
-                Ok(&instr.true_dest)
+        let target = match cond.get_constant_bool() {
+            // Fast path: skip checking satisfiability if the condition is constant.
+            Some(condition) => {
+                if condition {
+                    &instr.true_dest
+                } else {
+                    &instr.false_dest
+                }
             }
-            (true, false) => Ok(&instr.true_dest),
-            (false, true) => Ok(&instr.false_dest),
-            (false, false) => Err(SolverError::Unsat),
-        }?;
+            None => {
+                let true_possible = e.state.constraints.is_sat_with_constraint(&cond)?;
+                let false_possible = e.state.constraints.is_sat_with_constraint(&cond.not())?;
 
+                match (true_possible, false_possible) {
+                    (true, true) => {
+                        // Explore `true` path, and save `false` path for later.
+                        e.save_path(&instr.false_dest, Some(cond.not()))?;
+                        e.state.constraints.assert(&cond);
+                        Ok(&instr.true_dest)
+                    }
+                    (true, false) => Ok(&instr.true_dest),
+                    (false, true) => Ok(&instr.false_dest),
+                    (false, false) => Err(SolverError::Unsat),
+                }?
+            }
+        };
         e.branch(target)
     }
 

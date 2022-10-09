@@ -12,7 +12,7 @@
 //! - [ ] `llvm.umin.*`
 //! - [x] `llvm.memcpy`
 //! - [ ] `llvm.memcpy.inline`
-//! - [ ] `llvm.memmove`
+//! - [x] `llvm.memmove`
 //! - [x] `llvm.memset`
 //! - [ ] `llvm.sqrt.*`
 //! - [ ] `llvm.powi.*`
@@ -76,7 +76,7 @@ use tracing::{trace, warn};
 use crate::{
     core::{
         memory::{Memory, BITS_IN_BYTE},
-        smt::{Expression, Solver, SolverContext},
+        smt::{Expression, Solutions, Solver, SolverContext},
     },
     executor::llvm::{common::binop, LLVMExecutor, LLVMExecutorError, Result, ReturnValue},
     smt::DExpr,
@@ -183,62 +183,59 @@ pub fn noop(_vm: &mut LLVMExecutor<'_>, _args: &[&Operand]) -> Result<ReturnValu
 // -------------------------------------------------------------------------------------------------
 
 /// Copy a block of memory from the source to the destination.
+///
+/// Requires that source and destination do not overlap.
 pub fn llvm_memcpy(vm: &mut LLVMExecutor<'_>, args: &[&Operand]) -> Result<ReturnValue> {
-    // Arguments:
+    assert_eq!(args.len(), 4);
+    trace!("llvm_memcpy");
+
+    // Arguments: ptr <dest>, ptr <src>, i32/i64 <len>, i1 <isvolatile>
     // 1. Pointer to destination.
     // 2. Pointer to source.
     // 3. Integer, number of bytes to copy.
     // 4. Bool, indicates volatile access.
-    // The first two arguments can have an optional alignment.
-    //
-    // The source and destination must either be equal or non-overlapping. If the length is not a
-    // well-defined value the behavior is undefined. Pointers to source and destination should be
-    // well-defined is the length is not zero.
-    //
-    // TODO: What is a `well-defined` value?
-    // TODO: Check the isvolatile and the details of volatile operations.
-    assert_eq!(args.len(), 4);
-    trace!("llvm_memcpy");
-
     let dst = vm.state.get_expr(args[0])?;
     let src = vm.state.get_expr(args[1])?;
+    let len = vm.state.get_expr(args[2])?;
 
-    // let size = get_u64_solution_from_operand(&vm.state, size)?;
-    let size = vm.state.get_expr(args[2])?.get_constant().unwrap();
-    let size = size as u32 * BITS_IN_BYTE;
-
-    // TODO: Seems like size can be zero for zero-sized types.
-    if size != 0 {
-        let value = vm.state.memory.read(&src, size)?;
-        vm.state.memory.write(&dst, value)?;
+    if let Some(len) = len.get_constant() {
+        if len > 0 {
+            let len = len as u32 * BITS_IN_BYTE;
+            let value = vm.state.memory.read(&src, len)?;
+            vm.state.memory.write(&dst, value)?;
+        } else {
+            warn!("memcpy with size 0");
+        }
     } else {
-        warn!("memcpy with size 0");
+        todo!("symbolic length in llvm.memcpy.*");
     }
 
     Ok(ReturnValue::Void)
 }
 
 pub fn llvm_memset(vm: &mut LLVMExecutor<'_>, args: &[&Operand]) -> Result<ReturnValue> {
-    // Arguments:
-    // 1. Pointer to address to fill.
-    // 2. Byte to to fill with.
-    // 3. Number of bytes to fill.
-    // 4. Indicates volatile access.
     assert_eq!(args.len(), 4);
     trace!("llvm_memset");
 
+    // Arguments: ptr <dest>, i8 <val>, i32/i64 <len>, i1 <isvolatile>
+    // - <dest> Pointer to address to fill.
+    // - <val> Byte to to fill with.
+    // - <len> Number of bytes to fill.
+    // - <isvolatile> Indicates volatile access.
     let dst = vm.state.get_expr(args[0])?;
-    let value = vm.state.get_expr(args[1])?;
-    assert_eq!(value.len(), BITS_IN_BYTE);
+    let val = vm.state.get_expr(args[1])?;
+    let len = vm.state.get_expr(args[2])?;
 
-    // let size = get_u64_solution_from_operand(&vm.state, size)?;
-    let size = vm.state.get_expr(args[2])?.get_constant().unwrap();
+    assert_eq!(val.len(), BITS_IN_BYTE);
+    if let Some(len) = len.get_constant() {
+        for byte in 0..len {
+            let offset = vm.state.ctx.from_u64(byte, vm.project.ptr_size);
+            let addr = dst.add(&offset);
 
-    for byte in 0..size {
-        let offset = vm.state.ctx.from_u64(byte, vm.project.ptr_size);
-        let addr = dst.add(&offset);
-
-        vm.state.memory.write(&addr, value.clone())?;
+            vm.state.memory.write(&addr, val.clone())?;
+        }
+    } else {
+        todo!("symbolic length in llvm.memset.*");
     }
 
     Ok(ReturnValue::Void)
@@ -248,25 +245,56 @@ pub fn llvm_memset(vm: &mut LLVMExecutor<'_>, args: &[&Operand]) -> Result<Retur
 ///
 /// Similar to `llvm_memcpy` but `llvm_memmove` allows the two memory locations to overlap.
 pub fn llvm_memmove(vm: &mut LLVMExecutor<'_>, args: &[&Operand]) -> Result<ReturnValue> {
-    // Arguments: ptr <dest>, ptr <src>, i32 <len> (bytes), i1 <isvolatile>
+    assert_eq!(args.len(), 4);
+    trace!("llvm_memmove");
+
+    // Arguments: ptr <dest>, ptr <src>, i32/i64 <len>, i1 <isvolatile>
     let dst = vm.state.get_expr(args[0])?;
     let src = vm.state.get_expr(args[1])?;
     let len = vm.state.get_expr(args[2])?;
 
-    // If len is constant, simplify the procedure.
-    if let Some(len) = len.get_constant() {
-        // TODO: Not sure about the exact semantics when the locations overlap. So copy the bytes
-        // one by one for now.
-        for i in 0..len {
-            let increment = vm.state.ctx.from_u64(i, vm.project.ptr_size);
-            let src_addr = src.add(&increment);
-            let dst_addr = dst.add(&increment);
+    // TODO: Not sure about the exact semantics when the locations overlap. So copy the bytes
+    // one by one for now.
 
-            let value = vm.state.memory.read(&src_addr, BITS_IN_BYTE)?;
-            vm.state.memory.write(&dst_addr, value)?;
+    let len = match len.get_constant() {
+        Some(len) => len,
+        None => {
+            warn!("symbolic length in llvm.memmove.* is experimental");
+            let concretizations = vm.vm.cfg.max_intrinsic_concretizations;
+            let solutions = vm.state.constraints.get_values(&len, concretizations)?;
+            let solutions = match solutions {
+                Solutions::Exactly(v) => v,
+                Solutions::AtLeast(v) => {
+                    warn!(
+                        "More than {} solutions found for length in memmove",
+                        concretizations
+                    );
+                    v
+                }
+            };
+
+            let (solution, others) = solutions.split_first().unwrap();
+
+            // Fork other paths.
+            for solution in others.iter() {
+                let constraint = len._eq(&solution);
+                vm.fork(constraint)?;
+            }
+
+            // OK, lets go.
+            let constraint = len._eq(&solution);
+            vm.state.constraints.assert(&constraint);
+            solution.get_constant().unwrap() // Know this is constant.
         }
-    } else {
-        todo!("symbolic length in llvm.memmove.*");
+    };
+
+    for i in 0..len {
+        let increment = vm.state.ctx.from_u64(i, vm.project.ptr_size);
+        let src_addr = src.add(&increment);
+        let dst_addr = dst.add(&increment);
+
+        let value = vm.state.memory.read(&src_addr, BITS_IN_BYTE)?;
+        vm.state.memory.write(&dst_addr, value)?;
     }
 
     Ok(ReturnValue::Void)
@@ -274,6 +302,8 @@ pub fn llvm_memmove(vm: &mut LLVMExecutor<'_>, args: &[&Operand]) -> Result<Retu
 
 pub fn llvm_umax(vm: &mut LLVMExecutor<'_>, args: &[&Operand]) -> Result<ReturnValue> {
     assert_eq!(args.len(), 2);
+    trace!("llvm_umax");
+
     let lhs = &args[0];
     let rhs = &args[1];
 
@@ -564,6 +594,21 @@ mod tests {
         let res = run("test_memmove_overlapping");
         assert_eq!(res.len(), 1);
         assert_eq!(res[0], Ok(Some(0xabcd34abcd34abcd_u64 as i64)));
+    }
+
+    #[test]
+    fn test_memmove_symbolic_len() {
+        let res = run("test_memmove_symbolic_len");
+        assert_eq!(res.len(), 2);
+        let possible_res0 = vec![
+            Ok(Some(0x00000003_0034abcd_u64 as i64)),
+            Ok(Some(0x00000004_1234abcd_u64 as i64)),
+        ];
+        let possible_res1 = vec![
+            Ok(Some(0x00000004_1234abcd_u64 as i64)),
+            Ok(Some(0x00000003_0034abcd_u64 as i64)),
+        ];
+        assert!(res == possible_res0 || res == possible_res1);
     }
 
     #[test]

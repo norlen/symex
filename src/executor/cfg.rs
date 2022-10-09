@@ -12,6 +12,9 @@ pub struct Config {
     /// Maximum amount of concretizations for a memory address. This does not apply for e.g.
     /// ArrayMemory, but does apply for ObjectMemory.
     pub max_memory_access_resolutions: usize,
+
+    /// Maximum amount of concretizations for memmove, memcpy, memset and other intrisic functions.
+    pub max_intrinsic_concretizations: usize,
 }
 
 impl Default for Config {
@@ -27,6 +30,7 @@ impl Config {
             max_iter_count: 1000,
             max_fn_ptr_resolutions: 1,
             max_memory_access_resolutions: 100,
+            max_intrinsic_concretizations: 100,
         }
     }
 }
