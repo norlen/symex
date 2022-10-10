@@ -3,6 +3,7 @@ use clap::Parser;
 use log::debug;
 use std::{fs, path::PathBuf};
 use symex::RunConfig;
+use tracing_subscriber;
 
 const BINARY_NAME: &str = "symex";
 
@@ -18,7 +19,7 @@ use build::{
 use crate::args::Subcommands;
 
 fn main() -> Result<()> {
-    env_logger::init();
+    tracing_subscriber::fmt::init();
 
     match run() {
         Ok(_) => {}

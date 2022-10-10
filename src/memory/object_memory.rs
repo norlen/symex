@@ -102,7 +102,10 @@ impl Memory for ObjectMemory {
         let addresses = match addresses {
             Solutions::Exactly(s) => s,
             Solutions::AtLeast(s) => {
-                warn!("More than 10 possible addresses, suppressing other paths");
+                warn!(
+                    "More than {} possible addresses, suppressing other paths",
+                    upper_bound
+                );
                 s
             }
         };

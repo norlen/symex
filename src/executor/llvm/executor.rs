@@ -57,8 +57,6 @@ pub struct LLVMExecutor<'vm> {
     pub project: &'static Project,
 }
 
-// impl<'vm> Executor for LLVMExecutor<'vm> {}
-
 impl<'vm> LLVMExecutor<'vm> {
     pub fn from_state(state: LLVMState, vm: &'vm mut VM, project: &'static Project) -> Self {
         Self { vm, state, project }

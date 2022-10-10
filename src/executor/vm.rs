@@ -21,6 +21,20 @@ pub struct VM {
     pub inputs: Vec<Variable>,
 }
 
+const ERR: &str = r#"Pointer types as input parameters are not supported.
+
+The analyzed function may take the parameter by value, however the generated IR may be different.
+To fix the issue wrap the function to analyze in another one that does not take any input parameters.
+
+use symbolic_lib::symbolic;
+fn analyzed_fn(a: [i32; 3]) {}
+fn wrapped() {
+    let mut a = [0; 3];
+    symbolic(&mut a);
+    analyzed_fn(a);
+}
+"#;
+
 impl VM {
     pub fn new(
         project: &'static Project,
@@ -35,6 +49,12 @@ impl VM {
         let mut inputs = Vec::new();
         for param in function.parameters.iter() {
             let size = project.bit_size(&param.ty).unwrap();
+            match param.ty.as_ref() {
+                llvm_ir::Type::PointerType { .. } => {
+                    todo!("{ERR}");
+                }
+                _ => {}
+            }
             assert_ne!(size, 0);
 
             let s = Box::new(param.name.to_string());
