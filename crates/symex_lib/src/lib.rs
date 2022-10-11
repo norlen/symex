@@ -42,12 +42,31 @@ pub fn assume(condition: bool) {
 ///     }
 /// }
 /// ```
+
 #[inline(never)]
-pub fn symbolic<T>(value: &mut T) {
+pub fn symbolic<T: Valid>(value: &mut T) {
+    symbolic_raw(value);
+    assume(value.is_valid());
+}
+
+// internal
+pub fn symbolic_raw<T>(value: &mut T) {
     unsafe {
         let size = std::mem::size_of_val(value);
         let ptr = std::mem::transmute(value);
         symex_symbolic(ptr, size as u64);
+    }
+}
+
+pub trait Valid {
+    fn is_valid(&self) -> bool {
+        true
+    }
+}
+
+impl<T> Valid for &T {
+    fn is_valid(&self) -> bool {
+        true
     }
 }
 

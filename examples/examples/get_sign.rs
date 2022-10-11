@@ -1,9 +1,8 @@
 //! Simple example.
 //!
 //! ```shell
-//! cargo symex --example simple --function rust_simple_test
+//! cargo symex --example get_sign --function get_sign
 //! ```
-use symex_lib::{assume, symbolic};
 
 #[inline(never)]
 pub fn get_sign(v: i32) -> i32 {
@@ -16,6 +15,4 @@ pub fn get_sign(v: i32) -> i32 {
     }
 }
 
-fn main() {
-    // get_sign(6);
-}
+fn main() {}
