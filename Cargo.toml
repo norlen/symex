@@ -22,12 +22,7 @@ indenter = "0.3"
 colored = "2.0.0"
 
 [workspace]
-members = [
-    "cli",
-    "examples",
-    "crates/symex_lib",
-    "crates/valid_derive",
-]
+members = ["cargo-symex", "examples", "crates/symex_lib", "crates/valid_derive"]
 
 [features]
 default = ["boolector"]

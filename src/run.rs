@@ -6,6 +6,8 @@ use std::{
     time::{Duration, Instant},
 };
 
+use tracing::info;
+
 use rustc_demangle::demangle;
 
 use crate::{
@@ -15,6 +17,7 @@ use crate::{
     VM,
 };
 
+#[derive(Debug)]
 pub struct RunConfig {
     /// Which paths should the solver be invoked on.
     pub solve_for: SolveFor,
@@ -32,7 +35,7 @@ pub struct RunConfig {
 impl RunConfig {
     /// Determine if the solver should be invoked this specific result.
     ///
-    /// Returns true of all paths should be sovled, or if the result variant matches the given
+    /// Returns true of all paths should be solved, or if the result variant matches the given
     /// `SolveFor`.
     fn should_solve<T, E>(&self, result: &Result<T, E>) -> bool {
         use SolveFor::*;
@@ -45,6 +48,7 @@ impl RunConfig {
 }
 
 /// Determine for which types of paths the solver should be invoked on.
+#[derive(Debug)]
 pub enum SolveFor {
     /// All paths.
     All,
@@ -70,7 +74,9 @@ pub fn run(
     let project = Box::new(Project::from_path(path).unwrap());
     let project = Box::leak(project);
 
+    info!("create VM");
     let mut vm = VM::new(project, context, function.as_ref())?;
+    info!("run paths");
     let result = run_paths(&mut vm, cfg)?;
 
     println!("Paths: {}, took: {:?}", result.num_paths, result.duration);

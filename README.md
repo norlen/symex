@@ -26,7 +26,7 @@ in the symbolic execution engine.
 It can be installed with
 
 ```shell
-> cargo install --path cli
+> cargo install --path cargo-symex
 ```
 
 For usage instructions see `cargo symex --help`.
@@ -38,7 +38,7 @@ subcommand or with
 
 ```shell
 > cd examples
-> cargo run -p cli -- --example <example> [--function <function>]
+> cargo run -p cargo-symex -- --example <example> [--function <function>]
 ```
 
 To compile and run the example `examples/rust_simple` using the cargo subcommand
@@ -59,6 +59,33 @@ run
 ```shell
 > ./scripts/compile_tests.sh
 ```
+
+### Debug output from SYMEX
+
+The implementation uses the Rust log framework. You can set the logging level to the environment variable `RUST_LOG`. See below example (assumes the cargo-sub command `symex`).
+
+```shell
+> RUST_LOG=DEBUG cargo symex --example get_sign --function get_sign --release
+```
+
+If you want to narrow down the scope of logging you can give a list of modules to log.
+
+```shell
+> RUST_LOG="symex=debug" cargo symex --example get_sign --function get_sign --release
+```
+
+Symex uses different logging levels:
+
+- info, high level logging of steps taken.
+- debug, general logging of important actions.
+- trace, further information on internal operations and data structures.
+
+You can also narrow down the scope to specific modules, e.g. the executor.
+
+```shell
+> RUST_LOG="symex::executor=trace" cargo symex --example get_sign --function get_sign --release
+```
+
 
 ## Known issues
 
