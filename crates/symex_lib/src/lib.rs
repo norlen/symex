@@ -43,7 +43,7 @@ pub fn assume(condition: bool) {
 /// }
 /// ```
 
-#[inline(never)]
+// #[inline(never)]
 pub fn symbolic<T: Valid>(value: &mut T) {
     symbolic_raw(value);
     assume(value.is_valid());
@@ -64,11 +64,17 @@ pub trait Valid {
     }
 }
 
-impl<T> Valid for &T {
-    fn is_valid(&self) -> bool {
-        true
-    }
-}
+impl<T> Valid for &T where T: Valid {}
+
+impl Valid for bool {}
+impl Valid for u8 {}
+impl Valid for u16 {}
+impl Valid for u32 {}
+impl Valid for u64 {}
+impl Valid for i8 {}
+impl Valid for i16 {}
+impl Valid for i32 {}
+impl Valid for i64 {}
 
 // These are implemented as hooks.
 extern "C" {

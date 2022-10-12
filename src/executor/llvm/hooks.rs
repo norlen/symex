@@ -38,8 +38,8 @@ impl Hooks {
 
         hooks.add("symex_lib::assume", assume);
         hooks.add("symex_lib::symbolic_raw", symbolic);
-        hooks.add("assume", assume);
-        hooks.add("symbolic", symbolic_no_type);
+        // hooks.add("assume", assume);
+        // hooks.add("symbolic", symbolic_no_type);
 
         hooks
     }

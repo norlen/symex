@@ -67,4 +67,12 @@ fn check_valid() -> bool {
     }
 }
 
+fn check_parameter(e: E) -> bool {
+    assume(e.is_valid());
+    match e {
+        E::A | E::B(_) => true,
+        E::C(_) => panic!(),
+    }
+}
+
 fn main() {}

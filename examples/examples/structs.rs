@@ -3,7 +3,7 @@
 //! cargo symex --example structs --function check
 //! ```
 #![allow(dead_code)]
-use symex_lib::{assume, symbolic};
+use symex_lib::{assume, symbolic, Valid};
 
 #[derive(Debug)]
 struct MyStruct {
@@ -36,6 +36,7 @@ struct S {
     a: i16,
     b: i32,
 }
+impl Valid for S {}
 
 fn check() -> bool {
     let mut s = S { a: 0, b: 0 };

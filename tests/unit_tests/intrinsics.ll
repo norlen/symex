@@ -6,7 +6,7 @@ target triple = "x86_64-pc-linux-gnu"
 declare void @_ZN9symex_lib6assume17hfd5bf6c9c604b625E(i1 zeroext) unnamed_addr #1
 
 ; symex_lib::symbolic for i32.
-declare void @_ZN9symex_lib8symbolic17h692d82273b6bba04E(i32* align 4) unnamed_addr #1
+declare void @_ZN9symex_lib8symbolic_raw17h692d82273b6bba04E(i32* align 4) unnamed_addr #1
 
 ; --------------------------------------------------------------------------------------------------
 ; Standard C/C++ intrinsics
@@ -94,7 +94,7 @@ define dso_local [4 x i16] @test_memmove_symbolic_len() #0 {
     store [4 x i16] [i16 6, i16 7, i16 u0xfecb, i16 u0x6543], [4 x i16]* %2
 
     ; setup symbolic len, but constrain to [3, 4].
-    call void @_ZN9symex_lib8symbolic17h692d82273b6bba04E(i32* align 4 %len_local)
+    call void @_ZN9symex_lib8symbolic_raw17h692d82273b6bba04E(i32* align 4 %len_local)
     %len = load i32, i32* %len_local
     %c0 = icmp uge i32 %len, 3
     %c1 = icmp ule i32 %len, 4
