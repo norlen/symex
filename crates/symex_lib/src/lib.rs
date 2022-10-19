@@ -46,10 +46,10 @@ pub fn assume(condition: bool) {
 // #[inline(never)]
 pub fn symbolic<T: Valid>(value: &mut T) {
     symbolic_raw(value);
-    assume(value.is_valid());
 }
 
 // internal
+#[inline(never)]
 pub fn symbolic_raw<T>(value: &mut T) {
     unsafe {
         let size = std::mem::size_of_val(value);

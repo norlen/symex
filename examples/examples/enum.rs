@@ -46,8 +46,8 @@ fn check() -> bool {
     symbolic(&mut e);
 
     match e {
-        E::A | E::B(_) => true,
-        E::C(_) => false,
+        E::A | E::B(_) => panic!(),
+        E::C(_) => panic!(),
     }
 }
 
@@ -62,15 +62,15 @@ fn check_valid() -> bool {
     assume(e.is_valid());
 
     match e {
-        E::A | E::B(_) => true,
-        E::C(_) => false,
+        E::A | E::B(_) => panic!(),
+        E::C(_) => panic!(),
     }
 }
 
 fn check_parameter(e: E) -> bool {
     assume(e.is_valid());
     match e {
-        E::A | E::B(_) => true,
+        E::A | E::B(_) => panic!(),
         E::C(_) => panic!(),
     }
 }
