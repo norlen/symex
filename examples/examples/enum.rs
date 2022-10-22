@@ -19,18 +19,7 @@
 //! the helper function `is_valid` when derived will suppress the invalid variant and only allow
 //! the valid variants.
 #![allow(dead_code)]
-use symex_lib::{assume, symbolic, Valid};
-use valid_derive::Validate;
-
-// trait Valid {
-//     fn is_valid(&self) -> bool;
-// }
-
-// impl<T> Valid for &T {
-//     fn is_valid(&self) -> bool {
-//         true
-//     }
-// }
+use symex_lib::{symbolic, valid, Validate};
 
 #[derive(Validate)]
 enum E {
@@ -59,7 +48,7 @@ fn check_valid() -> bool {
 
     // But this will suppress the invalid variants, so for the sake of the analysis `e` can only be
     // `A`, `B`, or `C`.
-    assume(e.is_valid());
+    valid(&e);
 
     match e {
         E::A | E::B(_) => true,

@@ -1,3 +1,8 @@
+mod any;
+
+pub use any::{any, Any};
+pub use valid_derive::Validate;
+
 /// Assume the condition.
 ///
 /// Adds a constraint that the passed condition must be true. If the condition can never be true,
@@ -42,20 +47,35 @@ pub fn assume(condition: bool) {
 ///     }
 /// }
 /// ```
-
 #[inline(never)]
-pub fn symbolic<T: Valid>(value: &mut T) {
-    symbolic_raw(value);
-    assume(value.is_valid());
-}
-
-// internal
-pub fn symbolic_raw<T>(value: &mut T) {
+pub fn symbolic<T>(value: &mut T) {
     unsafe {
         let size = std::mem::size_of_val(value);
         let ptr = std::mem::transmute(value);
         symex_symbolic(ptr, size as u64);
     }
+}
+
+/// Assume the passed value contains a valid representation.
+///
+/// # Example
+///
+/// ```rust
+/// # use symex_lib::{Validate, valid, symbolic};
+/// #[derive(Validate)]
+/// enum E {
+///     A,
+///     B,
+/// }
+///
+/// fn assume_valid() {
+///     let mut e = E::A;
+///     symbolic(&mut e); // `e` does not necessarily contain a valid discriminant.
+///     valid(&e); // only allows `e` to contain valid discriminants.
+/// }
+/// ```
+pub fn valid<T: Valid>(value: &T) {
+    assume(value.is_valid());
 }
 
 pub trait Valid {
@@ -70,17 +90,18 @@ impl<T> Valid for &T {
     }
 }
 
+/// Suppresses this path from the executor.
+///
+/// Note that this affects the completeness of the analysis and can prevent certain errors from
+/// being found.
+#[inline(never)]
+pub fn ignore_path() -> ! {
+    unsafe { std::hint::unreachable_unchecked() }
+}
+
 // These are implemented as hooks.
 extern "C" {
-    #![allow(dead_code)]
-
     fn symex_assume(condition: u8);
 
     fn symex_symbolic(ptr: *mut std::ffi::c_void, size: u64);
-
-    // // Implemented as hook `hooks::assume`.
-    // fn symex_assume(condition: bool);
-
-    // // Implemented as hook `hooks::symbolic`.
-    // fn symex_symbolic(ptr: *mut std::ffi::c_void, size: usize);
 }

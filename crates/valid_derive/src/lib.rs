@@ -47,11 +47,11 @@ pub fn validate_macro_derive(input: TokenStream) -> TokenStream {
     };
 
     let expanded = quote!(
-        impl Valid for #id {
+        impl symex_lib::Valid for #id {
             fn is_valid(&self) -> bool {
                 #(#exp)*
                 {
-                     false
+                     symex_lib::ignore_path()
                 }
             }
         }
