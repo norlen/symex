@@ -11,7 +11,7 @@ use tracing::trace;
 
 use crate::{
     core::memory::Memory,
-    core::smt::{Expression, Solutions, Solver, SolverContext},
+    core::smt::{Expression, Solutions, Solver, SolverContext, SolverError},
     executor::llvm::{LLVMExecutorError, ReturnValue},
     llvm::type_to_expr_type,
     ExpressionType, LLVMExecutor, Variable,
@@ -37,9 +37,12 @@ impl Hooks {
         };
 
         hooks.add("symex_lib::assume", assume);
-        hooks.add("symex_lib::symbolic_raw", symbolic);
-        hooks.add("assume", assume);
-        hooks.add("symbolic", symbolic_no_type);
+        hooks.add("symex_lib::symbolic", symbolic);
+        hooks.add("symex_lib::ignore_path", ignore);
+
+        // These are not mangled, so these can be called from e.g. C.
+        hooks.add("symex_assume", assume);
+        hooks.add("symex_symbolic", symbolic_no_type);
 
         hooks
     }
@@ -52,6 +55,13 @@ impl Hooks {
         trace!("hooks: get {}", name);
         self.hooks.get(name).copied()
     }
+}
+
+pub fn ignore(
+    _vm: &mut LLVMExecutor<'_>,
+    _args: &[&Operand],
+) -> Result<ReturnValue, LLVMExecutorError> {
+    Err(LLVMExecutorError::SuppressPath)
 }
 
 pub fn assume(
@@ -77,7 +87,7 @@ pub fn assume(
     if vm.state.constraints.is_sat()? {
         Ok(ReturnValue::Void)
     } else {
-        panic!("unsat continue");
+        Err(LLVMExecutorError::SolverError(SolverError::Unsat))
     }
 }
 

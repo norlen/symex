@@ -2,7 +2,7 @@ use crate::{
     core::executor::VMError,
     core::smt::{Solver, SolverContext},
     executor::llvm::{project::Project, LLVMState},
-    llvm::{type_to_expr_type, ReturnValue},
+    llvm::{type_to_expr_type, LLVMExecutorError, ReturnValue},
     path_exploration::Path,
     smt::{DContext, DSolver},
     Config, DFSPathExploration, LLVMExecutor, PathExploration, Stats, Variable,
@@ -89,16 +89,28 @@ impl VM {
     }
 
     pub fn run(&mut self) -> Option<(Result<ReturnValue, VMError>, LLVMState)> {
-        if let Some(path) = self.paths.get_path() {
-            let mut executor = LLVMExecutor::from_state(path.state, self, self.project);
-            for constraint in path.constraints {
-                executor.state.constraints.assert(&constraint);
-            }
+        loop {
+            if let Some(path) = self.paths.get_path() {
+                let mut executor = LLVMExecutor::from_state(path.state, self, self.project);
+                for constraint in path.constraints {
+                    executor.state.constraints.assert(&constraint);
+                }
 
-            let res = executor.resume_execution().map_err(|e| e.into());
-            Some((res, executor.state))
-        } else {
-            None
+                let res = match executor.resume_execution() {
+                    Ok(v) => Ok(v),
+                    Err(e) => {
+                        if let LLVMExecutorError::SuppressPath = e {
+                            continue;
+                        } else {
+                            Err(e.into())
+                        }
+                    }
+                };
+                // let res = executor.resume_execution().map_err(|e| e.into());
+                break Some((res, executor.state));
+            } else {
+                break None;
+            }
         }
     }
 }

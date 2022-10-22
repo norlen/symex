@@ -51,6 +51,9 @@ pub enum LLVMExecutorError {
 
     #[error("Solver error")]
     SolverError(#[from] SolverError),
+
+    #[error("Path suppressed")]
+    SuppressPath,
 }
 
 impl Into<VMError> for LLVMExecutorError {
