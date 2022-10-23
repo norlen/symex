@@ -56,14 +56,14 @@ pub enum LLVMExecutorError {
     SuppressPath,
 }
 
-impl Into<VMError> for LLVMExecutorError {
-    fn into(self) -> VMError {
+impl From<LLVMExecutorError> for VMError {
+    fn from(e: LLVMExecutorError) -> Self {
         use LLVMExecutorError::*;
-        match self {
+        match e {
             Abort(i) => VMError::Abort(i),
             MemoryError(e) => VMError::MemoryError(e),
             SolverError(e) => VMError::SolverError(e),
-            _ => VMError::Other(format!("{self}")),
+            _ => VMError::Other(format!("{e}")),
         }
     }
 }

@@ -294,10 +294,12 @@ define dso_local i32 @test_expect() #0 {
     ret i32 %3 ; expect 100
 }
 
-define dso_local i32 @test_assume(i32 %0) #0 {
-    %2 = icmp eq i32 %0, 5
-    call void @llvm.assume(i1 %2)
-    ret i32 %0 ; expect 5
+define dso_local i32 @test_assume() #0 {
+    %1 = alloca i32
+    %val = load i32, i32* %1
+    %cmp = icmp eq i32 %val, 5
+    call void @llvm.assume(i1 %cmp)
+    ret i32 %val ; expect 5
 }
 
 

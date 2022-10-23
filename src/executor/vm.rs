@@ -1,12 +1,13 @@
 use crate::{
     core::executor::VMError,
-    core::smt::{Solver, SolverContext},
+    core::smt::Solver,
     executor::llvm::{project::Project, LLVMState},
-    llvm::{type_to_expr_type, LLVMExecutorError, ReturnValue},
+    llvm::{LLVMExecutorError, ReturnValue},
     path_exploration::Path,
     smt::{DContext, DSolver},
     Config, DFSPathExploration, LLVMExecutor, PathExploration, Stats, Variable,
 };
+use tracing::error;
 
 #[derive(Debug)]
 pub struct VM {
@@ -21,66 +22,30 @@ pub struct VM {
     pub inputs: Vec<Variable>,
 }
 
-const ERR: &str = r#"Pointer types as input parameters are not supported.
-
-The analyzed function may take the parameter by value, however the generated IR may be different.
-To fix the issue wrap the function to analyze in another one that does not take any input parameters.
-
-use symbolic_lib::symbolic;
-fn analyzed_fn(a: [i32; 3]) {}
-fn wrapped() {
-    let mut a = [0; 3];
-    symbolic(&mut a);
-    analyzed_fn(a);
-}
-"#;
-
 impl VM {
     pub fn new(
         project: &'static Project,
         ctx: &'static DContext,
         fn_name: &str,
     ) -> Result<Self, VMError> {
-        let (module, function) = project.find_entry_function(fn_name).unwrap();
-        let solver = DSolver::new(ctx);
-        let mut state = LLVMState::new(ctx, project, solver, module, function);
-
-        // Setup initial parameters.
-        let mut inputs = Vec::new();
-        for param in function.parameters.iter() {
-            let size = project.bit_size(&param.ty).unwrap();
-            match param.ty.as_ref() {
-                llvm_ir::Type::PointerType { .. } => {
-                    todo!("{ERR}");
-                }
-                _ => {}
-            }
-            assert_ne!(size, 0);
-
-            let s = Box::new(param.name.to_string());
-            let s = Box::leak(s);
-
-            let input = ctx.unconstrained(size as u32, s);
-            inputs.push(Variable {
-                name: Some(param.name.to_string()),
-                value: input.clone(),
-                ty: type_to_expr_type(param.ty.as_ref(), project),
-            });
-
-            state
-                .stack_frames
-                .last_mut()
-                .unwrap()
-                .registers
-                .insert(param.name.clone(), input);
+        let (module, function) = project.find_entry_function(fn_name)?;
+        if !function.parameters.is_empty() {
+            error!(
+                "Function {} has parameters: {:?}",
+                function.name, function.parameters
+            );
+            return Err(VMError::UnexpectedParameter);
         }
+
+        let solver = DSolver::new(ctx);
+        let state = LLVMState::new(ctx, project, solver, module, function);
 
         let mut vm = Self {
             project,
             paths: DFSPathExploration::new(),
             cfg: Config::new(),
             stats: Stats::new(),
-            inputs,
+            inputs: Vec::new(),
         };
         let path = Path::new(state, None);
         vm.paths.save_path(path);
@@ -106,7 +71,6 @@ impl VM {
                         }
                     }
                 };
-                // let res = executor.resume_execution().map_err(|e| e.into());
                 break Some((res, executor.state));
             } else {
                 break None;

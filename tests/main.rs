@@ -25,7 +25,7 @@ fn ifs() {
 // The input here is symbolic so both paths should be taken.
 #[test]
 fn multiple_paths() {
-    let res = run("tests/samples/multiple_paths.bc", "foo");
+    let res = run("tests/samples/multiple_paths.bc", "main");
     assert_eq!(res.len(), 2, "expected 2 paths");
     assert_eq!(res[0], Ok(Some(1)));
     assert_eq!(res[1], Ok(Some(2)));
@@ -36,7 +36,7 @@ fn multiple_paths() {
 // This also has backtracking so it ensures it correctly handles re-entry into an inner function.
 #[test]
 fn call() {
-    let res = run("tests/samples/call.bc", "bar");
+    let res = run("tests/samples/call.bc", "main");
     assert_eq!(res.len(), 2, "expected 2 paths");
     assert_eq!(res[0], Ok(Some(10)));
     assert_eq!(res[1], Ok(Some(1)));
@@ -63,7 +63,7 @@ fn match_works() {
 // This will call one of two functions depending on a bool.
 #[test]
 fn fn_refs() {
-    let res = run("tests/samples/fn_refs.bc", "fn_refs::foo");
+    let res = run("tests/samples/fn_refs.bc", "fn_refs::callme");
     println!("res: {res:#?}");
     assert_eq!(res.len(), 2, "expected 2 paths");
     assert_eq!(res[0], Ok(Some(10)));

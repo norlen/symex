@@ -72,7 +72,7 @@ impl Memory for ObjectMemory {
 
     #[tracing::instrument(skip(self))]
     fn write(&mut self, addr: &DExpr, value: DExpr) -> Result<(), MemoryError> {
-        trace!("write addr={addr:?}, value={value:?}");
+        trace!("write addr={addr:?}, len={}, value={value:?}", value.len());
         assert_eq!(addr.len(), self.ptr_size, "passed wrong sized address");
 
         let (addr, val) = self.resolve_address_mut(addr)?;

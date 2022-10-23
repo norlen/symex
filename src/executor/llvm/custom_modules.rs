@@ -36,6 +36,7 @@ impl CustomModule for RustModule {
             ("__rust_dealloc", rust_dealloc),
             ("__rust_realloc", rust_realloc),
             ("__rust_alloc_zeroed", rust_alloc_zeroed),
+            ("std::process::exit", exit),
             ("core::panicking::panic_bounds_check", abort),
             ("core::panicking::panic", abort),
             ("core::panicking::panic_fmt", abort),
@@ -58,6 +59,12 @@ fn get_single_u64_from_op(
         .get_constant()
         .unwrap();
     Ok(value)
+}
+
+fn exit(vm: &mut LLVMExecutor<'_>, args: &[&Operand]) -> Result<ReturnValue, LLVMExecutorError> {
+    let exit_code = vm.state.get_expr(args[0])?;
+    let exit_code = exit_code.get_constant().unwrap();
+    Err(LLVMExecutorError::Abort(exit_code as i64))
 }
 
 /// Hook that tells the VM to abort.

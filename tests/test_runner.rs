@@ -23,7 +23,7 @@ pub fn run(path: impl AsRef<Path>, function: &str) -> Vec<Result<Option<u128>, V
     //     .with_max_level(Level::TRACE)
     //     .finish();
 
-    // tracing::subscriber::set_global_default(subscriber); //.expect("setting default subscriber failed");
+    // tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
 
     let context = Box::new(DContext::new());
     let context = Box::leak(context);

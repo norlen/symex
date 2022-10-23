@@ -10,8 +10,8 @@ use tracing::trace;
 // This would require a general purpose project as well though.
 
 use crate::{
-    core::memory::Memory,
-    core::smt::{Expression, Solutions, Solver, SolverContext, SolverError},
+    core::memory::{Memory, BITS_IN_BYTE},
+    core::smt::{Expression, Solver, SolverContext, SolverError},
     executor::llvm::{LLVMExecutorError, ReturnValue},
     llvm::type_to_expr_type,
     ExpressionType, LLVMExecutor, Variable,
@@ -105,14 +105,13 @@ pub fn symbolic_no_type(
 
     let size = vm.state.get_expr(args[1])?;
 
-    let values = vm.state.constraints.get_values(&size, 1)?;
-    let concrete_size = match values {
-        Solutions::Exactly(values) => values[0].get_constant().unwrap(),
-        Solutions::AtLeast(_) => panic!("Multiple solutions for size of variable not supported"),
+    let concrete_size_in_bits = match size.get_constant() {
+        Some(value) => value as u32 * BITS_IN_BYTE,
+        None => panic!("Size for symbolic requires constant size"),
     };
 
     let name = get_operand_name(&addr);
-    let new_value = vm.state.ctx.unconstrained(concrete_size as u32, &name);
+    let new_value = vm.state.ctx.unconstrained(concrete_size_in_bits, &name);
 
     let addr = vm.state.get_expr(addr)?;
     vm.state.memory.write(&addr, new_value.clone())?;

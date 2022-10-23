@@ -1,3 +1,5 @@
+void symex_symbolic(void* ptr, int size);
+
 int foo(int i) {
     if (i < 3) {
         return 1;
@@ -7,5 +9,7 @@ int foo(int i) {
 }
 
 int main() {
-    return foo(0);
+    int i = 0;
+    symex_symbolic(&i, sizeof(i));
+    return foo(i);
 }
