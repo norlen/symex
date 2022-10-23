@@ -35,12 +35,3 @@ fn wrapped() {
 
 Note that returning larger values may also result in the compiler generating code that takes the return value as a parameter instead.
 "#;
-
-// WORK IN PROGRESS:
-// Have to figure out a good set of traits for executor related functionality.
-//
-// Should support different executors such as for LLVM and ASM.
-//
-// To begin with it may be smarter to have a trait on the VM, and make it really coarse grained,
-// keeping them completely separate and see which functions are similar (if any).
-//pub trait Executor {}

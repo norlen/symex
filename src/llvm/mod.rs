@@ -97,6 +97,7 @@ pub mod common;
 pub mod environment;
 pub mod error;
 pub mod executor;
+pub mod path_selection;
 pub mod project;
 pub mod state;
 pub mod vm;

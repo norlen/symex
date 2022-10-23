@@ -1,3 +1,4 @@
+//! Utility structures mostly related to passing information to runner and display to user.
 use colored::*;
 use core::fmt::{self, Write};
 use indenter::indented;
@@ -68,12 +69,6 @@ impl fmt::Display for PathResult {
                     "_"
                 };
                 writeln!(indented(f), "{name}: {}", value)?;
-                // if matches!(value.value, ConcreteValue::Struct { .. }) {
-                //     writeln!(f, "{name:>4}: ")?;
-                //     writeln!(f, "{}", value.value)?;
-                // } else {
-                //     writeln!(f, "{name:>4}: {}", value.value)?;
-                // }
             }
         }
 

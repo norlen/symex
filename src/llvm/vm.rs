@@ -3,16 +3,16 @@ use tracing::error;
 use crate::{
     core::{
         executor::VMError,
-        path_exploration::{Path, PathExploration},
+        path_selection::{Path, PathSelection},
         smt::Solver,
     },
     llvm::{
         executor::{LLVMExecutor, ReturnValue},
+        path_selection::DFSPathSelection,
         project::Project,
         state::LLVMState,
         Config, LLVMExecutorError, Stats,
     },
-    path_exploration::DFSPathExploration,
     smt::{DContext, DSolver},
     util::Variable,
 };
@@ -21,7 +21,7 @@ use crate::{
 pub struct VM {
     project: &'static Project,
 
-    pub(crate) paths: DFSPathExploration,
+    pub(crate) paths: DFSPathSelection,
 
     pub cfg: Config,
 
@@ -50,7 +50,7 @@ impl VM {
 
         let mut vm = Self {
             project,
-            paths: DFSPathExploration::new(),
+            paths: DFSPathSelection::new(),
             cfg: Config::new(),
             stats: Stats::new(),
             inputs: Vec::new(),

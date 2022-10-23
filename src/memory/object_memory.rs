@@ -14,7 +14,6 @@ use crate::{
 
 #[derive(Debug, Clone)]
 pub struct MemoryObject {
-    //name: String,
     address: u64,
 
     size: u64,

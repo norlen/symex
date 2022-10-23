@@ -1,6 +1,3 @@
-//!
-//!
-//!
 use crate::{core::smt::SolverError, smt::DExpr};
 
 /// Error representing an issue when performing memory operations.
@@ -50,15 +47,23 @@ pub fn to_bytes(size: u64) -> Result<u64, MemoryError> {
 }
 
 pub trait Memory {
+    /// Allocate `bits` of memory returning the newly allocated address.
     fn allocate(&mut self, bits: u64, align: u64) -> Result<u64, MemoryError>;
 
+    /// For a symbolic address, get addresses to read or write from.
+    ///
+    /// Certain memory models may not support fully symbolic pointers. This function allows the
+    /// memory model to resolve the passed address to any number of locations. The caller is then
+    /// expected to handle the multiple returned addresses by e.g. forking the path of execution.
     fn resolve_addresses(
         &self,
         addr: &DExpr,
         upper_bound: usize,
     ) -> Result<Vec<DExpr>, MemoryError>;
 
+    /// Read `bits` from `address`.
     fn read(&self, addr: &DExpr, bits: u32) -> Result<DExpr, MemoryError>;
 
+    /// Write a value to `address`.
     fn write(&mut self, addr: &DExpr, value: DExpr) -> Result<(), MemoryError>;
 }

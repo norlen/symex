@@ -2,7 +2,7 @@ use anyhow::{anyhow, Result};
 use clap::Parser;
 use log::debug;
 use std::{fs, path::PathBuf};
-use symex::RunConfig;
+use symex::run::RunConfig;
 use tracing_subscriber;
 
 const BINARY_NAME: &str = "symex";
@@ -97,10 +97,10 @@ fn run_rs(args: Args) -> Result<()> {
         solve_inputs: true,
         solve_symbolics: true,
         solve_output: true,
-        solve_for: symex::SolveFor::All,
+        solve_for: symex::run::SolveFor::All,
     };
 
-    symex::run(&target_path, &fn_name, &cfg)?;
+    symex::run::run(&target_path, &fn_name, &cfg)?;
     Ok(())
 }
 

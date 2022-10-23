@@ -3,11 +3,17 @@ use thiserror::Error;
 
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum SolverError {
+    /// The set of constraints added to the solution are unsatisfiable.
+    #[error("Unsat")]
+    Unsat,
+
+    /// Unknown error passed along from the SMT solver used.
     #[error("Unknown")]
     Unknown,
 
-    #[error("Unsat")]
-    Unsat,
+    /// Exceeded the passed maximum number of solutions.
+    #[error("Exceeded number of solutions")]
+    TooManySolutions,
 }
 
 #[derive(Debug)]
@@ -16,12 +22,17 @@ pub enum Solutions<E> {
     AtLeast(Vec<E>),
 }
 
+/// SolverContext handles the creation of expressions.
+///
+/// Keeps track of all the created expressions and the internal SMT state.
 pub trait SolverContext<E: Expression> {
+    /// Associated solver to be used with the context.
     type Solver: Solver;
 
     /// Create a new uninitialized expression of size `bits`.
     fn unconstrained(&self, bits: u32, name: &str) -> E;
 
+    /// Create a new expression set equal to `1` of size `bits.
     fn one(&self, bits: u32) -> E;
 
     /// Create a new expression set to zero of size `bits.
@@ -71,8 +82,12 @@ pub trait SolverContext<E: Expression> {
     }
 }
 
+/// Symbolic array where both index and stored values are symbolic.
 pub trait Array: Sized + Clone + Debug {
+    /// Expressions used for index and stored in the array.
     type Expression: Expression;
+
+    /// Associated context used for creation of the array, and stored expressions.
     type Context: SolverContext<Self::Expression>;
 
     /// Create a new array where index has size `index_size` and each element has size `element_size`.
@@ -102,41 +117,43 @@ pub trait Expression: Sized + Clone + Debug {
     fn resize_unsigned(&self, width: u32) -> Self;
 
     /// [Expression] equality check. Both [Expression]s must have the same bit width, the result is
-    /// returned as a [Expression] of width `1`.
+    /// returned as an [Expression] of width `1`.
     fn _eq(&self, other: &Self) -> Self;
 
+    /// [Expression] inequality check. Both [Expression]s must have the same bit width, the result is
+    /// returned as an [Expression] of width `1`.
     fn _ne(&self, other: &Self) -> Self;
 
     /// [Expression] unsigned greater than. Both [Expression]s must have the same bit width, the
-    /// result is returned as a [Expression] of width `1`.
+    /// result is returned as an [Expression] of width `1`.
     fn ugt(&self, other: &Self) -> Self;
 
     /// [Expression] unsigned greater than or equal. Both [Expression]s must have the same bit
-    /// width, the result is returned as a [Expression] of width `1`.
+    /// width, the result is returned as an [Expression] of width `1`.
     fn ugte(&self, other: &Self) -> Self;
 
     /// [Expression] unsigned less than. Both [Expression]s must have the same bit width, the result
-    /// is returned as a [Expression] of width `1`.
+    /// is returned as an [Expression] of width `1`.
     fn ult(&self, other: &Self) -> Self;
 
     /// [Expression] unsigned less than or equal. Both [Expression]s must have the same bit width,
-    /// the result is returned as a [Expression] of width `1`.
+    /// the result is returned as an [Expression] of width `1`.
     fn ulte(&self, other: &Self) -> Self;
 
     /// [Expression] signed greater than. Both [Expression]s must have the same bit width, the
-    /// result is returned as a [Expression] of width `1`.
+    /// result is returned as an [Expression] of width `1`.
     fn sgt(&self, other: &Self) -> Self;
 
     /// [Expression] signed greater or equal than. Both [Expression]s must have the same bit width,
-    /// the result is returned as a [Expression] of width `1`.
+    /// the result is returned as an [Expression] of width `1`.
     fn sgte(&self, other: &Self) -> Self;
 
     /// [Expression] signed less than. Both [Expression]s must have the same bit width, the result
-    /// is returned as a [Expression] of width `1`.
+    /// is returned as an [Expression] of width `1`.
     fn slt(&self, other: &Self) -> Self;
 
     /// [Expression] signed less than or equal. Both [Expression]s must have the same bit width,
-    /// the result is returned as a [Expression] of width `1`.
+    /// the result is returned as an [Expression] of width `1`.
     fn slte(&self, other: &Self) -> Self;
 
     fn add(&self, other: &Self) -> Self;
@@ -292,10 +309,23 @@ pub trait Solver: Debug {
         self.is_sat_with_constraint(&lhs._eq(rhs))
     }
 
-    // Get constant values
+    /// Find solutions to `expr`.
+    ///
+    /// Returns concrete solutions up to `upper_bound`, the returned [`Solutions`] has variants
+    /// for if the number of solution exceeds the upper bound.
     fn get_values(
         &self,
         expr: &Self::E,
         upper_bound: usize,
     ) -> Result<Solutions<Self::E>, SolverError>;
+
+    /// Find solutions to `expr`.
+    ///
+    /// Returns concrete solutions up to a maximum of `upper_bound`. If more solutions are available
+    /// the error [`SolverError::TooManySolutions`] is returned.
+    fn get_solutions(
+        &self,
+        expr: &Self::E,
+        upper_bound: usize,
+    ) -> Result<Vec<Self::E>, SolverError>;
 }

@@ -70,11 +70,9 @@
 #![warn(rust_2018_idioms, rust_2021_compatibility)]
 //#![warn(missing_docs)]
 
-// mod environment;
 pub mod core;
 pub mod llvm;
 pub mod memory;
-pub mod path_exploration;
 pub mod run;
 pub mod smt;
 pub mod util;

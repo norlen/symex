@@ -7,7 +7,7 @@ use tracing::trace;
 
 use crate::{
     core::{
-        path_exploration::{Path, PathExploration},
+        path_selection::{Path, PathSelection},
         smt::{Expression, Solutions, Solver},
     },
     llvm::{

@@ -130,4 +130,16 @@ impl<'ctx> Solver for Z3SolverIncremental<'ctx> {
             false => Ok(Solutions::AtLeast(results)),
         }
     }
+
+    fn get_solutions(
+        &self,
+        expr: &Self::E,
+        upper_bound: usize,
+    ) -> Result<Vec<Self::E>, SolverError> {
+        let result = self.get_values(expr, upper_bound)?;
+        match result {
+            Solutions::Exactly(solutions) => Ok(solutions),
+            Solutions::AtLeast(_) => Err(SolverError::TooManySolutions),
+        }
+    }
 }
