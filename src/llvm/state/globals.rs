@@ -7,7 +7,10 @@ use tracing::{debug, trace};
 
 use crate::{
     core::memory::Memory,
-    executor::llvm::{LLVMExecutorError, ModuleHandle, Project},
+    llvm::{
+        project::{ModuleHandle, Project},
+        LLVMExecutorError,
+    },
 };
 
 /// A global [Function] or [GlobalVariable].

@@ -3,10 +3,13 @@
 //! Constant operands are especially annoying, as they can contain many of the regular instructions.
 use llvm_ir::{Constant, ConstantRef, IntPredicate, Operand, Type};
 
-use super::{convert_to_map, gep, ToValue};
 use crate::{
     core::smt::{Expression, SolverContext},
-    executor::llvm::{LLVMExecutorError, LLVMState, Result},
+    llvm::{
+        common::{convert_to_map, gep, ToValue},
+        state::LLVMState,
+        LLVMExecutorError, Result,
+    },
     smt::DExpr,
 };
 

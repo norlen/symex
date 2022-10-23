@@ -12,9 +12,12 @@ use tracing::trace;
 use crate::{
     core::memory::{Memory, BITS_IN_BYTE},
     core::smt::{Expression, Solver, SolverContext, SolverError},
-    executor::llvm::{LLVMExecutorError, ReturnValue},
-    llvm::type_to_expr_type,
-    ExpressionType, LLVMExecutor, Variable,
+    llvm::{
+        common::type_to_expr_type,
+        executor::{LLVMExecutor, ReturnValue},
+        LLVMExecutorError,
+    },
+    util::{ExpressionType, Variable},
 };
 
 /// Hook type

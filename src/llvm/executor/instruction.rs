@@ -1,28 +1,25 @@
 use llvm_ir::{instruction, terminator, Instruction, Terminator, Type};
 use tracing::{debug, trace, warn};
 
-use super::{LLVMExecutor, TerminatorResult};
 use crate::{
     core::{
         memory::Memory,
         smt::{Expression, Solver, SolverContext, SolverError},
     },
-    executor::llvm::{
-        binop, cast_to, convert_to_map, gep, icmp, FunctionType, LLVMExecutorError, Result,
-        ReturnValue,
+    llvm::{
+        common::{binop, cast_to, convert_to_map, extract_value, gep, get_element_offset, icmp},
+        executor::{LLVMExecutor, ReturnValue, TerminatorResult},
+        project::FunctionType,
+        LLVMExecutorError, Result,
     },
-    llvm::{extract_value, get_element_offset},
     smt::DExpr,
 };
 
-pub(super) struct LLVMInstruction;
+pub struct LLVMInstruction;
 
 impl<'p> LLVMInstruction {
     /// Process a single LLVM IR instruction.
-    pub(super) fn process_instruction(
-        e: &mut LLVMExecutor<'p>,
-        instr: &'p Instruction,
-    ) -> Result<()> {
+    pub fn process_instruction(e: &mut LLVMExecutor<'p>, instr: &'p Instruction) -> Result<()> {
         e.vm.stats.instructions_processed += 1;
 
         match &instr {
@@ -84,7 +81,7 @@ impl<'p> LLVMInstruction {
     }
 
     /// Process a single LLVM IR terminator instruction.
-    pub(super) fn process_terminator(
+    pub fn process_terminator(
         e: &mut LLVMExecutor<'p>,
         terminator: &Terminator,
     ) -> Result<TerminatorResult> {
@@ -1154,9 +1151,8 @@ impl<'p> LLVMInstruction {
 mod tests {
     use crate::{
         core::{executor::VMError, smt::Expression},
-        llvm::ReturnValue,
+        llvm::{executor::ReturnValue, project::Project, vm::VM},
         smt::DContext,
-        Project, VM,
     };
 
     fn run(fn_name: &str) -> Vec<Result<Option<i64>, VMError>> {

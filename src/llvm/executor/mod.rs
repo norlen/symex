@@ -6,18 +6,25 @@ use llvm_ir::{
 use tracing::trace;
 
 use crate::{
-    core::smt::{Expression, Solutions, Solver},
-    executor::{
-        llvm::{
-            project::Project, InstructionIndex, LLVMExecutorError, LLVMInstruction, LLVMState,
-            Location, ModuleHandle, Result, StackFrame,
-        },
-        vm::VM,
+    core::{
+        path_exploration::{Path, PathExploration},
+        smt::{Expression, Solutions, Solver},
     },
-    path_exploration::Path,
+    llvm::{
+        executor::LLVMInstruction,
+        project::{ModuleHandle, Project},
+        state::{InstructionIndex, LLVMState, Location, StackFrame},
+        vm::VM,
+        LLVMExecutorError, Result,
+    },
     smt::DExpr,
-    PathExploration,
 };
+
+mod instruction;
+mod intrinsics;
+
+pub use instruction::*;
+pub use intrinsics::*;
 
 #[derive(Debug, Clone)]
 pub enum TerminatorResult {

@@ -12,9 +12,9 @@ use rustc_demangle::demangle;
 
 use crate::{
     core::executor::VMError,
-    llvm::{LLVMState, ReturnValue},
-    DContext, ErrorReason, ExpressionType, LineTrace, PathResult, PathStatus, Project, Variable,
-    VM,
+    llvm::{executor::ReturnValue, project::Project, state::LLVMState, vm::VM},
+    smt::DContext,
+    util::{ErrorReason, ExpressionType, LineTrace, PathResult, PathStatus, Variable},
 };
 
 #[derive(Debug)]

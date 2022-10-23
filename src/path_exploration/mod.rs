@@ -1,38 +1,43 @@
-use crate::{llvm::LLVMState, DExpr};
+//! Path exploration strategies.
+//!
+//! Currently the only supported strategy is [`DFSPathExploration`] which explores all paths using
+//! depth-first search.
+use crate::{
+    core::path_exploration::{self, PathExploration},
+    llvm::state::LLVMState,
+    smt::DExpr,
+};
 
-mod dfs;
+type Path = path_exploration::Path<LLVMState, DExpr>;
 
-pub use dfs::DFSPathExploration;
-
-/// A `Path` represents a single path of execution through a program. The path is composed by the
-/// current execution state (`State`) and an optional constraint that will be asserted when this
-/// path begins executing.
+/// Depth-first search path exploration.
 ///
-/// A single path may produce multiple other paths when encountering branching paths of execution.
+/// Each path is explored for as long as possible, when a path finishes the most recently added
+/// path is the next to be run.
 #[derive(Debug, Clone)]
-pub struct Path {
-    /// The state to use when resuming execution.
-    ///
-    /// The location in the state should be where to resume execution at.
-    pub state: LLVMState,
-
-    /// Constraints to add before starting execution on this path.
-    pub constraints: Vec<DExpr>,
+pub struct DFSPathExploration {
+    paths: Vec<Path>,
 }
 
-impl Path {
-    pub fn new(state: LLVMState, constraint: Option<DExpr>) -> Self {
-        let constraints = match constraint {
-            Some(c) => vec![c],
-            None => vec![],
-        };
-
-        Self { state, constraints }
+impl DFSPathExploration {
+    pub fn new() -> Self {
+        Self { paths: Vec::new() }
     }
 }
 
-pub trait PathExploration {
-    fn save_path(&mut self, path: Path);
+impl PathExploration<LLVMState, DExpr> for DFSPathExploration {
+    fn save_path(&mut self, path: Path) {
+        path.state.constraints.push();
+        self.paths.push(path);
+    }
 
-    fn get_path(&mut self) -> Option<Path>;
+    fn get_path(&mut self) -> Option<Path> {
+        match self.paths.pop() {
+            Some(path) => {
+                path.state.constraints.pop();
+                Some(path)
+            }
+            None => None,
+        }
+    }
 }

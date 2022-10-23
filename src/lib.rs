@@ -1,9 +1,16 @@
-//! This library provides a symbolic execution engine that operates on LLVM IR.
+//! SYMEX aims to be a general purpose symbolic execution environment.
+//!
+//! # Background
+//!
+//!
+//!
+//!
+//! # LLVM IR
 //!
 //! It aims to be a general purpose execution engine that can analyze mainly Rust code, but should
 //! handle other languages that can generate LLVM bitcode.
 //!
-//! It currently supports LLVM 13, and uses the [boolector](https://crates.io/crates/boolector)
+//! It currently supports LLVM 14, and uses the [boolector](https://crates.io/crates/boolector)
 //! library as the SMT solver.
 //!
 //! # Example
@@ -60,55 +67,14 @@
 //! }
 //! ```
 //!
-//! This should give two possible paths through the program. For the condition `x < 10` then one
-//! for the then branch, with the constraint that `x < 10` and one for the else branch with the
-//! constraint `x >= 10`.
-//!
-//!
-//! # Details
-//!
-//! ## Project
-//!
-//! A [Project] is a collection of LLVM IR modules. It holds the IR code and can be queried for size
-//! information about each type, which functions are available. Custom hooks and intrinsics are
-//! also present in the project.
-//!
-//! ## VM
-//!
-//! A [VM] is created from a project and a function name. A single VM holds mutable state for a
-//! run of that function. Multiple VMs can be spawned from a single project, for different
-//! functions.
-//!
-//! The mutable state it holds are memory, allocated variables, the callstack, and so on. This state
-//! is cloned for each path through the given function.
-//!
-//! ## Solver
-//!
-//! The [Solver] keeps tracks of all the constraints added to it. It it also used to create new
-//! symbols. The solver can be queried for solutions to different symbols.
-//!
-//! ## Hooks
-//!
-//! Hooks can be added for any function the IR calls. They are added onto a project, and when a call
-//! matches the name the VM first check if a hook is available for the function call. Each hook has
-//! full access to the [VM] so they can re-implement most of the functionality.
-//!
 #![warn(rust_2018_idioms, rust_2021_compatibility)]
 //#![warn(missing_docs)]
 
 // mod environment;
 pub mod core;
-mod executor;
+pub mod llvm;
 pub mod memory;
-mod path_exploration;
-mod run;
-mod smt;
-mod util;
-
-pub use executor::llvm::{project::Project, LLVMExecutor};
-// pub use executor::Executor;
-pub use executor::*;
-pub use path_exploration::*;
-pub use run::*;
-pub use smt::*;
-pub use util::*;
+pub mod path_exploration;
+pub mod run;
+pub mod smt;
+pub mod util;

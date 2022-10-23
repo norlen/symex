@@ -1,13 +1,21 @@
-use crate::{
-    core::executor::VMError,
-    core::smt::Solver,
-    executor::llvm::{project::Project, LLVMState},
-    llvm::{LLVMExecutorError, ReturnValue},
-    path_exploration::Path,
-    smt::{DContext, DSolver},
-    Config, DFSPathExploration, LLVMExecutor, PathExploration, Stats, Variable,
-};
 use tracing::error;
+
+use crate::{
+    core::{
+        executor::VMError,
+        path_exploration::{Path, PathExploration},
+        smt::Solver,
+    },
+    llvm::{
+        executor::{LLVMExecutor, ReturnValue},
+        project::Project,
+        state::LLVMState,
+        Config, LLVMExecutorError, Stats,
+    },
+    path_exploration::DFSPathExploration,
+    smt::{DContext, DSolver},
+    util::Variable,
+};
 
 #[derive(Debug)]
 pub struct VM {

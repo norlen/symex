@@ -8,18 +8,17 @@ use std::{collections::HashMap, fs, path::Path};
 use tracing::warn;
 
 use crate::{
-    executor::llvm::{
+    llvm::{
         common::{get_bit_offset, get_byte_offset, size_in_bits, size_in_bytes},
-        Result,
+        environment::{
+            custom_modules::RustModule,
+            hooks::{Hook, Hooks},
+            CustomModule,
+        },
+        executor::{is_intrinsic, Intrinsic, Intrinsics},
+        LLVMExecutorError, Result,
     },
     smt::{DContext, DExpr},
-};
-
-use super::{
-    custom_modules::{CustomModule, RustModule},
-    hooks::{Hook, Hooks},
-    intrinsics::{is_intrinsic, Intrinsic, Intrinsics},
-    LLVMExecutorError,
 };
 
 /// Handle that references a [Module].
@@ -108,7 +107,7 @@ impl Project {
     /// # Example
     ///
     /// ```rust
-    /// # use symex::Project;
+    /// # use symex::llvm::project::Project;
     /// #
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let project = Project::from_folder("tests/doc_tests/")?;
@@ -137,7 +136,7 @@ impl Project {
     /// # Example
     ///
     /// ```rust
-    /// # use symex::Project;
+    /// # use symex::llvm::project::Project;
     /// #
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let project = Project::from_path("tests/doc_tests/test.bc")?;
@@ -284,7 +283,7 @@ impl Project {
     /// # Example
     ///
     /// ```rust
-    /// # use symex::Project;
+    /// # use symex::llvm::project::Project;
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let project = Project::from_path("tests/doc_tests/test.bc")?;
     /// let (module, function) = project.find_entry_function("test::main")?;
@@ -323,7 +322,7 @@ impl Project {
     /// # Example
     ///
     /// ```ignore
-    /// # use symex::{Project, project::ModuleHandle};
+    /// # use symex::llvm::project::{Project, ModuleHandle};
     /// #
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// #   let project = Project::from_path("tests/doc_tests/test.bc")?;

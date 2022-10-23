@@ -6,11 +6,13 @@
 use llvm_ir::{IntPredicate, Operand, Type};
 use tracing::error;
 
-use super::get_bit_offset_concrete;
-use super::Op;
 use crate::{
     core::smt::Expression,
-    executor::llvm::{LLVMExecutorError, LLVMState, Result},
+    llvm::{
+        common::{get_bit_offset_concrete, Op},
+        state::LLVMState,
+        LLVMExecutorError, Result,
+    },
     smt::DExpr,
 };
 

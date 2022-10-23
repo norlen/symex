@@ -4,7 +4,7 @@ use llvm_ir::{
     Constant, ConstantRef, Operand, Type,
 };
 
-use crate::{ExpressionType, Project};
+use crate::{llvm::project::Project, util::ExpressionType};
 
 use super::Result;
 

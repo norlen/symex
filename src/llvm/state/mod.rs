@@ -2,21 +2,26 @@ use llvm_ir::{types::Typed, Function, Name, TypeRef};
 use std::collections::HashMap;
 use tracing::warn;
 
-// use crate::memory::ArrayMemory;
-use crate::memory::ObjectMemory;
-
-use super::{const_to_expr, operand_to_expr, GlobalReferenceKind, GlobalReferences};
 use crate::{
     core::{memory::Memory, smt::SolverContext},
-    executor::llvm::{
-        common::Op,
+    llvm::{
+        common::{const_to_expr, operand_to_expr, Op},
         project::{ModuleHandle, Project},
+        Result,
     },
+    memory::ObjectMemory,
+    // memory::ArrayMemory,
     smt::{DContext, DExpr, DSolver},
-    Variable,
+    util::Variable,
 };
 
-pub use super::{Location, Result};
+mod globals;
+mod location;
+
+use globals::{GlobalReferenceKind, GlobalReferences};
+
+// Re-exports.
+pub use location::{InstructionIndex, Location};
 
 /// Stack frame keeps track of information related to a specific stack frame.
 #[derive(Debug, Clone)]

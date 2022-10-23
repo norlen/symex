@@ -78,14 +78,18 @@ use crate::{
         memory::{Memory, BITS_IN_BYTE},
         smt::{Expression, Solutions, Solver, SolverContext},
     },
-    executor::llvm::{common::binop, LLVMExecutor, LLVMExecutorError, Result, ReturnValue},
+    llvm::{
+        common::binop,
+        executor::{LLVMExecutor, ReturnValue},
+        LLVMExecutorError, Result,
+    },
     smt::DExpr,
 };
 
 /// Check if the given name is an LLVM intrinsic.
 ///
 /// Currently it checks that the name starts with `llvm.` which seems like a good approximation.
-pub(super) fn is_intrinsic(name: &str) -> bool {
+pub fn is_intrinsic(name: &str) -> bool {
     name.starts_with("llvm.")
 }
 
@@ -100,7 +104,7 @@ pub type Intrinsic = fn(&mut LLVMExecutor<'_>, &[&Operand]) -> Result<ReturnValu
 /// constant time. Variable intrinsic names use a `[radix_trie::Trie]` so lookups are linear time of
 /// the retrieved name.
 #[derive(Clone)]
-pub(super) struct Intrinsics {
+pub struct Intrinsics {
     /// Fixed length intrinsic values, e.g. `llvm.va_start`.
     fixed: HashMap<String, Intrinsic>,
 
@@ -113,7 +117,7 @@ pub(super) struct Intrinsics {
 
 impl Intrinsics {
     /// Creates a new intrinsic hook storage with all the default intrinsics enabled.
-    pub(super) fn new_with_defaults() -> Self {
+    pub fn new_with_defaults() -> Self {
         let mut s = Self {
             fixed: HashMap::new(),
             variable: Trie::new(),
@@ -167,7 +171,7 @@ impl Intrinsics {
     ///
     /// It first checks the fixed length names, and if such a name cannot be found it checks the
     /// variable length names.
-    pub(super) fn get(&self, name: &str) -> Option<&Intrinsic> {
+    pub fn get(&self, name: &str) -> Option<&Intrinsic> {
         self.fixed
             .get(name)
             .or_else(|| self.variable.get_ancestor_value(name))
@@ -538,9 +542,8 @@ pub fn llvm_assume(vm: &mut LLVMExecutor<'_>, args: &[&Operand]) -> Result<Retur
 mod tests {
     use crate::{
         core::{executor::VMError, smt::Expression},
-        llvm::ReturnValue,
+        llvm::{executor::ReturnValue, project::Project, vm::VM},
         smt::DContext,
-        Project, VM,
     };
 
     fn run(fn_name: &str) -> Vec<Result<Option<i64>, VMError>> {

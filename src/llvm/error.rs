@@ -1,7 +1,5 @@
 use crate::core::{executor::VMError, memory::MemoryError, smt::SolverError};
 
-pub type Result<T> = std::result::Result<T, LLVMExecutorError>;
-
 // TODO: Other errors
 //
 // - Cannot take size of opaque struct.

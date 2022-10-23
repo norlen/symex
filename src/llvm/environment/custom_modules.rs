@@ -2,22 +2,16 @@ use llvm_ir::Operand;
 use tracing::debug;
 
 use crate::{
-    core::memory::{Memory, BITS_IN_BYTE},
-    core::smt::{Expression, SolverContext},
-    executor::llvm::{LLVMExecutorError, ReturnValue},
-    LLVMExecutor,
+    core::{
+        memory::{Memory, BITS_IN_BYTE},
+        smt::{Expression, SolverContext},
+    },
+    llvm::{
+        environment::{CustomModule, UserDefinedFunction},
+        executor::{LLVMExecutor, ReturnValue},
+        LLVMExecutorError,
+    },
 };
-
-type UserDefinedFunction = (
-    &'static str,
-    fn(&mut LLVMExecutor<'_>, &[&Operand]) -> Result<ReturnValue, LLVMExecutorError>,
-);
-
-pub trait CustomModule {
-    fn get_name(&self) -> &'static str;
-
-    fn get_all_functions(&self) -> &[UserDefinedFunction];
-}
 
 /// Custom module for Rust functionality.
 ///
