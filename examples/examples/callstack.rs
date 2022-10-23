@@ -1,7 +1,7 @@
 //! Example showcasing error output.
 //!
 //! ```shell
-//! cargo symex --example callstack --function foobar
+//! cargo symex --example callstack
 //! ```
 //!
 //! Should output something along the lines of
@@ -10,11 +10,11 @@
 //! Error: Abort -1
 //! Stacktrace:
 //!    0: callstack::bar
-//!     at <path_to_examples>/examples/callstack.rs, line 11, col 9
+//!     at <path_to_examples>/examples/callstack.rs, line 35, col 9
 //!    1: callstack::foo
-//!     at <path_to_examples>/examples/callstack.rs, line 21, col 9
-//!    2: callstack::foobar
-//!     at <path_to_examples>/examples/callstack.rs, line 28, col 5
+//!     at <path_to_examples>/examples/callstack.rs, line 45, col 9
+//!    2: callstack::main
+//!     at <path_to_examples>/examples/callstack.rs, line 53, col 5
 //!
 //! Symbolic:
 //!     y-3684861729: 0xfffffffffffffe04 (64-bits)
@@ -24,7 +24,7 @@
 //!
 //! # More ...
 //! ```
-use symex_lib::{assume, symbolic};
+use symex_lib::{assume, symbolic, Any};
 
 fn bar(x: i64, y: i64) -> i64 {
     //!Assume these are not too big, otherwise it catches overflow as well (at least in debug)
@@ -48,10 +48,7 @@ fn foo(x: i64) -> i64 {
     }
 }
 
-fn foobar(x: i64) -> i64 {
-    foo(x)
-}
-
 fn main() {
-    foobar(1);
+    let x = i64::any();
+    foo(x);
 }

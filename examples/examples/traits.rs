@@ -4,6 +4,7 @@
 //! cargo symex --example traits --function check
 //! ```
 #![allow(dead_code)]
+use symex_lib::Any;
 
 trait Random {
     fn get_random(&self) -> i32;
@@ -22,7 +23,8 @@ impl Random for T {
     }
 }
 
-fn check(b: bool) -> i32 {
+fn check() -> i32 {
+    let b = bool::any();
     let a: Vec<Box<dyn Random>> = vec![Box::new(S), Box::new(T)];
     if b {
         a[0].get_random()

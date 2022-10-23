@@ -23,7 +23,8 @@ pub use valid_derive::Validate;
 /// ```
 #[inline(never)]
 pub fn assume(condition: bool) {
-    unsafe { symex_assume(condition as u8) }
+    let mut condition = condition;
+    black_box(&mut condition);
 }
 
 /// Creates a new symbolic value for `value`. This removes all constraints.
@@ -49,11 +50,7 @@ pub fn assume(condition: bool) {
 /// ```
 #[inline(never)]
 pub fn symbolic<T>(value: &mut T) {
-    unsafe {
-        let size = std::mem::size_of_val(value);
-        let ptr = std::mem::transmute(value);
-        symex_symbolic(ptr, size as u64);
-    }
+    black_box(value);
 }
 
 /// Assume the passed value contains a valid representation.
@@ -99,9 +96,10 @@ pub fn ignore_path() -> ! {
     unsafe { std::hint::unreachable_unchecked() }
 }
 
-// These are implemented as hooks.
-extern "C" {
-    fn symex_assume(condition: u8);
-
-    fn symex_symbolic(ptr: *mut std::ffi::c_void, size: u64);
+/// Try and trick the optimizer.
+///
+/// It is hard to create a "can be anything" value in pure rust, this function tries to trick the
+/// optimizer into not optimizing `value`.
+fn black_box<T>(value: &mut T) {
+    *value = unsafe { core::ptr::read_volatile(value as *mut T) }
 }

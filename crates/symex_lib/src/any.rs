@@ -21,6 +21,8 @@ macro_rules! blanket_impl {
     };
 }
 
+blanket_impl!(bool);
+
 blanket_impl!(u8);
 blanket_impl!(u16);
 blanket_impl!(u32);

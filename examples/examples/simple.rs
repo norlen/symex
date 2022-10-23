@@ -1,9 +1,9 @@
 //! Simple example.
 //!
 //! ```shell
-//! cargo symex --example simple --function rust_simple_test
+//! cargo symex --example simple
 //! ```
-use symex_lib::{assume, symbolic};
+use symex_lib::{assume, symbolic, Any};
 
 fn rust_simple_test(mut t: u32) -> u32 {
     assume(t > 0);
@@ -21,5 +21,6 @@ fn rust_simple_test(mut t: u32) -> u32 {
 }
 
 fn main() {
-    rust_simple_test(6);
+    let t = u32::any();
+    rust_simple_test(t);
 }

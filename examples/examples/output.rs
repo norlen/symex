@@ -46,7 +46,7 @@ fn struct_simple() {
     assume(b.e == 0xab && b.f == 0xcd);
 }
 
-fn struct_nested() -> A {
+fn struct_nested() {
     let mut a = A::default();
     symbolic(&mut a);
 
@@ -57,7 +57,6 @@ fn struct_nested() -> A {
     let b = &a.d;
     assume(b.e == 0xbeef);
     assume(b.f == 0xef);
-    a
 }
 
 fn main() {}
