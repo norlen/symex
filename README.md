@@ -3,6 +3,15 @@
 Symbolic execution engine that operates on LLVM IR. Main use case is to analyze Rust programs but
 as it operates on LLVM IR it allows it to analyze all software that can generate LLVM IR.
 
+## Rust version
+
+Due to LLVM dependencies the current implementation is limited to Rust < 1.64. `cd` to the folder where you want to run `cargo symex` from and override the Rust version to be used as below:
+
+```shell
+cd <folder>
+rustup override set 1.64
+```
+
 ## Dependencies
 
 - [boolector](https://github.com/Boolector/boolector), Boolector is a Satisfiability Modulo Theories
