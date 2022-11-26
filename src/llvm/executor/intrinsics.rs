@@ -1,72 +1,6 @@
 //! LLVM support a large number of [intrinsic functions][1] these are not implemented in bitcode.
 //! Thus, these all have to be hooks that are implemented in the system.
 //!
-//! # Status of supported intrinsics
-//!
-//! ## Standard C/C++ intrinsics
-//!
-//! - [ ] `llvm.abs.*`
-//! - [ ] `llvm.smax.*`
-//! - [ ] `llvm.smin.*`
-//! - [x] `llvm.umax.*`
-//! - [ ] `llvm.umin.*`
-//! - [x] `llvm.memcpy`
-//! - [ ] `llvm.memcpy.inline`
-//! - [x] `llvm.memmove`
-//! - [x] `llvm.memset`
-//! - [ ] `llvm.sqrt.*`
-//! - [ ] `llvm.powi.*`
-//! - [ ] `llvm.sin.*`
-//! - [ ] `llvm.cos.*`
-//! - [ ] `llvm.pow.*`
-//! - [ ] `llvm.exp.*`
-//! - [ ] `llvm.exp2.*`
-//! - [ ] `llvm.log.*`
-//! - [ ] `llvm.log10.*`
-//! - [ ] `llvm.log2.*`
-//! - [ ] `llvm.fma.*`
-//! - [ ] `llvm.fabs.*`
-//! - [ ] `llvm.minnum.*`
-//! - [ ] `llvm.maxnum.*`
-//! - [ ] `llvm.minimum.*`
-//! - [ ] `llvm.maximum.*`
-//! - [ ] `llvm.copysign.*`
-//! - [ ] `llvm.floor.*`
-//! - [ ] `llvm.ceil.*`
-//! - [ ] `llvm.trunc.*`
-//! - [ ] `llvm.rint.*`
-//! - [ ] `llvm.nearbyint.*`
-//! - [ ] `llvm.round.*`
-//! - [ ] `llvm.roundeven.*`
-//! - [ ] `llvm.lround.*`
-//! - [ ] `llvm.llround.*`
-//! - [ ] `llvm.lrint.*`
-//! - [ ] `llvm.llrint.*`
-//!
-//! ## Arithmetic with overflow intrinsics
-//!
-//! - [x] `llvm.sadd.with.overflow.*`
-//! - [x] `llvm.uadd.with.overflow.*`
-//! - [x] `llvm.ssub.with.overflow.*`
-//! - [x] `llvm.usub.with.overflow.*`
-//! - [x] `llvm.smul.with.overflow.*`
-//! - [x] `llvm.umul.with.overflow.*`
-//!
-//! ## Saturation arithmetic intrinsics
-//!
-//! - [x] `llvm.sadd.sat.*`
-//! - [x] `llvm.uadd.sat.*`
-//! - [ ] `llvm.ssub.sat.*`
-//! - [ ] `llvm.usub.sat.*`
-//! - [ ] `llvm.sshl.sat.*`
-//! - [ ] `llvm.ushl.sat.*`
-//!
-//! ## General intrinsics (non-exhaustive)
-//!
-//! - [x] `llvm.expect`
-//! - [ ] `llvm.expect.with.probability`
-//! - [x] `llvm.assume`
-//!
 //! [1]: https://llvm.org/docs/LangRef.html#intrinsic-functions
 use llvm_ir::{Operand, Type};
 use radix_trie::Trie;
@@ -141,6 +75,8 @@ impl Intrinsics {
 
         s.add_variable("llvm.sadd.sat.", llvm_sadd_sat);
         s.add_variable("llvm.uadd.sat.", llvm_uadd_sat);
+        s.add_variable("llvm.ssub.sat.", llvm_ssub_sat);
+        s.add_variable("llvm.usub.sat.", llvm_usub_sat);
 
         s.add_variable("llvm.expect.", llvm_expect);
 
@@ -492,6 +428,8 @@ pub fn llvm_umul_with_overflow(
 enum BinaryOpSaturate {
     SAdd,
     UAdd,
+    SSub,
+    USub,
 }
 
 fn binary_op_saturate(
@@ -507,6 +445,8 @@ fn binary_op_saturate(
     let result = binop(&vm.state, lhs, rhs, |lhs, rhs| match op {
         BinaryOpSaturate::UAdd => lhs.uadds(&rhs),
         BinaryOpSaturate::SAdd => lhs.sadds(&rhs),
+        BinaryOpSaturate::USub => lhs.usubs(&rhs),
+        BinaryOpSaturate::SSub => lhs.ssubs(&rhs),
     })?;
 
     Ok(ReturnValue::Value(result))
@@ -515,8 +455,19 @@ fn binary_op_saturate(
 pub fn llvm_uadd_sat(vm: &mut LLVMExecutor<'_>, args: &[&Operand]) -> Result<ReturnValue> {
     binary_op_saturate(vm, args, BinaryOpSaturate::UAdd)
 }
+
 pub fn llvm_sadd_sat(vm: &mut LLVMExecutor<'_>, args: &[&Operand]) -> Result<ReturnValue> {
     binary_op_saturate(vm, args, BinaryOpSaturate::SAdd)
+}
+
+/// Unsigned saturating subtraction on two values.
+pub fn llvm_usub_sat(vm: &mut LLVMExecutor<'_>, args: &[&Operand]) -> Result<ReturnValue> {
+    binary_op_saturate(vm, args, BinaryOpSaturate::USub)
+}
+
+/// Signed saturating subtraction on two values.
+pub fn llvm_ssub_sat(vm: &mut LLVMExecutor<'_>, args: &[&Operand]) -> Result<ReturnValue> {
+    binary_op_saturate(vm, args, BinaryOpSaturate::SSub)
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -689,6 +640,48 @@ mod tests {
         let res = run("test_uadd_sat_vec");
         assert_eq!(res.len(), 1);
         assert_eq!(res[0], Ok(Some(0xfb3)));
+    }
+
+    #[test]
+    fn test_ssub_sat0() {
+        let res = run("test_ssub_sat0");
+        assert_eq!(res.len(), 1);
+        assert_eq!(res[0], Ok(Some(1)));
+    }
+
+    #[test]
+    fn test_ssub_sat1() {
+        let res = run("test_ssub_sat1");
+        assert_eq!(res.len(), 1);
+        assert_eq!(res[0], Ok(Some(-4)));
+    }
+
+    #[test]
+    fn test_ssub_sat2() {
+        let res = run("test_ssub_sat2");
+        assert_eq!(res.len(), 1);
+        assert_eq!(res[0], Ok(Some(-8)));
+    }
+
+    #[test]
+    fn test_ssub_sat3() {
+        let res = run("test_ssub_sat3");
+        assert_eq!(res.len(), 1);
+        assert_eq!(res[0], Ok(Some(7)));
+    }
+
+    #[test]
+    fn test_usub_sat0() {
+        let res = run("test_usub_sat0");
+        assert_eq!(res.len(), 1);
+        assert_eq!(res[0], Ok(Some(1)));
+    }
+
+    #[test]
+    fn test_usub_sat1() {
+        let res = run("test_usub_sat1");
+        assert_eq!(res.len(), 1);
+        assert_eq!(res[0], Ok(Some(0)));
     }
 
     #[test]

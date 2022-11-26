@@ -280,6 +280,48 @@ define dso_local <3 x i4> @test_uadd_sat_vec() #0 {
     ;   <0x3, 0xb, 0xf> -> 0xfb3
 }
 
+; ssub.sat
+declare i4 @llvm.ssub.sat.i4(i4 %a, i4 %b)
+
+define dso_local i64 @test_ssub_sat0() #0 {
+    %res = call i4 @llvm.ssub.sat.i4(i4 2, i4 1) ; %res = 1
+    %1 = sext i4 %res to i64
+    ret i64 %1
+}
+
+define dso_local i64 @test_ssub_sat1() #0 {
+    %res = call i4 @llvm.ssub.sat.i4(i4 2, i4 6) ; %res = -4
+    %1 = sext i4 %res to i64
+    ret i64 %1
+}
+
+define dso_local i64 @test_ssub_sat2() #0 {
+    %res = call i4 @llvm.ssub.sat.i4(i4 -4, i4 5) ; %res = -8
+    %1 = sext i4 %res to i64
+    ret i64 %1
+}
+
+define dso_local i64 @test_ssub_sat3() #0 {
+    %res = call i4 @llvm.ssub.sat.i4(i4 4, i4 -5) ; %res = 7
+    %1 = sext i4 %res to i64
+    ret i64 %1
+}
+
+; usub.sat
+declare i4 @llvm.usub.sat.i4(i4 %a, i4 %b)
+
+define dso_local i64 @test_usub_sat0() #0 {
+    %res = call i4 @llvm.usub.sat.i4(i4 2, i4 1) ; %res = 1
+    %1 = sext i4 %res to i64
+    ret i64 %1
+}
+
+define dso_local i64 @test_usub_sat1() #0 {
+    %res = call i4 @llvm.usub.sat.i4(i4 2, i4 6) ; %res = 0
+    %1 = sext i4 %res to i64
+    ret i64 %1
+}
+
 ; --------------------------------------------------------------------------------------------------
 ; General intrinsics
 ; --------------------------------------------------------------------------------------------------

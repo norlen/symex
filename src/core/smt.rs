@@ -263,6 +263,42 @@ pub trait Expression: Sized + Clone + Debug {
             .simplify()
     }
 
+    /// Saturated unsigned subtraction.
+    ///
+    /// Subtracts `self` with `other` and if the result overflows it is clamped to zero, since the
+    /// values are unsigned it can never go below the minimum value.
+    fn usubs(&self, other: &Self) -> Self {
+        assert_eq!(self.len(), other.len());
+
+        let result = self.sub(other).simplify();
+        let overflow = self.usubo(other).simplify();
+
+        let zero = self.get_ctx().zero(self.len());
+        overflow.ite(&zero, &result)
+    }
+
+    /// Saturated signed subtraction.
+    ///
+    /// Subtracts `self` with `other` with the result clamped between the largest and smallest
+    /// value allowed by the bit-width.
+    fn ssubs(&self, other: &Self) -> Self {
+        assert_eq!(self.len(), other.len());
+
+        let result = self.sub(other).simplify();
+        let overflow = self.ssubo(other).simplify();
+
+        let width = self.len();
+        let min = self.get_ctx().signed_min(width);
+        let max = self.get_ctx().signed_max(width);
+
+        // Check the sign bit if max or min should be given on overflow.
+        let is_negative = self.slice(self.len() - 1, self.len() - 1).simplify();
+
+        overflow
+            .ite(&is_negative.ite(&min, &max), &result)
+            .simplify()
+    }
+
     fn simplify(self) -> Self;
 
     fn get_constant(&self) -> Option<u64>;
