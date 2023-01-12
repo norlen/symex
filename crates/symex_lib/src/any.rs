@@ -1,5 +1,4 @@
 use super::symbolic;
-use std::mem::MaybeUninit;
 
 pub trait Any {
     fn any() -> Self;
@@ -39,7 +38,7 @@ blanket_impl!(isize);
 
 fn internal_any<T: Any>() -> T {
     unsafe {
-        let mut a = MaybeUninit::uninit();
+        let mut a = core::mem::MaybeUninit::uninit();
         symbolic(&mut a);
         a.assume_init()
     }
