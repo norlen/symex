@@ -1,19 +1,15 @@
-//! Any
-//! ---
-//!
-//! This file defines and exports the [`Any`] trait.
-//! This trait provides an interface that allows the user to create a new [`symbolic`] without any prior [`assumptions`](crate::assume) of its value.
 use super::symbolic;
 
-/// Any
+/// Provides the [`any`] operation on the implementor
 /// ---
 ///
-/// The implementers of this trait can be represented as a symbolic value.
-/// # Example implementation
+/// The any operation should return a new [`symbolic`] value with no prior [`assumptions`](crate::assume) placed on the value
+///
+/// ### Example implementation
 /// ```no_run
 /// impl Any for u8 {
 ///     /// Generates a symbolic value a without any assumption of the value.
-///     fn any() -> u8{
+///     fn any() -> Self{
 ///         unsafe{
 ///             let mut a = core::mem::MaybeUninit::uninit();
 ///             symex_lib::symbolic(&mut a);
@@ -26,11 +22,15 @@ pub trait Any {
     fn any() -> Self;
 }
 
-/// any
+/// Creates a new [`symbolic`] value with no prior assumptions.
 /// ---
 ///
-/// Returns a new symbolic value of a type that implements [`Any`].
 /// The symbolic value returned should have no [`assumptions`](crate::assume`) placed on it after the function returns.
+///
+/// ## Safety
+///
+/// Since the generic implementations provided by the crate generates variables from uninitialized memory it is
+/// inherently unsound to execute the code without symex.
 #[inline(never)]
 pub fn any<T: Any>() -> T {
     T::any()
@@ -40,12 +40,13 @@ pub fn any<T: Any>() -> T {
 ///
 /// The blanket implementation provides a method [`any`] that creates a [`uninit`](core::mem::MaybeUninit) value
 /// that is converted to a [`symbolic`] value which is then assumed to be initialized to make the compiler happy.
-#[macro_export]
 macro_rules! impl_primitive {
     ( $($type: ty),+) => {
         paste::paste!{$(
                 impl Any for $type {
-                    #[doc = "Generates a new symbolic value of type [`"[<$type>]"`] value from uninitialized memory"]
+                    #[doc = "Generates a new symbolic value from uninitialized memory\n\n### Safety\n\n"
+                    "Running code that uses uninitialized memory is inherently unsafe, do not run code using the any function "
+                    "without symbolic execution"]
                     #[inline(always)]
                     fn any() -> Self {
                         unsafe {
