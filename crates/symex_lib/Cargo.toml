@@ -5,4 +5,3 @@ edition = "2021"
 
 [dependencies]
 valid_derive = { path = "../valid_derive", version = "*" }
-paste = "1.0.11"

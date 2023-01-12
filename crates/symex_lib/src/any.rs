@@ -42,22 +42,24 @@ pub fn any<T: Any>() -> T {
 /// that is converted to a [`symbolic`] value which is then assumed to be initialized to make the compiler happy.
 macro_rules! impl_primitive {
     ( $($type: ty),+) => {
-        paste::paste!{$(
-                impl Any for $type {
-                    #[doc = "Generates a new symbolic value from uninitialized memory\n\n### Safety\n\n"
-                    "Running code that uses uninitialized memory is inherently unsafe, do not run code using the any function "
-                    "without symbolic execution"]
-                    #[inline(always)]
-                    fn any() -> Self {
-                        unsafe {
-                            let mut a = core::mem::MaybeUninit::uninit();
-                            symbolic(&mut a);
-                            a.assume_init()
-                        }
+        $(
+            impl Any for $type {
+                /// Generates a new symbolic value from uninitialized memory
+                ///
+                /// ### Safety
+                /// 
+                /// Running code that uses uninitialized memory is inherently unsafe, do not run code using the [`any`] function
+                /// without symbolic execution
+                #[inline(always)]
+                fn any() -> Self {
+                    unsafe {
+                        let mut a = core::mem::MaybeUninit::uninit();
+                        symbolic(&mut a);
+                        a.assume_init()
                     }
                 }
-            )+
-        }
+            }
+        )+
     };
 }
 
