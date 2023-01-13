@@ -50,7 +50,7 @@ pub fn assume(condition: bool) {
 /// }
 /// ```
 #[inline(never)]
-pub fn symbolic<T>(value: & T) {
+pub fn symbolic<T>(value: &mut T) {
     black_box(value);
 }
 
@@ -101,6 +101,6 @@ pub fn ignore_path() -> ! {
 ///
 /// It is hard to create a "can be anything" value in pure rust, this function tries to trick the
 /// optimizer into not optimizing `value`.
-fn black_box<T>(value: &T) {
-    //*value = unsafe { core::ptr::read(value) }
+fn black_box<T>(value: &mut T) {
+    *value = unsafe { core::ptr::read_volatile(value as *mut T) }
 }

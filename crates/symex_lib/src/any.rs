@@ -26,6 +26,11 @@ pub trait Any {
 /// ---
 ///
 /// The symbolic value returned should have no [`assumptions`](crate::assume`) placed on it after the function returns.
+///
+/// ## Safety
+///
+/// Since the generic implementations provided by the crate generates variables from uninitialized memory it is
+/// inherently unsound to execute the code without symex.
 #[inline(never)]
 pub fn any<T: Any>() -> T {
     T::any()
@@ -40,6 +45,11 @@ macro_rules! impl_primitive {
         $(
             impl Any for $type {
                 /// Generates a new symbolic value from uninitialized memory
+                ///
+                /// ### Safety
+                /// 
+                /// Running code that uses uninitialized memory is inherently unsafe, do not run code using the [`any`] function
+                /// without symbolic execution
                 #[inline(always)]
                 fn any() -> Self {
                     unsafe {
