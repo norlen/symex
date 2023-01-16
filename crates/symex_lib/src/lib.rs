@@ -1,3 +1,4 @@
+#![no_std]
 mod any;
 
 pub use any::{any, Any};
@@ -93,7 +94,7 @@ impl<T> Valid for &T {
 /// being found.
 #[inline(never)]
 pub fn ignore_path() -> ! {
-    unsafe { std::hint::unreachable_unchecked() }
+    unsafe { core::hint::unreachable_unchecked() }
 }
 
 /// Try and trick the optimizer.
