@@ -17,9 +17,11 @@ rand = "0.8.5"
 tracing = "0.1.36"
 tracing-subscriber = "0.3.15"
 object = "0.29.0"
-num_enum = "0.5.7"
+num_enum = "=0.5.7"
 indenter = "0.3"
 colored = "2.0.0"
+toml_edit = "=0.19.14"
+llvm-sys = "=140.0.5"
 
 [workspace]
 members = ["cargo-symex", "examples", "crates/symex_lib", "crates/valid_derive"]
