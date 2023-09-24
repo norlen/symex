@@ -12,6 +12,12 @@ cd <folder>
 rustup override set 1.64
 ```
 
+### Devcontainer
+
+As an alternative, a [Dev Container](https://code.visualstudio.com/docs/devcontainers/containers) is provided that automatically installs Rust `1.64` and LLVM 14.
+
+To generate tests use `./scripts/compile_tests_dc.sh` instead.
+
 ## Dependencies
 
 - [boolector](https://github.com/Boolector/boolector), Boolector is a Satisfiability Modulo Theories
