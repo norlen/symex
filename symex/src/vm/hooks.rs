@@ -13,7 +13,7 @@ use crate::{
     memory::BITS_IN_BYTE,
     smt::SolverError,
     util::{ExpressionType, Variable},
-    vm::{executor::LLVMExecutor, LLVMExecutorError},
+    vm::{executor::LLVMExecutor, AnalysisError, LLVMExecutorError},
 };
 
 use super::PathResult;
@@ -70,7 +70,7 @@ pub fn ignore(
     _vm: &mut LLVMExecutor<'_>,
     _args: &[Value],
 ) -> Result<PathResult, LLVMExecutorError> {
-    Err(LLVMExecutorError::SuppressPath)
+    Ok(PathResult::Suppress)
 }
 
 pub fn assume(vm: &mut LLVMExecutor<'_>, args: &[Value]) -> Result<PathResult, LLVMExecutorError> {
@@ -213,8 +213,8 @@ fn exit(vm: &mut LLVMExecutor<'_>, args: &[Value]) -> Result<PathResult, LLVMExe
 
 /// Hook that tells the VM to abort.
 pub fn abort(_vm: &mut LLVMExecutor<'_>, _args: &[Value]) -> Result<PathResult, LLVMExecutorError> {
-    debug!("Hook: ABORT");
-    Err(LLVMExecutorError::Abort(-1))
+    debug!("Hook: panic!");
+    Ok(PathResult::Failure(AnalysisError::Panic))
 }
 
 // fn __rust_alloc(size: usize, align: usize) -> *mut u8;

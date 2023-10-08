@@ -2,19 +2,25 @@ use std::ffi::CStr;
 
 use llvm_sys::{
     core::{
-        LLVMGetAlignment, LLVMGetDLLStorageClass, LLVMGetFirstBasicBlock, LLVMGetFunctionCallConv,
-        LLVMGetGC, LLVMGetIntrinsicID, LLVMGetLinkage, LLVMGetPersonalityFn, LLVMGetSection,
-        LLVMGetThreadLocalMode, LLVMGetUnnamedAddress, LLVMGetValueKind, LLVMGetValueName2,
-        LLVMGetVisibility, LLVMGlobalGetValueType, LLVMHasPersonalityFn, LLVMIntrinsicGetName,
-        LLVMIntrinsicIsOverloaded, LLVMIsExternallyInitialized, LLVMIsGlobalConstant,
-        LLVMIsThreadLocal, LLVMPrintValueToString, LLVMTypeOf,
+        LLVMGetAlignment, LLVMGetDLLStorageClass, LLVMGetFirstBasicBlock, LLVMGetFirstParam,
+        LLVMGetFunctionCallConv, LLVMGetGC, LLVMGetInitializer, LLVMGetIntrinsicID, LLVMGetLinkage,
+        LLVMGetNextParam, LLVMGetPersonalityFn, LLVMGetSection, LLVMGetThreadLocalMode,
+        LLVMGetUnnamedAddress, LLVMGetValueKind, LLVMGetValueName2, LLVMGetVisibility,
+        LLVMGlobalGetValueType, LLVMHasPersonalityFn, LLVMIntrinsicGetName,
+        LLVMIntrinsicIsOverloaded, LLVMIsDeclaration, LLVMIsExternallyInitialized,
+        LLVMIsGlobalConstant, LLVMIsThreadLocal, LLVMPrintValueToString, LLVMTypeOf,
     },
     prelude::*,
     LLVMDLLStorageClass, LLVMLinkage, LLVMThreadLocalMode, LLVMUnnamedAddr, LLVMValueKind,
     LLVMVisibility,
 };
 
-use crate::{instruction::BasicBlock, types::Type, Value};
+use crate::{
+    instruction::BasicBlock,
+    types::Type,
+    util::{debug_location_without_column, DebugLocation},
+    Value,
+};
 
 pub trait GlobalValue {
     fn is_declaration(&self) -> bool;
@@ -254,6 +260,32 @@ impl Function {
             Some(BasicBlock::new(bb))
         }
     }
+
+    pub fn parameters(&self) -> ParameterIter {
+        unsafe { ParameterIter::new(self.0) }
+    }
+}
+
+pub struct ParameterIter(LLVMValueRef);
+
+impl ParameterIter {
+    pub(crate) unsafe fn new(function_ref: LLVMValueRef) -> Self {
+        Self(unsafe { LLVMGetFirstParam(function_ref) })
+    }
+}
+
+impl Iterator for ParameterIter {
+    type Item = Value;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.0.is_null() {
+            None
+        } else {
+            let current = self.0;
+            self.0 = unsafe { LLVMGetNextParam(self.0) };
+            Some(Value::new(current))
+        }
+    }
 }
 
 impl From<LLVMValueRef> for Function {
@@ -264,7 +296,7 @@ impl From<LLVMValueRef> for Function {
 
 impl GlobalValue for Function {
     fn is_declaration(&self) -> bool {
-        todo!()
+        unsafe { LLVMIsDeclaration(self.0) != 0 }
     }
 
     fn value_type(&self) -> Type {
@@ -369,30 +401,35 @@ impl GlobalVariable {
         unsafe { LLVMGetThreadLocalMode(self.0) }
     }
 
-    pub fn preemption_specifier(&self) -> u32 {
-        todo!()
-    }
+    // pub fn preemption_specifier(&self) -> u32 {
+    //     todo!()
+    // }
 
     pub fn initializer(&self) -> Option<Value> {
-        todo!()
+        let initializer = unsafe { LLVMGetInitializer(self.0) };
+        if initializer.is_null() {
+            None
+        } else {
+            Some(Value::new(initializer))
+        }
     }
 
-    pub fn comdat(&self) -> Option<&CStr> {
-        todo!()
-    }
+    // pub fn comdat(&self) -> Option<&CStr> {
+    //     todo!()
+    // }
 
-    pub fn partition(&self) -> Option<&CStr> {
-        todo!()
-    }
+    // pub fn partition(&self) -> Option<&CStr> {
+    //     todo!()
+    // }
 
-    pub fn debug_location(&self) -> Option<&CStr> {
-        todo!()
+    pub fn debug_location(&self) -> Option<DebugLocation> {
+        debug_location_without_column(self.0)
     }
 }
 
 impl GlobalValue for GlobalVariable {
     fn is_declaration(&self) -> bool {
-        todo!()
+        unsafe { LLVMIsDeclaration(self.0) != 0 }
     }
 
     fn value_type(&self) -> Type {
@@ -463,7 +500,7 @@ impl From<LLVMValueRef> for GlobalAlias {
 
 impl GlobalValue for GlobalAlias {
     fn is_declaration(&self) -> bool {
-        todo!()
+        unsafe { LLVMIsDeclaration(self.0) != 0 }
     }
 
     fn value_type(&self) -> Type {
@@ -534,7 +571,7 @@ impl From<LLVMValueRef> for GlobalIFunc {
 
 impl GlobalValue for GlobalIFunc {
     fn is_declaration(&self) -> bool {
-        todo!()
+        unsafe { LLVMIsDeclaration(self.0) != 0 }
     }
 
     fn value_type(&self) -> Type {

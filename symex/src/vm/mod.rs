@@ -16,15 +16,19 @@ pub use vm::*;
 
 use crate::{memory::MemoryError, smt::SolverError};
 
-// TODO: Other errors
-//
-// - Cannot take size of opaque struct.
-// - Cannot find named struct.
-// - Cannot convert operand to symbol.
-// - Global reference not found
-// - Cannot find basic block.
-// - Call depth exceeded.
-// - Iteration count exceeded.
+/// Errors that can occur during analysis.
+///
+/// These errors are not related to the VM/Executor, but to the analysis itself. The error path
+/// of a `Result` will never contain an `AnalysisError`, those are reservered for errors related
+/// to the execution of the VM/Executor.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum AnalysisError {
+    // CallDepthExceeded,
+    // IterationCountExceeded,
+    // NoPath,
+    Panic,
+    Unreachable,
+}
 
 pub type Result<T> = std::result::Result<T, LLVMExecutorError>;
 
@@ -52,15 +56,8 @@ pub enum LLVMExecutorError {
     #[error("UnsupportedInstruction {0}")]
     UnsupportedInstruction(String),
 
-    /// UnreachableInstruction
-    #[error("UnreachableInstruction")]
-    UnreachableInstruction,
-
     #[error("UnexpectedZeroSize")]
     UnexpectedZeroSize,
-
-    #[error("Path suppressed")]
-    SuppressPath,
 
     #[error("No active stack frame")]
     NoStackFrame,

@@ -4,8 +4,6 @@ use symex::{
     smt::{DContext, DExpr},
     vm::{LLVMState, PathResult, Project, VM},
 };
-// use tracing::Level;
-// use tracing_subscriber::FmtSubscriber;
 
 fn get_u128_value(expr: DExpr, state: &LLVMState) -> u128 {
     let value = state
@@ -18,8 +16,8 @@ fn get_u128_value(expr: DExpr, state: &LLVMState) -> u128 {
 }
 
 pub fn run(path: impl AsRef<Path>, function: &str) -> Vec<Option<u128>> {
-    // let subscriber = FmtSubscriber::builder()
-    //     .with_max_level(Level::TRACE)
+    // let subscriber = tracing_subscriber::FmtSubscriber::builder()
+    //     .with_max_level(tracing::Level::TRACE)
     //     .finish();
 
     // tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
@@ -40,6 +38,7 @@ pub fn run(path: impl AsRef<Path>, function: &str) -> Vec<Option<u128>> {
         let result = match path_result {
             PathResult::Success(value) => value.map(|value| get_u128_value(value, &state)),
             PathResult::Failure(_) => panic!("analysis failed"),
+            PathResult::Suppress => panic!("path suppressed"),
         };
 
         results.push(result);

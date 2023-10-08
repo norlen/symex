@@ -8,6 +8,7 @@ members = [
     "crates/symex_lib",
     "crates/valid_derive",
 ]
+exclude = ["symex-llvm-14-legacy"]
 
 [profile.release]
 debug = true

@@ -11,7 +11,8 @@ use crate::{
 };
 
 use super::{
-    project::Project, state::LLVMState, vm::VM, Hook, Intrinsic, LLVMExecutorError, Path, Result,
+    project::Project, state::LLVMState, vm::VM, AnalysisError, Hook, Intrinsic, LLVMExecutorError,
+    Path, Result,
 };
 
 pub struct LLVMExecutor<'vm> {
@@ -25,17 +26,12 @@ pub struct LLVMExecutor<'vm> {
 pub enum PathResult {
     Success(Option<DExpr>),
     Failure(AnalysisError),
+    Suppress,
 }
 
 pub struct CallFn {
     function: Value,
     arguments: Vec<Value>,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum AnalysisError {
-    Unreachable,
-    Panic,
 }
 
 pub enum CallResult {
@@ -122,7 +118,7 @@ impl<'vm> LLVMExecutor<'vm> {
                             let arguments = call
                                 .arguments
                                 .into_iter()
-                                .map(|arg| self.state.get_expr(&arg).map(|expr| (arg, expr)))
+                                .map(|arg| self.state.get_expr(&arg))
                                 .collect::<Result<Vec<_>>>()?;
 
                             let stack_frame = StackFrame::new_from_function(function, &arguments)?;
@@ -1352,6 +1348,7 @@ mod tests {
                 PathResult::Failure(error) => {
                     panic!("Did not expect any paths to fail, reason: {error:?}")
                 }
+                PathResult::Suppress => panic!("Did not expect any paths to be suppressed"),
             };
             path_results.push(result);
         }

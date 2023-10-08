@@ -482,6 +482,7 @@ mod tests {
                 PathResult::Failure(error) => {
                     panic!("Did not expect any paths to fail, reason: {error:?}")
                 }
+                PathResult::Suppress => panic!("Did not expect any paths to be suppressed"),
             };
             path_results.push(result);
         }

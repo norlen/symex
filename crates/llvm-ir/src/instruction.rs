@@ -21,7 +21,7 @@ pub use llvm_sys::LLVMAtomicRMWBinOp;
 pub use llvm_sys::LLVMIntPredicate;
 pub use llvm_sys::LLVMRealPredicate;
 
-use crate::{util::DebugLocation, Argument, Type, Value};
+use crate::{util::DebugLocation, Type, Value};
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct BasicBlock(LLVMBasicBlockRef);
@@ -1430,7 +1430,7 @@ impl Invoke {
         let num_arguments = unsafe { LLVMGetNumArgOperands(self.0) };
         (0..num_arguments)
             .map(|i| unsafe { LLVMGetOperand(self.0, i + 1) })
-            .map(|v| Argument::new(v).into())
+            .map(|v| Value::new(v))
             .collect()
     }
 
@@ -1500,7 +1500,7 @@ impl CallBr {
         let num_arguments = unsafe { LLVMGetNumArgOperands(self.0) };
         (0..num_arguments)
             .map(|i| unsafe { LLVMGetOperand(self.0, i + 1) })
-            .map(|v| Argument::new(v).into())
+            .map(|v| Value::new(v).into())
             .collect()
     }
 

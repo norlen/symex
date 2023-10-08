@@ -6,7 +6,7 @@ use llvm_ir::{
     instruction::{BasicBlock, Instruction},
     Function, Global, GlobalVariable, Value,
 };
-use tracing::warn;
+use tracing::{debug, warn};
 
 use super::{binop, bit_size, project::Project};
 use crate::vm::{executor::convert_to_map, LLVMExecutorError};
@@ -42,10 +42,15 @@ impl StackFrame {
         })
     }
 
-    pub fn new_from_function(function: Function, arguments: &[(Value, DExpr)]) -> Result<Self> {
+    pub fn new_from_function(function: Function, arguments: &[DExpr]) -> Result<Self> {
+        debug!(
+            "Creating new stack frame for function: {:?} with arguments: {arguments:?}",
+            function.name()
+        );
         let mut registers = HashMap::new();
-        for arg in arguments.iter() {
-            registers.insert(arg.0.clone(), arg.1.clone());
+        for (value, expr) in function.parameters().zip(arguments) {
+            debug!("Argument: {value} -> {expr:?}");
+            registers.insert(value, expr.clone());
         }
 
         let basic_block = function
@@ -223,7 +228,7 @@ pub fn operand_to_expr(state: &mut LLVMState, value: &Value) -> Result<DExpr> {
             .current_frame_mut()?
             .get_register(&value)
             .cloned()
-            .ok_or_else(|| LLVMExecutorError::LocalNotFound("op".to_string())),
+            .ok_or_else(|| LLVMExecutorError::LocalNotFound(format!("{value}"))),
 
         // Not supported.
         Value::InlineAsm | Value::Metadata => panic!("Unexpected operand"),

@@ -7,7 +7,7 @@ use std::{
 };
 
 use rustc_demangle::demangle;
-use tracing::info;
+use tracing::{debug, info};
 
 use crate::{
     smt::DContext,
@@ -99,6 +99,11 @@ fn run_paths(vm: &mut VM, cfg: &RunConfig) -> Result<RunnerResult, LLVMExecutorE
 
     let start = Instant::now();
     while let Some((path_result, mut state)) = vm.run()? {
+        if matches!(path_result, PathResult::Suppress) {
+            debug!("Suppressing path");
+            continue;
+        }
+
         path_num += 1;
         // TODO: Cache for solutions.
 
@@ -135,6 +140,7 @@ fn run_paths(vm: &mut VM, cfg: &RunConfig) -> Result<RunnerResult, LLVMExecutorE
                 PathResult::Failure(reason) => {
                     PathStatus::Failed(create_error_reason(&mut state, reason.into()))
                 }
+                PathResult::Suppress => unreachable!("Suppress is handled above"),
             };
 
             let path_result = VisualPathResult {
