@@ -3,36 +3,6 @@
 Symbolic execution engine that operates on LLVM IR. Main use case is to analyze Rust programs but
 as it operates on LLVM IR it allows it to analyze all software that can generate LLVM IR.
 
-## Rust version
-
-Due to LLVM dependencies the current implementation is limited to Rust < 1.64. `cd` to the folder where you want to run `cargo symex` from and override the Rust version to be used as below:
-
-```shell
-cd <folder>
-rustup override set 1.64
-```
-
-### Devcontainer
-
-As an alternative, a [Dev Container](https://code.visualstudio.com/docs/devcontainers/containers) is provided that automatically installs Rust `1.64` and LLVM 14.
-
-To generate tests use `./scripts/compile_tests_dc.sh` instead.
-
-## Dependencies
-
-- [boolector](https://github.com/Boolector/boolector), Boolector is a Satisfiability Modulo Theories
-  (SMT) solver for the theories of fixed-size bit-vectors, arrays and uninterpreted functions.
-- [LLVM](https://llvm.org/), used as a library for decoding the LLVM-IR (internal representation)
-  of the program under analysis.
-
-The project currently uses LLVM 14 which require a relatively recent version of Rust.
-
-### Optional dependencies
-
-It is possible to use Z3 instead of Boolector by using the feature flag `z3`.
-
-- [Z3](https://github.com/Z3Prover/z3), Z3 is a theorem prover from Microsoft Research.
-
 ## Cargo subcommand
 
 A cargo subcommand is available to easily compile Rust programs into bitcode files and run them
@@ -46,14 +16,14 @@ It can be installed with
 
 For usage instructions see `cargo symex --help`.
 
+
 ## Getting started
 
-Check out the examples contained in `examles/examples`. These can either be run with the cargo
-subcommand or with
+Check out the examples contained in `examles/examples`. These can be run with the cargo subcommand
 
 ```shell
 > cd examples
-> cargo run -p cargo-symex -- --example <example> [--function <function>]
+> cargo-symex --example <example>
 ```
 
 To compile and run the example `examples/rust_simple` using the cargo subcommand
@@ -65,6 +35,50 @@ To compile and run the example `examples/rust_simple` using the cargo subcommand
 
 This will display the results of the analysis of the example, showing all the paths it took and
 concrete values for all inputs and output.
+
+
+## Building
+
+### Dependencies
+
+- [LLVM](https://llvm.org/), used as a library for decoding the LLVM-IR (internal representation)
+  of the program under analysis.
+- [boolector](https://github.com/Boolector/boolector), Boolector is a Satisfiability Modulo Theories
+  (SMT) solver for the theories of fixed-size bit-vectors, arrays and uninterpreted functions.
+
+The project currently uses LLVM 17 which require a relatively recent version of Rust.
+
+### Devcontainer
+
+As an alternative, a [Dev Container](https://code.visualstudio.com/docs/devcontainers/containers) is provided that automatically installs Rust `1.72` and LLVM 17.
+
+To generate tests use `./symex/compile_tests_dc.sh` instead.
+
+## SYMEX LLVM 14
+
+The older version `symex-llvm-14-legacy` is still avaiable (for now). But it will be phased out later in favor of the more updated version that supports LLVM 17.
+
+Due to LLVM dependencies the current implementation is limited to Rust < 1.64. `cd` to the folder where you want to run `cargo symex` from and override the Rust version to be used as below:
+
+```shell
+cd <folder>
+rustup override set 1.64
+```
+
+Required dependencies for `symex-llvm-14-legacy`
+
+- [LLVM](https://llvm.org/), used as a library for decoding the LLVM-IR (internal representation)
+  of the program under analysis.
+
+SMT solver defaults to `boolector`. It is possible to use Z3 instead of Boolector by using the feature flag `z3`.
+
+- [boolector](https://github.com/Boolector/boolector), Boolector is a Satisfiability Modulo Theories
+  (SMT) solver for the theories of fixed-size bit-vectors, arrays and uninterpreted functions.
+- [Z3](https://github.com/Z3Prover/z3), Z3 is a theorem prover from Microsoft Research.
+
+To use the devcontainer with this setup, see the notes in `.devcontainer/devcontainer.json`.
+
+## Usage
 
 ### Making tests work
 
