@@ -8,7 +8,8 @@ Cargo.lock
 *.ll
 
 # Keep hand written .ll files for unit tests.
-!tests/unit_tests/*.ll
+!symex/tests/unit_tests/*.ll
+!symex-llvm-14-legacy/tests/unit_tests/*.ll
 
 # Misc
 .z3-trace
