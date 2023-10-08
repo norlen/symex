@@ -9,7 +9,7 @@
   // Features to add to the dev container. More info: https://containers.dev/features.
   "features": {
     "ghcr.io/devcontainers/features/rust:1": {
-      "version": "1.72",
+      "version": "1.64",
       "profile": "minimal"
     }
     // "ghcr.io/devcontainers-community/features/llvm:3": {}
@@ -24,5 +24,5 @@
   // Uncomment to connect as root instead. More info: https://aka.ms/dev-containers-non-root.
   "remoteUser": "root",
 
-  "postStartCommand": "apt update && apt install lsb-release wget software-properties-common gnupg cmake libzstd-dev -y -qq && wget -O - https://apt.llvm.org/llvm.sh | bash -s -- 17 all"
+  "postStartCommand": "apt update && apt install lsb-release wget software-properties-common gnupg cmake -y -qq && wget -O - https://apt.llvm.org/llvm.sh | bash -s -- 14 all && apt install libpolly-14-dev -y -qq"
 }

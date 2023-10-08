@@ -2,10 +2,11 @@
 resolver = "2"
 members = [
     "cargo-symex",
+    "symex",
     "examples",
+    "crates/llvm-ir",
     "crates/symex_lib",
     "crates/valid_derive",
-    "symex-llvm-ir",
 ]
 
 [profile.release]

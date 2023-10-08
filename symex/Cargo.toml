@@ -1,0 +1,18 @@
+[package]
+name = "symex"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+llvm-ir = { path = "../crates/llvm-ir", version = "*" }
+anyhow = "1.0"
+thiserror = "1.0"
+rustc-demangle = "0.1.21"
+boolector = { version = "0.4.3", features = ["vendor-lgl"] }
+radix_trie = "0.2.1"
+tracing = "0.1"
+tracing-subscriber = "0.3"
+
+indenter = "0.3"
+colored = "2.0"
+rand = "0.8.5"
