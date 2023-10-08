@@ -326,12 +326,6 @@ impl_constant!(Integer);
 
 impl Integer {
     pub fn value(&self) -> u64 {
-        // {
-        //     let mut len = 0;
-        //     let ptr = unsafe { core::LLVMGetAsString(self.0, &mut len) };
-        //     let str = unsafe { std::ffi::CStr::from_ptr(ptr) };
-        //     println!("Integer::value() str: {:?}", str);
-        // }
         unsafe { core::LLVMConstIntGetZExtValue(self.0) }
     }
 

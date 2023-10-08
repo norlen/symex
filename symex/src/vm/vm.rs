@@ -1,4 +1,5 @@
 use llvm_ir::{Global, GlobalValue, Value};
+use tracing::trace;
 
 use crate::{
     smt::{DContext, DSolver},
@@ -28,17 +29,12 @@ impl VM {
         fn_name: &str,
     ) -> Result<Self, LLVMExecutorError> {
         let function = project.find_entry_function(fn_name)?;
-        // if let Type::Function(ty) = function.ty() {
-        //     if !ty.param_types().is_empty() {
-        //         panic!("Function {:?} has parameters", function.name());
-        //     }
-        // } else {
-        //     panic!(
-        //         "Function {:?} has invalid type, type: {:?}",
-        //         function.name(),
-        //         function.ty()
-        //     );
-        // };
+        if function.parameters().count() > 0 {
+            panic!(
+                "Function {:?} has parameters which isn't allowed",
+                function.name()
+            );
+        }
 
         let mut vm = Self {
             project,
@@ -72,14 +68,13 @@ impl VM {
         //
         // When functions are allocated we just allocate a pointer size, this is just so we get an
         // address. The actual bitcode instructions are never stored in symbolic memory.
-        println!("=== Initialize globals");
         let fn_size = self.project.ptr_size as u64;
         let fn_align = 4;
 
         for function in self.project.module.functions() {
             let address = state.memory.allocate(fn_size, fn_align).unwrap();
 
-            println!(
+            trace!(
                 "function {:?} allocated at address: {}",
                 function.name(),
                 address
@@ -113,7 +108,7 @@ impl VM {
             let address = state
                 .memory
                 .allocate(allocated_size.into(), alignment.into())?;
-            println!("gv {:?} allocated at address: {}", gv.name(), address);
+            trace!("gv {:?} allocated at address: {}", gv.name(), address);
 
             let value = Value::Global(Global::Variable(gv));
             state.global_lookup.insert(value.clone(), address);

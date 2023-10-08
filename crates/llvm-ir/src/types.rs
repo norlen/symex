@@ -68,15 +68,6 @@ impl Type {
     }
 
     /// Returns `true` if the type is an integer.
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// use llvm_ir::types::Type;
-    ///
-    /// let t = Type::Integer(IntegerType { bits: 32 });
-    /// assert!(t.is_integer());
-    /// ```
     pub fn is_integer(&self) -> bool {
         matches!(self, Type::Integer(_))
     }
@@ -92,15 +83,6 @@ impl Type {
     }
 
     /// Returns `true` if the type is a floating point type.
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// use llvm_ir::types::Type;
-    ///
-    /// let t = Type::Float(FloatingPointType::Double);
-    /// assert!(t.is_fp());
-    /// ```
     pub fn is_fp(&self) -> bool {
         matches!(self, Type::Float(_))
     }

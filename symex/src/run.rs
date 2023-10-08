@@ -103,6 +103,10 @@ fn run_paths(vm: &mut VM, cfg: &RunConfig) -> Result<RunnerResult, LLVMExecutorE
             debug!("Suppressing path");
             continue;
         }
+        if matches!(path_result, PathResult::AssumptionUnsat) {
+            println!("Encountered an unsatisfiable assumption, ignoring this path");
+            continue;
+        }
 
         path_num += 1;
         // TODO: Cache for solutions.
@@ -141,6 +145,7 @@ fn run_paths(vm: &mut VM, cfg: &RunConfig) -> Result<RunnerResult, LLVMExecutorE
                     PathStatus::Failed(create_error_reason(&mut state, reason.into()))
                 }
                 PathResult::Suppress => unreachable!("Suppress is handled above"),
+                PathResult::AssumptionUnsat => unreachable!("AssumptionUnsat is handled above"),
             };
 
             let path_result = VisualPathResult {

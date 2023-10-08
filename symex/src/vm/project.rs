@@ -2,6 +2,7 @@ use std::{ffi::CStr, path::Path};
 
 use llvm_ir::{Function, Module};
 use rustc_demangle::demangle;
+use tracing::debug;
 
 use crate::vm::Result;
 
@@ -134,19 +135,19 @@ impl Project {
         // Check for intrinsic.
         if is_intrinsic(&name) {
             if let Some(intrinsic) = self.intrinsics.get(&name) {
-                println!("Resolved instrinsic: {name}");
+                debug!("Resolved instrinsic: {name}");
                 return Some(Overriden::Intrinsic(*intrinsic));
             }
         }
 
         // Check for hooks.
         if let Some(hook) = self.hooks.get(&name) {
-            println!("Resolved hook: {name}");
+            debug!("Resolved hook: {name}");
             return Some(Overriden::Hook(hook));
         }
         for name in [&demangled_name, &demangled_name_no_hash] {
             if let Some(hook) = self.hooks.get(name) {
-                println!("Resolved hook: {name}");
+                debug!("Resolved hook: {name}");
                 return Some(Overriden::Hook(hook));
             }
         }

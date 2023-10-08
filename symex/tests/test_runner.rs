@@ -39,6 +39,7 @@ pub fn run(path: impl AsRef<Path>, function: &str) -> Vec<Option<u128>> {
             PathResult::Success(value) => value.map(|value| get_u128_value(value, &state)),
             PathResult::Failure(_) => panic!("analysis failed"),
             PathResult::Suppress => panic!("path suppressed"),
+            PathResult::AssumptionUnsat => panic!("assumption unsat"),
         };
 
         results.push(result);

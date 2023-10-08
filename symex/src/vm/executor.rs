@@ -23,9 +23,11 @@ pub struct LLVMExecutor<'vm> {
     pub project: &'static Project,
 }
 
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum PathResult {
     Success(Option<DExpr>),
     Failure(AnalysisError),
+    AssumptionUnsat,
     Suppress,
 }
 
@@ -698,7 +700,6 @@ impl<'vm> LLVMExecutor<'vm> {
             let index = self.state.get_expr(index)?;
             let index = index.zero_ext(ptr_size).simplify();
             let (offset, ty) = byte_offset(&curr_ty, &index, ptr_size, &self.state.ctx)?;
-            println!("index: {index:?}, offset: {offset:?}");
 
             address = address.add(&offset);
             curr_ty = ty;
@@ -1349,11 +1350,12 @@ mod tests {
                     panic!("Did not expect any paths to fail, reason: {error:?}")
                 }
                 PathResult::Suppress => panic!("Did not expect any paths to be suppressed"),
+                PathResult::AssumptionUnsat => panic!("Did not expect any paths to be unsat"),
             };
             path_results.push(result);
         }
 
-        println!("{path_results:x?}");
+        eprintln!("{path_results:x?}");
         path_results
     }
 

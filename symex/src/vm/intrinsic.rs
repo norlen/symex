@@ -5,7 +5,7 @@
 use llvm_ir::{Type, Value};
 use radix_trie::Trie;
 use std::collections::HashMap;
-use tracing::{trace, warn};
+use tracing::{debug, trace, warn};
 
 use crate::memory::BITS_IN_BYTE;
 use crate::smt::{DExpr, Solutions};
@@ -121,7 +121,7 @@ pub fn noop(_vm: &mut LLVMExecutor<'_>, _args: &[Value]) -> Result<PathResult> {
 /// Requires that source and destination do not overlap.
 pub fn llvm_memcpy(vm: &mut LLVMExecutor<'_>, args: &[Value]) -> Result<PathResult> {
     assert_eq!(args.len(), 4);
-    println!("llvm_memcpy");
+    debug!("llvm_memcpy");
 
     // Arguments: ptr <dest>, ptr <src>, i32/i64 <len>, i1 <isvolatile>
     // 1. Pointer to destination.
@@ -483,11 +483,12 @@ mod tests {
                     panic!("Did not expect any paths to fail, reason: {error:?}")
                 }
                 PathResult::Suppress => panic!("Did not expect any paths to be suppressed"),
+                PathResult::AssumptionUnsat => panic!("Did not expect any paths to be unsat"),
             };
             path_results.push(result);
         }
 
-        println!("{path_results:x?}");
+        eprintln!("{path_results:x?}");
         path_results
     }
 

@@ -6,7 +6,7 @@ use llvm_ir::{
     instruction::{BasicBlock, Instruction},
     Function, Global, GlobalVariable, Value,
 };
-use tracing::{debug, warn};
+use tracing::{debug, trace, warn};
 
 use super::{binop, bit_size, project::Project};
 use crate::vm::{executor::convert_to_map, LLVMExecutorError};
@@ -215,7 +215,7 @@ impl LLVMState {
 
     /// Retrieves or creates an [Expr] from an [Operand] or [Constant].
     pub fn get_expr(&mut self, value: &Value) -> Result<DExpr> {
-        println!("Get expression: {value:?} -> {value}");
+        trace!("Get expression: {value:?} -> {value}");
         operand_to_expr(self, value)
     }
 }
@@ -273,7 +273,7 @@ pub(crate) fn const_to_expr_zero_size(
     let constant = match value {
         Value::Function(_) | Value::Global(_) => {
             let global_address = state.global_lookup.get(&value).cloned();
-            println!("gv lookup: {global_address:?}");
+            debug!("gv lookup: {global_address:?}");
             let Some(global_address) = global_address else {
                 panic!("Global not found");
             };

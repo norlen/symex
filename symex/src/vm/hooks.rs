@@ -11,7 +11,6 @@ use tracing::{debug, trace};
 
 use crate::{
     memory::BITS_IN_BYTE,
-    smt::SolverError,
     util::{ExpressionType, Variable},
     vm::{executor::LLVMExecutor, AnalysisError, LLVMExecutorError},
 };
@@ -93,7 +92,7 @@ pub fn assume(vm: &mut LLVMExecutor<'_>, args: &[Value]) -> Result<PathResult, L
     if vm.state.constraints.is_sat()? {
         Ok(PathResult::Success(None))
     } else {
-        Err(LLVMExecutorError::SolverError(SolverError::Unsat))
+        Ok(PathResult::AssumptionUnsat)
     }
 }
 
@@ -137,17 +136,17 @@ pub fn symbolic(
     args: &[Value],
 ) -> Result<PathResult, LLVMExecutorError> {
     let addr = &args[0];
-    trace!("call symbolic({})", addr);
 
     if addr.ty().is_pointer() {
         // TODO: We need the size of the pointed to value, which we cannot easily get with
         // opaque pointers.
+        let addr_expr = vm.state.get_expr(addr)?;
         let size = {
+            // HACK:
             // Read the pointed to object from memory and get the size from there, not entirely
             // sure this works for all cases... Since, I think we may sometimes only want
             // part of the memory object to be reset to entirely symbolic.
-            let addr = vm.state.get_expr(addr)?;
-            let addr = addr.get_constant().expect("expected constant addr");
+            let addr = addr_expr.get_constant().expect("expected constant addr");
             let obj = vm
                 .state
                 .memory
@@ -168,8 +167,7 @@ pub fn symbolic(
         };
         vm.state.marked_symbolic.push(var);
 
-        let addr = vm.state.get_expr(addr)?;
-        vm.state.memory.write(&addr, new_value)?;
+        vm.state.memory.write(&addr_expr, new_value)?;
 
         Ok(PathResult::Success(None))
     } else {

@@ -57,11 +57,12 @@ impl ObjectMemory {
     }
 
     /// Allocate `bits` of memory returning the newly allocated address.
+    #[tracing::instrument(skip(self))]
     pub fn allocate(&mut self, bits: u64, align: u64) -> Result<u64, MemoryError> {
         let (addr, _bytes) = self.allocator.get_address(bits, align)?;
 
         let name = format!("alloc{}-{}", self.alloc_id, rand::random::<u32>());
-        // println!("Allocate {name} at addr: 0x{addr:x}, size_bits: {bits} bytes");
+        trace!(name = name, addr = format!("{addr:?}"), bits = bits);
         self.alloc_id += 1;
 
         let obj = MemoryObject {
@@ -93,12 +94,10 @@ impl ObjectMemory {
     #[tracing::instrument(skip(self))]
     pub fn write(&mut self, addr: &DExpr, value: DExpr) -> Result<(), MemoryError> {
         trace!("write addr={addr:?}, len={}, value={value:?}", value.len());
-        // println!("write addr={addr:?}, len={}, value={value:?}", value.len());
         assert_eq!(addr.len(), self.ptr_size, "passed wrong sized address");
 
         let (addr, val) = self.resolve_address_mut(addr)?;
         let offset = (addr - val.address) * 8;
-        // println!("mem obj: addr: {addr:x}, val: {val:#?}, offset: {offset}",);
 
         if value.len() == val.size as u32 {
             val.bv = value;
@@ -124,8 +123,6 @@ impl ObjectMemory {
             return Ok(vec![address.clone()]);
         }
 
-        println!("Resolve addresses: {address:?}");
-
         // Otherwise, get solutions for addresses.
         let addresses = self.solver.get_values(address, upper_bound)?;
         let addresses = match addresses {
@@ -138,7 +135,6 @@ impl ObjectMemory {
                 s
             }
         };
-        println!("Addresses: {addresses:?}");
 
         Ok(addresses)
     }
