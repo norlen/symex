@@ -1,5 +1,8 @@
-// For format details, see https://aka.ms/devcontainer.json. For config options, see the
-// README at: https://github.com/devcontainers/templates/tree/main/src/debian
+// Devcontainer for setting up Rust with LLVM.
+//
+// To use with the old version (Rust 1.62 and LLVM 14)
+// - Change the version to Rust 1.62
+// - Use the correct `postStartCommand` to install LLVM 14.
 {
   "name": "Debian - Rust",
 
@@ -9,6 +12,8 @@
   // Features to add to the dev container. More info: https://containers.dev/features.
   "features": {
     "ghcr.io/devcontainers/features/rust:1": {
+      // Uncomment this version for LLVM 14
+      // "version": "1.64",
       "version": "1.72",
       "profile": "minimal"
     }
@@ -25,4 +30,7 @@
   "remoteUser": "root",
 
   "postStartCommand": "apt update && apt install lsb-release wget software-properties-common gnupg cmake libzstd-dev -y -qq && wget -O - https://apt.llvm.org/llvm.sh | bash -s -- 17 all"
+
+  // Uncomment this `postStartCommand` for LLVM 14
+  // "postStartCommand": "apt update && apt install lsb-release wget software-properties-common gnupg cmake -y -qq && wget -O - https://apt.llvm.org/llvm.sh | bash -s -- 14 all && apt install libpolly-14-dev -y -qq"
 }
