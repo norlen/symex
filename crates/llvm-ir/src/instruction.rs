@@ -1317,10 +1317,10 @@ impl_instruction!(Ret);
 
 impl Ret {
     pub fn return_value(&self) -> Option<Value> {
-        let value_ref = unsafe { LLVMGetOperand(self.0, 0) };
-        match value_ref.is_null() {
-            false => Some(Value::new(value_ref)),
-            true => None,
+        match unsafe { LLVMGetNumOperands(self.0) } {
+            0 => None,
+            1 => Some(Value::new(unsafe { LLVMGetOperand(self.0, 0) })),
+            _ => panic!("invalid number of operands"),
         }
     }
 }
